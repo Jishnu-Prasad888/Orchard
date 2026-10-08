@@ -30,22 +30,22 @@ func TestRelPath(t *testing.T) {
 	}
 
 	bad := map[string]error{
-		"":               ErrEmpty,
-		".":              ErrTraversal,
-		"..":             ErrTraversal,
-		"./x.jpg":        ErrTraversal,
-		"../escape":      ErrTraversal,
-		"../x.jpg":       ErrTraversal,
-		"a/../../b":      ErrTraversal,
-		"a/./b":          ErrTraversal,
-		"/absolute":      ErrAbsolute,
-		"/abs/x.jpg":     ErrAbsolute,
-		".cairn":         ErrReserved,
-		".cairn/db":      ErrReserved,
-		".cairn/trash/y": ErrReserved,
-		"a\x00b":         ErrControl,
-		"a\nb":           ErrControl,
-		"\x1fb":          ErrControl,
+		"":                 ErrEmpty,
+		".":                ErrTraversal,
+		"..":               ErrTraversal,
+		"./x.jpg":          ErrTraversal,
+		"../escape":        ErrTraversal,
+		"../x.jpg":         ErrTraversal,
+		"a/../../b":        ErrTraversal,
+		"a/./b":            ErrTraversal,
+		"/absolute":        ErrAbsolute,
+		"/abs/x.jpg":       ErrAbsolute,
+		".orchard":         ErrReserved,
+		".orchard/db":      ErrReserved,
+		".orchard/trash/y": ErrReserved,
+		"a\x00b":           ErrControl,
+		"a\nb":             ErrControl,
+		"\x1fb":            ErrControl,
 	}
 	for in, wantErr := range bad {
 		_, err := RelPath(in)
@@ -70,7 +70,7 @@ func TestBareName(t *testing.T) {
 		"a/b":      ErrNotBare,
 		"a\\b":     ErrNotBare,
 		"dir/name": ErrNotBare,
-		".cairn":   ErrReserved,
+		".orchard": ErrReserved,
 		"a\x00b":   ErrControl,
 		"a\nb":     ErrControl,
 	}

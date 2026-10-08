@@ -1,4 +1,4 @@
-// Package authz implements Cairn's resource-based authorization subsystem
+// Package authz implements Orchard's resource-based authorization subsystem
 // (ADR-0005).
 //
 // Authorization is a dedicated, first-class subsystem: never scattered

@@ -1,4 +1,4 @@
-// Package indexer implements the incremental filesystem scanner for Cairn
+// Package indexer implements the incremental filesystem scanner for Orchard
 // libraries.
 //
 // A scan walks the library root and reconciles each discovered file against

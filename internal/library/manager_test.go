@@ -148,7 +148,7 @@ func TestReconnectAtNewPathRebindsIdentity(t *testing.T) {
 	// Same metadata present now at a different path (disk remounted elsewhere).
 	// Simulate re-creating the library's own identity at the new mount point.
 	root2 := t.TempDir()
-	_ = os.RemoveAll(filepath.Join(root2, ".cairn"))
+	_ = os.RemoveAll(filepath.Join(root2, ".orchard"))
 	_ = copyDir(root1, root2) // no-op for nonexistent source
 	// Write the original library identity at root2 so Refresh can verify it.
 	dir := metadataDir(root2)

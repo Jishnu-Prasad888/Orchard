@@ -187,7 +187,7 @@ func (s *Server) handleRefreshLibrary(w http.ResponseWriter, r *http.Request, u 
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"library": toLibraryResponse(lib)})
 }
 
-// handleDeleteLibrary unregisters a library, leaving its .cairn metadata in
+// handleDeleteLibrary unregisters a library, leaving its .orchard metadata in
 // place. Admin only.
 func (s *Server) handleDeleteLibrary(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	if err := s.libraries.Remove(actorCtx(r, u).Context(), r.PathValue("id")); err != nil {
@@ -211,7 +211,7 @@ func (s *Server) writeLibraryError(w http.ResponseWriter, r *http.Request, err e
 		writeError(w, s.logger, requestID, http.StatusNotFound, CodeNotFound, "Library not found.")
 	case errors.Is(err, library.ErrNoMetadata):
 		writeError(w, s.logger, requestID, http.StatusBadRequest, CodeBadRequest,
-			"No Cairn metadata was found at that path.")
+			"No Orchard metadata was found at that path.")
 	default:
 		s.logger.Error("library error", "error", err)
 		writeError(w, s.logger, requestID, http.StatusInternalServerError, CodeInternal,

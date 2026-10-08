@@ -13,11 +13,11 @@ import (
 func openTestStore(t *testing.T) *NoteStore {
 	t.Helper()
 	dir := t.TempDir()
-	cairnDir := filepath.Join(dir, ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
-		t.Fatalf("mkdir .cairn: %v", err)
+	orchardDir := filepath.Join(dir, ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatalf("mkdir .orchard: %v", err)
 	}
-	db, err := librarydb.Open(cairnDir)
+	db, err := librarydb.Open(orchardDir)
 	if err != nil {
 		t.Fatalf("open library db: %v", err)
 	}

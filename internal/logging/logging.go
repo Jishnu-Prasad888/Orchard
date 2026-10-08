@@ -1,4 +1,4 @@
-// Package logging provides the shared slog-based logger for the Cairn server.
+// Package logging provides the shared slog-based logger for the Orchard server.
 package logging
 
 import (

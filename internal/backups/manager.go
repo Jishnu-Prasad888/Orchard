@@ -49,7 +49,7 @@ type Manager struct {
 	libs   *library.Manager
 	store  *Store
 	cfg    Config
-	server string // absolute path of the server-level cairn.db
+	server string // absolute path of the server-level orchard.db
 
 	busy    atomic.Bool
 	skipped atomic.Int64
@@ -57,7 +57,7 @@ type Manager struct {
 }
 
 // NewManager builds the backup manager. serverDB is the absolute path of the
-// server-level cairn.db so it can be snapshotted.
+// server-level orchard.db so it can be snapshotted.
 func NewManager(db *sql.DB, logger *slog.Logger, libs *library.Manager, cfg Config, serverDB string) *Manager {
 	if cfg.Keep <= 0 {
 		cfg.Keep = 4
@@ -218,7 +218,7 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 	}
 	m.logger.Info("backup starting", "backup_id", rec.ID)
 
-	destBase := filepath.Join(m.cfg.Dir, "cairn-backup-"+now.Format("20060102-150405"))
+	destBase := filepath.Join(m.cfg.Dir, "orchard-backup-"+now.Format("20060102-150405"))
 	dest := destBase
 	for i := 1; ; i++ {
 		if _, err := os.Stat(dest); os.IsNotExist(err) {
@@ -260,7 +260,7 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 	}
 
 	mf := &Manifest{
-		Format:    "cairn-backup",
+		Format:    "orchard-backup",
 		Version:   1,
 		CreatedAt: now,
 		Encrypted: encrypted,
@@ -338,7 +338,7 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 	return rec, nil
 }
 
-// snapshotServerDB copies the server cairn.db into the backup after forcing a
+// snapshotServerDB copies the server orchard.db into the backup after forcing a
 // WAL checkpoint so the file is self-contained.
 func (m *Manager) snapshotServerDB(ctx context.Context, dest string, encrypted bool, key []byte) (Entry, error) {
 	if m.server == "" {
@@ -347,8 +347,8 @@ func (m *Manager) snapshotServerDB(ctx context.Context, dest string, encrypted b
 	if _, err := m.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
 		return Entry{}, err
 	}
-	rel := path.Join("server", "cairn.db")
-	e, err := copyFileEntry(m.server, filepath.Join(dest, "server", "cairn.db"), rel, true, encrypted, key)
+	rel := path.Join("server", "orchard.db")
+	e, err := copyFileEntry(m.server, filepath.Join(dest, "server", "orchard.db"), rel, true, encrypted, key)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -357,12 +357,12 @@ func (m *Manager) snapshotServerDB(ctx context.Context, dest string, encrypted b
 }
 
 // snapshotLibraryDB checkpoints a library's metadata db and copies it.
-func (m *Manager) snapshotLibraryDB(ctx context.Context, libDir, libID, cairnDir string, encrypted bool, key []byte) (Entry, error) {
-	dbPath := filepath.Join(cairnDir, "library.db")
+func (m *Manager) snapshotLibraryDB(ctx context.Context, libDir, libID, orchardDir string, encrypted bool, key []byte) (Entry, error) {
+	dbPath := filepath.Join(orchardDir, "library.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		return Entry{}, err
 	}
-	db, err := librarydb.Open(cairnDir)
+	db, err := librarydb.Open(orchardDir)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -372,20 +372,20 @@ func (m *Manager) snapshotLibraryDB(ctx context.Context, libDir, libID, cairnDir
 	return copyFileEntry(dbPath, filepath.Join(libDir, "library.db"), rel, true, encrypted, key)
 }
 
-// backupLibrary copies one library's .cairn metadata and its media files.
+// backupLibrary copies one library's .orchard metadata and its media files.
 func (m *Manager) backupLibrary(ctx context.Context, dest string, lib library.Library, encrypted bool, key []byte, prev *prevBackup) (LibraryBackup, error) {
-	cairnDir := filepath.Join(lib.Root, ".cairn")
+	orchardDir := filepath.Join(lib.Root, ".orchard")
 	lb := LibraryBackup{ID: lib.ID, Name: lib.Name, Root: lib.Root}
 	libDir := filepath.Join(dest, "libraries", lib.ID)
 
-	dbEntry, err := m.snapshotLibraryDB(ctx, libDir, lib.ID, cairnDir, encrypted, key)
+	dbEntry, err := m.snapshotLibraryDB(ctx, libDir, lib.ID, orchardDir, encrypted, key)
 	if err != nil {
 		m.logger.Warn("library db backup skipped", "library_id", lib.ID, "error", err)
 	} else {
 		lb.DB = &dbEntry
 	}
 
-	idSrc := filepath.Join(cairnDir, "library.json")
+	idSrc := filepath.Join(orchardDir, "library.json")
 	if _, err := os.Stat(idSrc); err == nil {
 		idRel := path.Join("libraries", lib.ID, "library.json")
 		entry, cerr := copyFileEntry(idSrc, filepath.Join(dest, filepath.FromSlash(idRel)), idRel, true, encrypted, key)
@@ -409,7 +409,7 @@ func (m *Manager) backupLibrary(ctx context.Context, dest string, lib library.Li
 			return nil
 		}
 		if d.IsDir() {
-			if rel == ".cairn" {
+			if rel == ".orchard" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -554,7 +554,7 @@ func (m *Manager) verifyEntry(dest string, e Entry, key []byte) bool {
 }
 
 // Restore writes the contents of a completed backup into dest, mirroring the
-// stored layout (server/cairn.db, libraries/<id>/...).
+// stored layout (server/orchard.db, libraries/<id>/...).
 func (m *Manager) Restore(ctx context.Context, id, dest string) (*Record, error) {
 	rec, err := m.store.Get(ctx, id)
 	if err != nil {
@@ -834,7 +834,7 @@ func dirBytes(dir string) (int64, error) {
 // writeHeader writes header.json (always plaintext).
 func writeHeader(dest string, encrypted bool, salt string) error {
 	h := headerMetadata{
-		Format:    "cairn-backup",
+		Format:    "orchard-backup",
 		Version:   1,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		Encrypted: encrypted,

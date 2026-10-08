@@ -17,7 +17,7 @@ func buildTestDist(t *testing.T) string {
 
 	files := map[string]string{
 		"index.html":       "<html><body id=\"app\"></body></html>",
-		"assets/app.js":    "console.log('cairn');",
+		"assets/app.js":    "console.log('orchard');",
 		"assets/app.css":   "body { color: red }",
 		"favicon.svg":      "<svg/>",
 		"nested/page.html": "<html><body>nested</body></html>",
@@ -195,7 +195,7 @@ func TestEmbeddedHandler(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("embedded / status = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "Cairn") {
-		t.Errorf("embedded placeholder does not reference Cairn")
+	if !strings.Contains(rec.Body.String(), "Orchard") {
+		t.Errorf("embedded placeholder does not reference Orchard")
 	}
 }

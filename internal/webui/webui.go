@@ -1,4 +1,4 @@
-// Package webui serves the compiled Cairn frontend either from the embedded
+// Package webui serves the compiled Orchard frontend either from the embedded
 // copy or, in development, from an on-disk build directory.
 //
 // The frontend is a React single-page application. Every non-file request is
@@ -21,7 +21,7 @@ import (
 //go:embed all:dist
 var embedded embed.FS
 
-// Handler returns an http.Handler that serves the Cairn frontend as a SPA.
+// Handler returns an http.Handler that serves the Orchard frontend as a SPA.
 //
 // If distDir is non-empty it is served instead of the embedded assets. This
 // lets a developer run a freshly built frontend against the API server
@@ -40,14 +40,14 @@ func Handler(distDir string) (http.Handler, error) {
 
 	info, err := os.Stat(distDir)
 	if err != nil {
-		return nil, fmt.Errorf("CAIRN_WEB_DIST: %w", err)
+		return nil, fmt.Errorf("ORCHARD_WEB_DIST: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("CAIRN_WEB_DIST %q is not a directory", distDir)
+		return nil, fmt.Errorf("ORCHARD_WEB_DIST %q is not a directory", distDir)
 	}
 	root := os.DirFS(distDir)
 	if err := requireFile(root, "index.html"); err != nil {
-		return nil, fmt.Errorf("CAIRN_WEB_DIST %q is missing index.html: %w", distDir, err)
+		return nil, fmt.Errorf("ORCHARD_WEB_DIST %q is missing index.html: %w", distDir, err)
 	}
 	return &spaHandler{fsys: root}, nil
 }

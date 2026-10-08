@@ -10,12 +10,12 @@ import (
 )
 
 func TestOpenCreatesAndMigrates(t *testing.T) {
-	cairnDir := filepath.Join(t.TempDir(), ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	pool, err := librarydb.Open(cairnDir)
+	pool, err := librarydb.Open(orchardDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -46,13 +46,13 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 // library is used, so this cannot be a server-side migration: if the column is
 // not added here, every ?type= listing fails with "no such column".
 func TestOpenAddsMediaTypeToExistingLibrary(t *testing.T) {
-	cairnDir := filepath.Join(t.TempDir(), ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Build a database in the old shape: the table, minus the media_type column.
-	old, err := sql.Open("sqlite", filepath.Join(cairnDir, "library.db"))
+	old, err := sql.Open("sqlite", filepath.Join(orchardDir, "library.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestOpenAddsMediaTypeToExistingLibrary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, err := librarydb.Open(cairnDir)
+	pool, err := librarydb.Open(orchardDir)
 	if err != nil {
 		t.Fatalf("Open on a pre-existing library db: %v", err)
 	}
@@ -118,18 +118,18 @@ func TestOpenAddsMediaTypeToExistingLibrary(t *testing.T) {
 
 	// Opening again must be a no-op rather than an error: the migration is
 	// applied on every open, and the library is opened on every request.
-	if _, err := librarydb.Open(cairnDir); err != nil {
+	if _, err := librarydb.Open(orchardDir); err != nil {
 		t.Errorf("re-open of a migrated library db: %v", err)
 	}
 }
 
 func TestOpenDBWrapper(t *testing.T) {
-	cairnDir := filepath.Join(t.TempDir(), ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	db, err := librarydb.OpenDB(cairnDir)
+	db, err := librarydb.OpenDB(orchardDir)
 	if err != nil {
 		t.Fatalf("OpenDB: %v", err)
 	}
@@ -142,14 +142,14 @@ func TestOpenDBWrapper(t *testing.T) {
 }
 
 func TestOpenIdempotent(t *testing.T) {
-	cairnDir := filepath.Join(t.TempDir(), ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Opening the same database twice is idempotent (migrations re-run safely).
 	for i := 0; i < 3; i++ {
-		pool, err := librarydb.Open(cairnDir)
+		pool, err := librarydb.Open(orchardDir)
 		if err != nil {
 			t.Fatalf("Open #%d: %v", i+1, err)
 		}

@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// cairnDirName is the metadata directory name that must never be indexed.
-const cairnDirName = ".cairn"
+// orchardDirName is the metadata directory name that must never be indexed.
+const orchardDirName = ".orchard"
 
 // Scanner walks a library root and reconciles the filesystem against the
 // persisted index. It implements staged identity detection to avoid
@@ -71,7 +71,7 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		}
 
 		// Skip the metadata directory entirely.
-		if d.IsDir() && d.Name() == cairnDirName {
+		if d.IsDir() && d.Name() == orchardDirName {
 			return filepath.SkipDir
 		}
 		if d.IsDir() {

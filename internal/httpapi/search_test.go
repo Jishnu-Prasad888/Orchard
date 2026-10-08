@@ -82,7 +82,7 @@ func newSearchTestServerWithKeys(t *testing.T, keys *crypto.Keys) (http.Handler,
 // seedLibraryFile inserts an indexed file directly into the per-library DB.
 func seedLibraryFile(t *testing.T, libRoot, id, relPath string, size int64) error {
 	t.Helper()
-	ldb, err := librarydb.Open(filepath.Join(libRoot, ".cairn"))
+	ldb, err := librarydb.Open(filepath.Join(libRoot, ".orchard"))
 	if err != nil {
 		return err
 	}

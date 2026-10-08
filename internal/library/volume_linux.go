@@ -10,7 +10,7 @@ import (
 // volumeID returns a best-effort filesystem volume identifier for the given
 // path, and false when the platform or filesystem does not expose one. It is a
 // secondary identity signal used to recognize a library when paths differ. The
-// stable, primary identity always remains the id inside <root>/.cairn/library.json.
+// stable, primary identity always remains the id inside <root>/.orchard/library.json.
 func volumeID(path string) (string, bool) {
 	var st syscall.Stat_t
 	if err := syscall.Stat(path, &st); err != nil {

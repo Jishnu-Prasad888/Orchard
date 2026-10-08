@@ -26,8 +26,8 @@ func (s *Server) openMediaService(
 		return nil, nil, false
 	}
 
-	cairnDir := lib.Root + "/.cairn"
-	db, err := librarydb.Open(cairnDir)
+	orchardDir := lib.Root + "/.orchard"
+	db, err := librarydb.Open(orchardDir)
 	if err != nil {
 		s.logger.Error("open library db", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
@@ -109,7 +109,6 @@ func (s *Server) handleFileCounts(w http.ResponseWriter, r *http.Request, u *aut
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
 		"counts":    counts,
-		"albums":    coll.Albums,
 		"tags":      coll.Tags,
 		"favorites": coll.Favorites,
 	})

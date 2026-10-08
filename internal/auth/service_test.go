@@ -39,7 +39,7 @@ func TestLoginUnknownUsernameRunsVerifier(t *testing.T) {
 
 func newTestService(t *testing.T) (*Service, *sql.DB) {
 	t.Helper()
-	pool, err := db.Open(filepath.Join(t.TempDir(), "cairn.db"))
+	pool, err := db.Open(filepath.Join(t.TempDir(), "orchard.db"))
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}

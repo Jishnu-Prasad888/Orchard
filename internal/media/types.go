@@ -1,4 +1,4 @@
-// Package media provides the domain types and repository for Cairn's media and
+// Package media provides the domain types and repository for Orchard's media and
 // file browsing layer. It sits on top of the per-library SQLite database and
 // the indexed_files table that the indexer maintains.
 //
@@ -232,42 +232,6 @@ type Page struct {
 	Files      []*File
 	NextCursor string // empty when this is the last page
 	Total      int    // approximate total matching (without pagination)
-}
-
-// --- duplicates ---
-
-// DuplicateGroup is a set of present files whose bytes are identical
-// (same non-null content hash). Every member reports the same SizeBytes.
-type DuplicateGroup struct {
-	ContentHash string
-	SizeBytes   int64
-	Files       []*File
-}
-
-// DuplicatesPage is one page of duplicate groups, ordered by content hash.
-type DuplicatesPage struct {
-	Groups     []*DuplicateGroup
-	NextCursor string // last content hash seen; empty when this is the last page
-	Total      int    // total number of duplicate groups (without pagination)
-}
-
-// DuplicateOptions controls pagination for duplicate detection.
-type DuplicateOptions struct {
-	// Cursor is the last content hash from the previous page, so the next page
-	// continues after it. Empty starts from the beginning.
-	Cursor string
-	// Limit caps the number of groups per page. Defaults to 50, max 200.
-	Limit int
-}
-
-// Defaults fills in zero values with sensible defaults.
-func (o *DuplicateOptions) Defaults() {
-	if o.Limit <= 0 {
-		o.Limit = 50
-	}
-	if o.Limit > 200 {
-		o.Limit = 200
-	}
 }
 
 // --- path safety ---

@@ -19,11 +19,11 @@ import (
 
 func newTestDB(t *testing.T) *librarydb.DB {
 	t.Helper()
-	cairnDir := filepath.Join(t.TempDir(), ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, err := librarydb.OpenDB(cairnDir)
+	db, err := librarydb.OpenDB(orchardDir)
 	if err != nil {
 		t.Fatalf("open library db: %v", err)
 	}
@@ -211,8 +211,8 @@ func TestStateStoreCounts(t *testing.T) {
 // them: a freshly triggered scan must actually index the library.
 func TestIndexManagerWorkerExecutesScanJob(t *testing.T) {
 	root := t.TempDir()
-	cairnDir := filepath.Join(root, ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(root, ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(root, "a.jpg"), "photo a")
@@ -252,8 +252,8 @@ func TestIndexManagerWorkerExecutesScanJob(t *testing.T) {
 
 func TestIndexManagerWorkersRestartIsIdempotent(t *testing.T) {
 	root := t.TempDir()
-	cairnDir := filepath.Join(root, ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(root, ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(root, "a.jpg"), "photo a")
@@ -317,11 +317,11 @@ func TestScannerNewFiles(t *testing.T) {
 	}
 }
 
-func TestScannerSkipsCairnDir(t *testing.T) {
+func TestScannerSkipsOrchardDir(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "real.jpg"), "photo")
-	writeFile(t, filepath.Join(root, ".cairn", "library.json"), `{"id":"x"}`)
-	writeFile(t, filepath.Join(root, ".cairn", "library.db"), "db content")
+	writeFile(t, filepath.Join(root, ".orchard", "library.json"), `{"id":"x"}`)
+	writeFile(t, filepath.Join(root, ".orchard", "library.db"), "db content")
 
 	db := newTestDB(t)
 	scanner := indexer.NewScanner(indexer.NewStateStore(db.DB()), discardLogger())
@@ -330,7 +330,7 @@ func TestScannerSkipsCairnDir(t *testing.T) {
 		t.Fatalf("Scan: %v", err)
 	}
 	if result.TotalFiles != 1 {
-		t.Errorf("total = %d, want 1 (.cairn files must not be indexed)", result.TotalFiles)
+		t.Errorf("total = %d, want 1 (.orchard files must not be indexed)", result.TotalFiles)
 	}
 }
 

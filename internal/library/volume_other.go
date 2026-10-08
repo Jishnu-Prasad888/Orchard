@@ -3,7 +3,7 @@
 package library
 
 // volumeID is unavailable on this platform; callers treat the absent volume
-// identity as "unknown" and rely on the .cairn identity file alone.
+// identity as "unknown" and rely on the .orchard identity file alone.
 func volumeID(string) (string, bool) {
 	return "", false
 }

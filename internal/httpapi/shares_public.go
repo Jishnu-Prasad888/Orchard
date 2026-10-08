@@ -11,7 +11,7 @@ import (
 )
 
 // sharePasswordHeader carries an optional share password on public requests.
-const sharePasswordHeader = "X-Cairn-Share-Password"
+const sharePasswordHeader = "X-Orchard-Share-Password"
 
 // shareAuthenticatedFunc is a handler that has already been granted access to
 // a share.

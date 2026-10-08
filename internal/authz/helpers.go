@@ -18,7 +18,7 @@ func newID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// rfc3339 renders a timestamp the way every Cairn table stores it.
+// rfc3339 renders a timestamp the way every Orchard table stores it.
 func rfc3339(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 
 // parseTime reads a stored RFC3339Nano timestamp. A zero/empty value yields

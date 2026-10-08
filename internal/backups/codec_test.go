@@ -96,7 +96,7 @@ func roundTrip(t *testing.T, payload []byte, compress, encrypted bool) {
 }
 
 func TestPayloadRoundTrip(t *testing.T) {
-	payload := []byte("hello cairn — backup me, please")
+	payload := []byte("hello orchard — backup me, please")
 	cases := []struct {
 		name      string
 		payload   []byte

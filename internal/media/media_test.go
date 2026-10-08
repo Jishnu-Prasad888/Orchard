@@ -19,11 +19,11 @@ import (
 func newTestStore(t *testing.T) (*media.FileStore, string) {
 	t.Helper()
 	root := t.TempDir()
-	cairnDir := filepath.Join(root, ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(root, ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, err := librarydb.Open(cairnDir)
+	db, err := librarydb.Open(orchardDir)
 	if err != nil {
 		t.Fatalf("open library db: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestSafeRelPath(t *testing.T) {
 			t.Errorf("SafeRelPath(%q) unexpected error: %v", p, err)
 		}
 	}
-	bad := []string{"", "../escape.jpg", "/absolute.jpg", "a/../../escape", ".", "..", "./x", "a/./b", ".cairn/db", "a\x00b", "a\nb"}
+	bad := []string{"", "../escape.jpg", "/absolute.jpg", "a/../../escape", ".", "..", "./x", "a/./b", ".orchard/db", "a\x00b", "a\nb"}
 	for _, p := range bad {
 		if _, err := media.SafeRelPath(p); err == nil {
 			t.Errorf("SafeRelPath(%q) expected error", p)
@@ -396,7 +396,7 @@ func TestUploadCapEnforced(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".cairn-upload") {
+		if strings.HasPrefix(e.Name(), ".orchard-upload") {
 			t.Errorf("stale upload temp file left behind: %s", e.Name())
 		}
 	}
@@ -441,7 +441,7 @@ func TestRenameRejectsTraversalName(t *testing.T) {
 	ctx := context.Background()
 	seedFile(t, store, root, "old.jpg")
 
-	for _, name := range []string{"../escape.jpg", "a/b.jpg", ".cairn", "x\x00.jpg"} {
+	for _, name := range []string{"../escape.jpg", "a/b.jpg", ".orchard", "x\x00.jpg"} {
 		if _, err := svc.Rename(ctx, "old.jpg", name); err == nil {
 			t.Errorf("Rename with new_name %q expected error", name)
 		}
@@ -620,7 +620,7 @@ func TestCreateFolderMakesDirectoryOnDisk(t *testing.T) {
 	if fi, err := os.Stat(filepath.Join(root, "trips", "2025")); err != nil || !fi.IsDir() {
 		t.Fatalf("folder not created: %v", err)
 	}
-	if _, err := svc.CreateFolder(".cairn/x"); err == nil {
+	if _, err := svc.CreateFolder(".orchard/x"); err == nil {
 		t.Fatal("hidden folder should be rejected")
 	}
 	if _, err := svc.CreateFolder("../escape"); err == nil {

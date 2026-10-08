@@ -14,7 +14,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/sanitize"
 )
 
-const trashDirName = ".cairn/trash"
+const trashDirName = ".orchard/trash"
 
 // Service executes media file operations against the filesystem and keeps the
 // FileStore in sync. The libraryRoot is the absolute path to the library root.
@@ -62,7 +62,7 @@ func (svc *Service) Store() *FileStore { return svc.store }
 // the indexer, so listing from it alone hid every folder — including ones just
 // created and still empty. The filesystem is the source of truth; counts are
 // counted from the index (files in the folder and everything beneath it). Hidden folders (which
-// includes the .cairn metadata directory) and symlinks are skipped.
+// includes the .orchard metadata directory) and symlinks are skipped.
 func (svc *Service) ListFolders(ctx context.Context, parent string) ([]*Folder, error) {
 	if parent == "." {
 		parent = ""
@@ -187,7 +187,7 @@ func (svc *Service) WriteUpload(ctx context.Context, destRelPath string, src io.
 	}
 
 	// Write to temp file in the same directory for atomic rename.
-	tmp, err := os.CreateTemp(filepath.Dir(abs), ".cairn-upload-*")
+	tmp, err := os.CreateTemp(filepath.Dir(abs), ".orchard-upload-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
@@ -328,7 +328,7 @@ func (svc *Service) Copy(ctx context.Context, srcRelPath, destRelPath string) (*
 	}
 	defer func() { _ = src.Close() }()
 
-	tmp, err := os.CreateTemp(filepath.Dir(destAbs), ".cairn-copy-*")
+	tmp, err := os.CreateTemp(filepath.Dir(destAbs), ".orchard-copy-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp for copy: %w", err)
 	}

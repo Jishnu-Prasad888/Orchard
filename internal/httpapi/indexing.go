@@ -79,7 +79,7 @@ func isLibraryDBMissing(err error) bool {
 		return false
 	}
 	// The library database open path calls os.Stat; "no such file" means the
-	// .cairn directory or library.db does not exist yet.
+	// .orchard directory or library.db does not exist yet.
 	return errors.Is(err, library.ErrNotFound) ||
 		containsAny(err.Error(), "no such file", "does not exist")
 }

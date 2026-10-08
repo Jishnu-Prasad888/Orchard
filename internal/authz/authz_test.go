@@ -17,7 +17,7 @@ import (
 // and returns an authorization Service wired to it.
 func newTestService(t *testing.T) (*Service, *sql.DB, string) {
 	t.Helper()
-	pool, err := db.Open(filepath.Join(t.TempDir(), "cairn.db"))
+	pool, err := db.Open(filepath.Join(t.TempDir(), "orchard.db"))
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}

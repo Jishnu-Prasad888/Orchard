@@ -33,8 +33,8 @@ var (
 	// ErrExists means the root is already registered (as the same or a
 	// different library).
 	ErrExists = errors.New("library already registered at this path")
-	// ErrNoMetadata means adopt was called on a path without Cairn metadata.
-	ErrNoMetadata = errors.New("no cairn metadata found at path")
+	// ErrNoMetadata means adopt was called on a path without Orchard metadata.
+	ErrNoMetadata = errors.New("no orchard metadata found at path")
 )
 
 // Library is the registrar's view of a storage location, plus its current
@@ -51,7 +51,7 @@ type Library struct {
 	UpdatedAt     time.Time
 }
 
-// ProbeResult reports what Cairn can learn about a candidate root without
+// ProbeResult reports what Orchard can learn about a candidate root without
 // changing anything. It drives the "create or open" wizard.
 type ProbeResult struct {
 	PathExists   bool   `json:"path_exists"`
@@ -88,10 +88,10 @@ func cleanRoot(root string) (string, error) {
 		return "", &ValidationError{Field: "path", Reason: "is not a directory"}
 	}
 
-	// Registering the metadata directory itself would nest libraries in .cairn.
-	if filepath.Base(root) == cairnDirName {
+	// Registering the metadata directory itself would nest libraries in .orchard.
+	if filepath.Base(root) == orchardDirName {
 		return "", &ValidationError{Field: "path",
-			Reason: "cannot register a Cairn metadata directory"}
+			Reason: "cannot register a Orchard metadata directory"}
 	}
 	return root, nil
 }

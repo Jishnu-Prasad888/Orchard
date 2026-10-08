@@ -172,7 +172,7 @@ func TestBackupRunListVerifyRestoreFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST restore status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(dst, "server", "cairn.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(dst, "server", "orchard.db")); err != nil {
 		t.Fatalf("restored server db missing: %v", err)
 	}
 

@@ -13,14 +13,14 @@ import (
 	_ "modernc.org/sqlite" // registers the pure-Go "sqlite" database/sql driver
 )
 
-// Driver is the database/sql driver name used for all Cairn SQLite databases.
+// Driver is the database/sql driver name used for all Orchard SQLite databases.
 const Driver = "sqlite"
 
 // Open opens (creating if necessary) the SQLite database at path and
 // configures pragmas that apply to every pooled connection.
 //
 // The file is created with owner-only permissions. The server process is the
-// only writer of any Cairn database.
+// only writer of any Orchard database.
 func Open(path string) (*sql.DB, error) {
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o700); err != nil {

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// clearEnv removes every CAIRN_* variable from the environment so tests do
+// clearEnv removes every ORCHARD_* variable from the environment so tests do
 // not depend on the developer's shell.
 func clearEnv(t *testing.T) {
 	t.Helper()
@@ -32,7 +32,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LogLevel != DefaultLogLevel {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, DefaultLogLevel)
 	}
-	wantDataDir := filepath.Join("/home/pebble", ".local", "share", "cairn")
+	wantDataDir := filepath.Join("/home/pebble", ".local", "share", "orchard")
 	if cfg.DataDir != wantDataDir {
 		t.Errorf("DataDir = %q, want %q", cfg.DataDir, wantDataDir)
 	}
@@ -46,23 +46,23 @@ func TestLoadXDGDataHome(t *testing.T) {
 	t.Setenv("HOME", "/home/pebble")
 	t.Setenv("XDG_DATA_HOME", "/var/data")
 
-	if got := Load().DataDir; got != filepath.Join("/var/data", "cairn") {
+	if got := Load().DataDir; got != filepath.Join("/var/data", "orchard") {
 		t.Errorf("DataDir with XDG_DATA_HOME = %q", got)
 	}
 }
 
 func TestLoadEnvOverrides(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("CAIRN_HTTP_ADDR", "0.0.0.0:9999")
-	t.Setenv("CAIRN_DATA_DIR", "/srv/cairn-state")
-	t.Setenv("CAIRN_LOG_LEVEL", "debug")
-	t.Setenv("CAIRN_ENCRYPTION_PASSPHRASE", "hunter2-at-rest")
+	t.Setenv("ORCHARD_HTTP_ADDR", "0.0.0.0:9999")
+	t.Setenv("ORCHARD_DATA_DIR", "/srv/orchard-state")
+	t.Setenv("ORCHARD_LOG_LEVEL", "debug")
+	t.Setenv("ORCHARD_ENCRYPTION_PASSPHRASE", "hunter2-at-rest")
 
 	cfg := Load()
 	if cfg.HTTPAddr != "0.0.0.0:9999" {
 		t.Errorf("HTTPAddr = %q", cfg.HTTPAddr)
 	}
-	if cfg.DataDir != "/srv/cairn-state" {
+	if cfg.DataDir != "/srv/orchard-state" {
 		t.Errorf("DataDir = %q", cfg.DataDir)
 	}
 	if cfg.LogLevel != "debug" {
@@ -75,7 +75,7 @@ func TestLoadEnvOverrides(t *testing.T) {
 
 func TestLoadTrimsWhitespace(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("CAIRN_LOG_LEVEL", "  warn  ")
+	t.Setenv("ORCHARD_LOG_LEVEL", "  warn  ")
 
 	if got := Load().LogLevel; got != "warn" {
 		t.Errorf("LogLevel = %q, want %q", got, "warn")
@@ -110,7 +110,7 @@ func TestValidate(t *testing.T) {
 
 func TestDatabasePath(t *testing.T) {
 	cfg := Config{DataDir: "/tmp/state"}
-	if got := cfg.DatabasePath(); got != filepath.Join("/tmp/state", "cairn.db") {
+	if got := cfg.DatabasePath(); got != filepath.Join("/tmp/state", "orchard.db") {
 		t.Errorf("DatabasePath = %q", got)
 	}
 }

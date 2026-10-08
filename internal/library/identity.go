@@ -1,6 +1,6 @@
-// Package library manages Cairn's storage libraries: existing directories the
+// Package library manages Orchard's storage libraries: existing directories the
 // server catalogs in place (ADR-0004). A library is self-describing: its
-// persistent identity and configuration live in <root>/.cairn/library.json, so
+// persistent identity and configuration live in <root>/.orchard/library.json, so
 // a library can be reconnected after being mounted at a different path and
 // adopted by a fresh installation without reprocessing anything.
 package library
@@ -18,9 +18,9 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
 )
 
-// cairnDirName is the single metadata directory Cairn keeps inside each
+// orchardDirName is the single metadata directory Orchard keeps inside each
 // library. It is never indexed as user media and never user-modifiable state.
-const cairnDirName = ".cairn"
+const orchardDirName = ".orchard"
 
 // metadataFileName is the library identity file inside the metadata directory.
 const metadataFileName = "library.json"
@@ -29,9 +29,9 @@ const metadataFileName = "library.json"
 // changes; a file with a mismatched version is rejected rather than assumed.
 const metadataSchemaVersion = 1
 
-// errNoMetadata is returned when a path holds no Cairn metadata. It is wrapped
+// errNoMetadata is returned when a path holds no Orchard metadata. It is wrapped
 // by callers that need to distinguish "adoptable" from "not a library".
-var errNoMetadata = errors.New("no cairn metadata at path")
+var errNoMetadata = errors.New("no orchard metadata at path")
 
 // identity is the durable, portable identity of a library. It travels with the
 // library directory itself, so identity never depends on the mount path.
@@ -45,10 +45,10 @@ type identity struct {
 
 // metadataDir returns the absolute metadata directory for a library root.
 func metadataDir(root string) string {
-	return filepath.Join(root, cairnDirName)
+	return filepath.Join(root, orchardDirName)
 }
 
-// createIdentity writes a fresh identity file into root/.cairn/. The metadata
+// createIdentity writes a fresh identity file into root/.orchard/. The metadata
 // directory is created as needed. Callers must already have validated the root.
 // The on-disk identity is sealed with keys when encryption is enabled.
 func createIdentity(root, name, volumeID string, keys *crypto.Keys) (*identity, error) {
@@ -71,7 +71,7 @@ func createIdentity(root, name, volumeID string, keys *crypto.Keys) (*identity, 
 	return ident, nil
 }
 
-// loadIdentity reads and validates the identity file at root/.cairn/library.json.
+// loadIdentity reads and validates the identity file at root/.orchard/library.json.
 // Sealed identities are decrypted with keys; the passphrase must therefore
 // match the one used when the library was created or adopted.
 func loadIdentity(root string, keys *crypto.Keys) (*identity, error) {
@@ -126,7 +126,7 @@ func writeIdentityFile(dir string, ident *identity, keys *crypto.Keys) error {
 	return nil
 }
 
-// hasMetadata reports whether root already carries a Cairn metadata directory.
+// hasMetadata reports whether root already carries a Orchard metadata directory.
 func hasMetadata(root string) bool {
 	_, err := os.Stat(filepath.Join(metadataDir(root), metadataFileName))
 	return err == nil

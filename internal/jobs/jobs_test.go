@@ -17,11 +17,11 @@ import (
 
 func newTestQueue(t *testing.T) *jobs.Queue {
 	t.Helper()
-	cairnDir := filepath.Join(t.TempDir(), ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, err := librarydb.OpenDB(cairnDir)
+	db, err := librarydb.OpenDB(orchardDir)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

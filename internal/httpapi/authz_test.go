@@ -93,7 +93,7 @@ func rawUpload(t *testing.T, c *testClient, libID, path string) *httptest.Respon
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fw.Write([]byte("hello cairn")); err != nil {
+	if _, err := fw.Write([]byte("hello orchard")); err != nil {
 		t.Fatal(err)
 	}
 	if err := mw.WriteField("path", path); err != nil {

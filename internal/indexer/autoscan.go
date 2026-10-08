@@ -38,7 +38,7 @@ func (m *IndexManager) StartAutoScan(ctx context.Context, interval time.Duration
 		}
 	}
 	go func() {
-		// Once at startup, to catch up on whatever changed while Cairn was off.
+		// Once at startup, to catch up on whatever changed while Orchard was off.
 		pass()
 		t := time.NewTicker(interval)
 		defer t.Stop()

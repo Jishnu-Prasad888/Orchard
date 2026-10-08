@@ -13,7 +13,7 @@ import (
 
 func newTestService(t *testing.T) (*Service, *sql.DB) {
 	t.Helper()
-	pool, err := db.Open(filepath.Join(t.TempDir(), "cairn.db"))
+	pool, err := db.Open(filepath.Join(t.TempDir(), "orchard.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestRecordPersistsEvent(t *testing.T) {
 		Action:       "tests.fired",
 		TargetUserID: "user-2",
 		IPAddress:    "127.0.0.1",
-		UserAgent:    "cairn-test",
+		UserAgent:    "orchard-test",
 		Details:      map[string]any{"count": 3},
 	})
 

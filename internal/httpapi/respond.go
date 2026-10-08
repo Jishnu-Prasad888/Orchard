@@ -1,4 +1,4 @@
-// Package httpapi implements the Cairn HTTP interface: the JSON/API v1
+// Package httpapi implements the Orchard HTTP interface: the JSON/API v1
 // routes and the embedded web frontend.
 //
 // Handlers in this package stay thin. Business logic lives in application

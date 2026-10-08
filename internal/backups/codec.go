@@ -1,5 +1,5 @@
 // Package backups implements Phase 10: incremental, compressed, optionally
-// encrypted backups of every registered library (media files and .cairn
+// encrypted backups of every registered library (media files and .orchard
 // metadata) and of the server database, with retention, verification, and
 // restore. See docs/backups.md and ADR-0008.
 package backups
@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// formatMagic identifies a Cairn backup payload.
+// formatMagic identifies a Orchard backup payload.
 var formatMagic = [8]byte{'C', 'A', 'I', 'R', 'N', 'B', 'K', 0x01}
 
 // headerSize is the fixed binary header preceding every stored payload:
@@ -89,7 +89,7 @@ func decodeHeader(b []byte) (fileHeader, error) {
 		return fileHeader{}, errors.New("backup payload header truncated")
 	}
 	if string(b[:8]) != string(formatMagic[:]) {
-		return fileHeader{}, errors.New("not a Cairn backup payload (bad magic)")
+		return fileHeader{}, errors.New("not a Orchard backup payload (bad magic)")
 	}
 	var h fileHeader
 	flags := b[8]
@@ -103,7 +103,7 @@ func decodeHeader(b []byte) (fileHeader, error) {
 }
 
 // deriveKey derives a 32-byte AES-256 key from a passphrase and salt via
-// argon2id, matching the password-hashing conventions used elsewhere in Cairn.
+// argon2id, matching the password-hashing conventions used elsewhere in Orchard.
 // The derived key is handed to crypto.NewKeysFromKey by the sealing/opening
 // paths so backup payloads use the shared AEAD kernel's blob format.
 func deriveKey(passphrase string, salt []byte) []byte {
@@ -133,7 +133,7 @@ type payloadSink struct {
 // so byte-identical unchanged files are hard-linkable across backups; encrypted
 // requires a 32-byte key.
 func newPayloadSink(compress, encrypted bool, key []byte) (*payloadSink, error) {
-	tmp, err := os.CreateTemp("", "cairn-payload-*")
+	tmp, err := os.CreateTemp("", "orchard-payload-*")
 	if err != nil {
 		return nil, fmt.Errorf("create payload temp file: %w", err)
 	}

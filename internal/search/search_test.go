@@ -23,11 +23,11 @@ import (
 func newTestStoreWithMediaStore(t *testing.T) (*search.SearchStore, *media.FileStore, *sql.DB) {
 	t.Helper()
 	root := t.TempDir()
-	cairnDir := filepath.Join(root, ".cairn")
-	if err := os.MkdirAll(cairnDir, 0o755); err != nil {
+	orchardDir := filepath.Join(root, ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, err := librarydb.Open(cairnDir)
+	db, err := librarydb.Open(orchardDir)
 	if err != nil {
 		t.Fatalf("open library db: %v", err)
 	}

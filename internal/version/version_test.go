@@ -6,7 +6,7 @@ import (
 )
 
 func TestGet(t *testing.T) {
-	t.Setenv("CAIRN_TEST", "1")
+	t.Setenv("ORCHARD_TEST", "1")
 	info := Get()
 
 	if strings.TrimSpace(info.Version) == "" {

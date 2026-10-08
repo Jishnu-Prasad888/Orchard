@@ -1,4 +1,4 @@
-// Package auth implements Cairn authentication: user accounts with argon2id
+// Package auth implements Orchard authentication: user accounts with argon2id
 // password hashing, opaque session tokens stored only as hashes, roles, and
 // the login/logout/current-user flows.
 //

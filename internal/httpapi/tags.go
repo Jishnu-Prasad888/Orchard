@@ -21,8 +21,8 @@ func (s *Server) openTagStore(
 			CodeConflict, "Library is offline.")
 		return nil, nil, false
 	}
-	cairnDir := lib.Root + "/.cairn"
-	db, err := librarydb.Open(cairnDir)
+	orchardDir := lib.Root + "/.orchard"
+	db, err := librarydb.Open(orchardDir)
 	if err != nil {
 		s.logger.Error("open library db for tags", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,

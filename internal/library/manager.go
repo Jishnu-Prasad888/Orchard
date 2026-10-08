@@ -16,7 +16,7 @@ import (
 )
 
 // Manager registers, probes, and reconciles storage libraries. It owns the
-// server-level registrar table and the on-disk .cairn metadata. Callers are
+// server-level registrar table and the on-disk .orchard metadata. Callers are
 // expected to already hold whatever authorization the app layer demands
 // (resource-based authorization; per-call capabilities gate access).
 type Manager struct {
@@ -80,7 +80,7 @@ func (m *Manager) Probe(ctx context.Context, root string) (*ProbeResult, error) 
 }
 
 // Register adds a library at root, creating fresh metadata when the directory
-// has none, or adopting the existing .cairn metadata when it does. If the
+// has none, or adopting the existing .orchard metadata when it does. If the
 // metadata's identity already exists in the registrar (a disk reconnected at a
 // new path), the registration rebinds instead of duplicating. The returned
 // mode is "created" or "adopted".
@@ -98,9 +98,9 @@ func (m *Manager) Register(ctx context.Context, root, name string) (*Library, st
 		return nil, "", &ValidationError{Field: "path", Reason: "must be an absolute path"}
 	}
 	root = filepath.Clean(root)
-	if filepath.Base(root) == cairnDirName {
+	if filepath.Base(root) == orchardDirName {
 		return nil, "", &ValidationError{Field: "path",
-			Reason: "cannot register a Cairn metadata directory"}
+			Reason: "cannot register a Orchard metadata directory"}
 	}
 
 	// Create the directory (and any missing parents) if it does not yet exist.
@@ -137,7 +137,7 @@ func (m *Manager) Register(ctx context.Context, root, name string) (*Library, st
 }
 
 // Create is the explicit "brand-new library" path. A directory that already
-// carries .cairn metadata is rejected in favor of adoption.
+// carries .orchard metadata is rejected in favor of adoption.
 func (m *Manager) Create(ctx context.Context, root, name string) (*Library, error) {
 	clean, err := cleanRoot(root)
 	if err != nil {
@@ -145,7 +145,7 @@ func (m *Manager) Create(ctx context.Context, root, name string) (*Library, erro
 	}
 	if hasMetadata(clean) {
 		return nil, &ValidationError{Field: "path",
-			Reason: "already contains Cairn metadata; adopt it instead"}
+			Reason: "already contains Orchard metadata; adopt it instead"}
 	}
 	registered, err := m.registeredRoot(ctx, clean)
 	if err != nil {
@@ -224,7 +224,7 @@ func (m *Manager) Refresh(ctx context.Context, id, newPath string) (*Library, er
 }
 
 // Remove unregisters the library: the registrar row is deleted, the on-disk
-// .cairn metadata is deliberately left in place so the library can be adopted
+// .orchard metadata is deliberately left in place so the library can be adopted
 // again (or backed up) later.
 func (m *Manager) Remove(ctx context.Context, id string) error {
 	res, err := m.db.ExecContext(ctx, `DELETE FROM libraries WHERE id = ?`, id)
@@ -541,7 +541,7 @@ func parseTime(value string, out *time.Time) error {
 // It is deliberately portable (works on Windows too), where an access-bit check
 // would not be.
 func isWritable(dir string) bool {
-	f, err := os.CreateTemp(dir, ".cairn-probe-*")
+	f, err := os.CreateTemp(dir, ".orchard-probe-*")
 	if err != nil {
 		return false
 	}

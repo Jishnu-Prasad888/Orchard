@@ -16,14 +16,14 @@ var (
 	ErrEmpty     = errors.New("path is empty")
 	ErrAbsolute  = errors.New("path must be relative")
 	ErrTraversal = errors.New("path must not contain '.' or '..' components")
-	ErrReserved  = errors.New("path must not target the Cairn metadata directory")
+	ErrReserved  = errors.New("path must not target the Orchard metadata directory")
 	ErrControl   = errors.New("path must not contain control characters")
 	ErrNotBare   = errors.New("filename must be a single name without separators")
 )
 
-// ReservedDir is the top-level directory name that stores Cairn's own library
+// ReservedDir is the top-level directory name that stores Orchard's own library
 // metadata. Library content may never address it.
-const ReservedDir = ".cairn"
+const ReservedDir = ".orchard"
 
 // RelPath validates and canonicalizes a caller-supplied relative path scoped to
 // a library root. It returns the canonical slash-separated relative path, or an

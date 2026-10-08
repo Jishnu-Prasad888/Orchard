@@ -17,36 +17,36 @@ func TestObserveAndRender(t *testing.T) {
 	out := string(r.Render())
 
 	// Series are labelled by method and exact status.
-	if !strings.Contains(out, `cairn_http_requests_total{method="GET",status="200"} 2`) {
+	if !strings.Contains(out, `orchard_http_requests_total{method="GET",status="200"} 2`) {
 		t.Errorf("missing GET/200 counter: %s", out)
 	}
-	if !strings.Contains(out, `cairn_http_requests_total{method="POST",status="409"} 1`) {
+	if !strings.Contains(out, `orchard_http_requests_total{method="POST",status="409"} 1`) {
 		t.Errorf("missing POST/409 counter: %s", out)
 	}
 
 	// Histogram: 2s request lands in the 2.5s bucket; 120ms in the 0.25s one.
-	if !strings.Contains(out, `cairn_http_request_duration_seconds_bucket{le="0.25"} 2`) {
+	if !strings.Contains(out, `orchard_http_request_duration_seconds_bucket{le="0.25"} 2`) {
 		t.Errorf("expected 2 requests in the 0.25s bucket: %s", out)
 	}
-	if !strings.Contains(out, `cairn_http_request_duration_seconds_bucket{le="2.5"} 3`) {
+	if !strings.Contains(out, `orchard_http_request_duration_seconds_bucket{le="2.5"} 3`) {
 		t.Errorf("expected all 3 requests in the 2.5s bucket: %s", out)
 	}
-	if !strings.Contains(out, `cairn_http_request_duration_seconds_bucket{le="+Inf"} 3`) {
+	if !strings.Contains(out, `orchard_http_request_duration_seconds_bucket{le="+Inf"} 3`) {
 		t.Errorf("expected +Inf bucket to equal count: %s", out)
 	}
-	if !strings.Contains(out, "cairn_http_request_duration_seconds_count 3") {
+	if !strings.Contains(out, "orchard_http_request_duration_seconds_count 3") {
 		t.Errorf("expected count 3: %s", out)
 	}
 
 	// Gauge restored after the paired in-flight calls.
-	if !strings.Contains(out, "cairn_http_requests_in_flight 0") {
+	if !strings.Contains(out, "orchard_http_requests_in_flight 0") {
 		t.Errorf("expected in-flight 0: %s", out)
 	}
 
 	// Process and runtime gauges always present.
 	for _, want := range []string{
-		"cairn_process_start_time_seconds",
-		"cairn_process_uptime_seconds",
+		"orchard_process_start_time_seconds",
+		"orchard_process_uptime_seconds",
 		"go_goroutines",
 		"go_memstats_alloc_bytes",
 		"go_memstats_heap_objects",
@@ -59,11 +59,11 @@ func TestObserveAndRender(t *testing.T) {
 
 	// Every series must be guarded by HELP and TYPE lines (order-free check).
 	for _, name := range []string{
-		"cairn_http_requests_total",
-		"cairn_http_request_duration_seconds",
-		"cairn_http_requests_in_flight",
-		"cairn_process_start_time_seconds",
-		"cairn_process_uptime_seconds",
+		"orchard_http_requests_total",
+		"orchard_http_request_duration_seconds",
+		"orchard_http_requests_in_flight",
+		"orchard_process_start_time_seconds",
+		"orchard_process_uptime_seconds",
 	} {
 		if !strings.Contains(out, "# HELP "+name) {
 			t.Errorf("missing HELP for %s", name)
@@ -114,7 +114,7 @@ func TestConcurrentObserve(t *testing.T) {
 		<-done
 	}
 	out := string(r.Render())
-	if !strings.Contains(out, `cairn_http_requests_total{method="GET",status="200"} 4000`) {
+	if !strings.Contains(out, `orchard_http_requests_total{method="GET",status="200"} 4000`) {
 		t.Errorf("expected exactly 4000 requests recorded, got: %s", out)
 	}
 }

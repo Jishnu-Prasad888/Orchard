@@ -1,4 +1,4 @@
-// Package jobs implements Cairn's persistent background job system.
+// Package jobs implements Orchard's persistent background job system.
 //
 // Jobs are written to the per-library SQLite database so they survive process
 // restarts. A job that was running when the process stopped is reset to

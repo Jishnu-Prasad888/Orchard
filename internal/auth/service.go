@@ -19,7 +19,7 @@ import (
 // budget on the login path for an unknown username as for a wrong password.
 // Computed once on first use.
 var timingEqualizerHash = sync.OnceValue(func() string {
-	h, err := HashPassword("cairn-timing-equalizer-000")
+	h, err := HashPassword("orchard-timing-equalizer-000")
 	if err != nil {
 		return ""
 	}

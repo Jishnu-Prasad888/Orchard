@@ -1,4 +1,4 @@
-// Package version holds build-time metadata for the Cairn binary.
+// Package version holds build-time metadata for the Orchard binary.
 //
 // The fields in this package are intended to be overridden at build time via
 // the -ldflags flag. See the Makefile's `build` target for details.

@@ -1,4 +1,4 @@
-// Package metrics exposes lightweight metrics for the Cairn server in the
+// Package metrics exposes lightweight metrics for the Orchard server in the
 // Prometheus text exposition format.
 //
 // The package deliberately has no third-party dependencies: the signals needed
@@ -28,8 +28,8 @@ import (
 // observed duration, mirroring the standard Prometheus histogram model.
 var durationBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
-// Name is the metrics namespace prefix for all Cairn metrics.
-const Name = "cairn"
+// Name is the metrics namespace prefix for all Orchard metrics.
+const Name = "orchard"
 
 // Registry accumulates metrics for the server process. A zero-value Registry
 // is not usable; use New.
@@ -109,8 +109,8 @@ func (r *Registry) Render() []byte {
 	var b strings.Builder
 
 	// --- HTTP request totals ---
-	b.WriteString("# HELP cairn_http_requests_total Total HTTP requests by method and status code.\n")
-	b.WriteString("# TYPE cairn_http_requests_total counter\n")
+	b.WriteString("# HELP orchard_http_requests_total Total HTTP requests by method and status code.\n")
+	b.WriteString("# TYPE orchard_http_requests_total counter\n")
 	r.mu.Lock()
 	keys := make([]string, 0, len(r.series))
 	for k := range r.series {
@@ -119,35 +119,35 @@ func (r *Registry) Render() []byte {
 	sort.Strings(keys)
 	for _, k := range keys {
 		method, status := splitSeriesKey(k)
-		fmt.Fprintf(&b, "cairn_http_requests_total{method=%q,status=%q} %d\n",
+		fmt.Fprintf(&b, "orchard_http_requests_total{method=%q,status=%q} %d\n",
 			method, status, r.series[k].Load())
 	}
 	r.mu.Unlock()
 
 	// --- Latency histogram ---
-	b.WriteString("# HELP cairn_http_request_duration_seconds HTTP request latency.\n")
-	b.WriteString("# TYPE cairn_http_request_duration_seconds histogram\n")
+	b.WriteString("# HELP orchard_http_request_duration_seconds HTTP request latency.\n")
+	b.WriteString("# TYPE orchard_http_request_duration_seconds histogram\n")
 	for i, bound := range durationBuckets {
-		fmt.Fprintf(&b, "cairn_http_request_duration_seconds_bucket{le=%q} %d\n",
+		fmt.Fprintf(&b, "orchard_http_request_duration_seconds_bucket{le=%q} %d\n",
 			strconvFormatFloat(bound), r.histBuckets[i].Load())
 	}
-	fmt.Fprintf(&b, "cairn_http_request_duration_seconds_bucket{le=\"+Inf\"} %d\n", r.histCount.Load())
+	fmt.Fprintf(&b, "orchard_http_request_duration_seconds_bucket{le=\"+Inf\"} %d\n", r.histCount.Load())
 	sum := float64(r.histSumNS.Load()) / 1e9
-	fmt.Fprintf(&b, "cairn_http_request_duration_seconds_sum %s\n", strconvFormatFloat(sum))
-	fmt.Fprintf(&b, "cairn_http_request_duration_seconds_count %d\n", r.histCount.Load())
+	fmt.Fprintf(&b, "orchard_http_request_duration_seconds_sum %s\n", strconvFormatFloat(sum))
+	fmt.Fprintf(&b, "orchard_http_request_duration_seconds_count %d\n", r.histCount.Load())
 
 	// --- In-flight gauge ---
-	b.WriteString("# HELP cairn_http_requests_in_flight HTTP requests currently being handled.\n")
-	b.WriteString("# TYPE cairn_http_requests_in_flight gauge\n")
-	fmt.Fprintf(&b, "cairn_http_requests_in_flight %d\n", r.inFlight.Load())
+	b.WriteString("# HELP orchard_http_requests_in_flight HTTP requests currently being handled.\n")
+	b.WriteString("# TYPE orchard_http_requests_in_flight gauge\n")
+	fmt.Fprintf(&b, "orchard_http_requests_in_flight %d\n", r.inFlight.Load())
 
 	// --- Process info ---
-	b.WriteString("# HELP cairn_process_start_time_seconds Start time of the process in unix seconds.\n")
-	b.WriteString("# TYPE cairn_process_start_time_seconds gauge\n")
-	fmt.Fprintf(&b, "cairn_process_start_time_seconds %d\n", r.start.Unix())
-	b.WriteString("# HELP cairn_process_uptime_seconds Seconds since the server process started.\n")
-	b.WriteString("# TYPE cairn_process_uptime_seconds gauge\n")
-	fmt.Fprintf(&b, "cairn_process_uptime_seconds %d\n", int64(time.Since(r.start).Seconds()))
+	b.WriteString("# HELP orchard_process_start_time_seconds Start time of the process in unix seconds.\n")
+	b.WriteString("# TYPE orchard_process_start_time_seconds gauge\n")
+	fmt.Fprintf(&b, "orchard_process_start_time_seconds %d\n", r.start.Unix())
+	b.WriteString("# HELP orchard_process_uptime_seconds Seconds since the server process started.\n")
+	b.WriteString("# TYPE orchard_process_uptime_seconds gauge\n")
+	fmt.Fprintf(&b, "orchard_process_uptime_seconds %d\n", int64(time.Since(r.start).Seconds()))
 
 	// --- Go runtime gauges ---
 	var mem runtime.MemStats

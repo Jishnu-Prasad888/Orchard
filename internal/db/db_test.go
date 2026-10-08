@@ -8,9 +8,9 @@ import (
 )
 
 func TestDSN(t *testing.T) {
-	got := dsn("/var/lib/cairn/cairn.db")
+	got := dsn("/var/lib/orchard/orchard.db")
 
-	if !strings.HasPrefix(got, "file:/var/lib/cairn/cairn.db?") {
+	if !strings.HasPrefix(got, "file:/var/lib/orchard/orchard.db?") {
 		t.Fatalf("dsn prefix = %q", got)
 	}
 	for _, pragma := range []string{
@@ -27,7 +27,7 @@ func TestDSN(t *testing.T) {
 
 func TestOpenCreatesDatabase(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "nested", "cairn.db")
+	path := filepath.Join(dir, "nested", "orchard.db")
 
 	pool, err := Open(path)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestOpenInvalidPath(t *testing.T) {
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(filepath.Join(file, "cairn.db")); err == nil {
+	if _, err := Open(filepath.Join(file, "orchard.db")); err == nil {
 		t.Error("expected error when database directory cannot be created")
 	}
 }

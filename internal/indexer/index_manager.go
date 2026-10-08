@@ -158,10 +158,10 @@ func (m *IndexManager) StartWorkers(ctx context.Context, libs []library.Library)
 }
 
 // openLibraryDB opens (and migrates) the library-level SQLite database for the
-// library rooted at root. The .cairn directory must already exist.
+// library rooted at root. The .orchard directory must already exist.
 func (m *IndexManager) openLibraryDB(root string) (*librarydb.DB, error) {
-	cairnDir := filepath.Join(root, ".cairn")
-	return librarydb.OpenDB(cairnDir)
+	orchardDir := filepath.Join(root, ".orchard")
+	return librarydb.OpenDB(orchardDir)
 }
 
 // TriggerScan opens the library DB, resets any stuck jobs, and enqueues a new
@@ -243,7 +243,7 @@ func (m *IndexManager) RunScanJob(ctx context.Context, job *jobs.Job) error {
 		return fmt.Errorf("index job %s missing root", job.ID)
 	}
 
-	cairnDir := root + "/.cairn"
+	orchardDir := root + "/.orchard"
 	ldb, err := m.openLibraryDB(root)
 	if err != nil {
 		return fmt.Errorf("open library db: %w", err)
@@ -273,11 +273,11 @@ func (m *IndexManager) RunScanJob(ctx context.Context, job *jobs.Job) error {
 			continue
 		}
 		if _, err := q.Enqueue(ctx, jobs.KindProcessMedia, map[string]any{
-			"library_id": libraryID,
-			"file_id":    change.File.ID,
-			"rel_path":   change.File.RelPath,
-			"root":       root,
-			"cairn_dir":  cairnDir,
+			"library_id":  libraryID,
+			"file_id":     change.File.ID,
+			"rel_path":    change.File.RelPath,
+			"root":        root,
+			"orchard_dir": orchardDir,
 		}); err != nil {
 			m.logger.Warn("enqueue process_media job", "file_id", change.File.ID, "error", err)
 		} else {

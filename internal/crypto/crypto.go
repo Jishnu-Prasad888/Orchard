@@ -1,8 +1,8 @@
-// Package crypto provides the shared at-rest encryption kernel for Cairn.
+// Package crypto provides the shared at-rest encryption kernel for Orchard.
 //
 // It implements the Phase 13 design (docs/encryption.md, ADR-0011): a single
-// optional passphrase-derived AES-256-GCM key that seals and opens Cairn-owned
-// on-disk data (the .cairn identity and generated thumbnails). It is shared by
+// optional passphrase-derived AES-256-GCM key that seals and opens Orchard-owned
+// on-disk data (the .orchard identity and generated thumbnails). It is shared by
 // library, metadata, and httpapi so the passphrase, the derivation, and the
 // on-disk blob format are defined in exactly one place.
 //
@@ -28,15 +28,15 @@ import (
 const (
 	// protocolSalt is the fixed, version-pinned salt used for key derivation.
 	// It is intentionally not secret and is never written to disk; the secret
-	// input is entirely the passphrase. Keeping it constant means any Cairn
+	// input is entirely the passphrase. Keeping it constant means any Orchard
 	// process that knows the passphrase can derive the same key, with nothing
 	// stored alongside the data.
-	protocolSalt = "cairn-at-rest-v1"
+	protocolSalt = "orchard-at-rest-v1"
 
 	// magic and formatVersion form the self-describing sealed blob header.
-	// formatMagic is a fixed 8-byte magic ("CAIRNATR") and formatVersion is the
+	// formatMagic is a fixed 8-byte magic ("ORCHARD1") and formatVersion is the
 	// current AEAD scheme. blobHeaderLen = len(magic) + 1 version byte.
-	magic         = "CAIRNATR"
+	magic         = "ORCHARD1"
 	formatVersion = byte(1)
 	blobHeaderLen = len(magic) + 1
 	nonceLen      = 12 // AES-GCM standard nonce size
