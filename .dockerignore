@@ -8,7 +8,7 @@ dev ntoes
 bin
 /dist
 node_modules
-cairn-data
+orchard-data
 data
 *.db
 internal/webui/dist/assets

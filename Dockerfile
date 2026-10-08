@@ -29,22 +29,22 @@ RUN --mount=type=cache,target=/go/pkg/mod \
   --mount=type=cache,target=/root/.cache/go-build \
   CGO_ENABLED=0 go build -trimpath -ldflags \
   "-s -w \
-  -X 'github.com/Jishnu-Prasad888/Cairn/internal/version.Version=${VERSION}' \
-  -X 'github.com/Jishnu-Prasad888/Cairn/internal/version.Commit=${COMMIT}' \
-  -X 'github.com/Jishnu-Prasad888/Cairn/internal/version.BuildDate=${BUILD_DATE}'" \
-  -o /out/cairn ./cmd/cairn
+  -X 'github.com/Jishnu-Prasad888/Orchard/internal/version.Version=${VERSION}' \
+  -X 'github.com/Jishnu-Prasad888/Orchard/internal/version.Commit=${COMMIT}' \
+  -X 'github.com/Jishnu-Prasad888/Orchard/internal/version.BuildDate=${BUILD_DATE}'" \
+  -o /out/orchard ./cmd/orchard
 
 # --- Stage 3: minimal runtime ---
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata ffmpeg
-RUN addgroup -S cairn && adduser -S cairn -G cairn \
-  && mkdir -p /data && chown cairn:cairn /data
-COPY --from=build /out/cairn /usr/local/bin/cairn
-USER cairn
-ENV CAIRN_DATA_DIR=/data
-ENV CAIRN_HTTP_ADDR=:8715
+RUN apk add --no-cache ca-certificates tzdata
+RUN addgroup -S orchard && adduser -S orchard -G orchard \
+  && mkdir -p /data && chown orchard:orchard /data
+COPY --from=build /out/orchard /usr/local/bin/orchard
+USER orchard
+ENV ORCHARD_DATA_DIR=/data
+ENV ORCHARD_HTTP_ADDR=:8715
 VOLUME /data
 EXPOSE 8715
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8715/api/v1/ready || exit 1
-ENTRYPOINT ["/usr/local/bin/cairn"]
+ENTRYPOINT ["/usr/local/bin/orchard"]

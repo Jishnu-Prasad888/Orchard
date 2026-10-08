@@ -1,5 +1,5 @@
-# Cairn local data
-cairn-data/
+# Orchard local data
+orchard-data/
 data/
 *.db
 *.db-shm

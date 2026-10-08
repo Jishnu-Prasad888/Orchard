@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""Cairn v1.0 end-to-end QA harness (Phase 19).
+"""Orchard end-to-end QA harness.
 
 Builds the server binary and drives real server processes against temporary
-data directories, exercising the Phase 19 validation matrix:
+data directories, exercising the core application-shell validation matrix:
 
-  S01 fresh install (bootstrap)        S10 large video upload + Range streaming
-  S02 existing library (pre-indexed)   S11 permissions (grant, deny paths, 403s)
-  S03 new media                        S12 sharing (public + password-protected)
-  S04 changed media                    S13 memories (CRUD, versions, refs)
-  S05 missing media                    S14 backups (run, list, verify, restore)
-  S06 moved media                      S15 ML disabled behavior
-  S07 duplicate content (hash)         S16 disconnect/reconnect (external drive)
-  S08 search                           S17 upload cap (413)
-  S09 uploads                          S18 ML enabled (similarity + faces)
-  S19 duplicate grouping API
+  S01 fresh install (bootstrap)        S09 uploads
+  S02 existing library (pre-indexed)   S10 large upload + Range streaming
+  S03 new file                         S11 permissions (grant, deny paths, 403s)
+  S04 changed file                     S12 sharing (public + password-protected)
+  S05 missing file                     S14 backups (run, list, verify, restore)
+  S06 moved file                       S16 disconnect/reconnect (external drive)
+  S07 duplicate content (hash)         S17 upload cap (413)
+  S08 search
 
 Platform coverage (AMD64/ARM64/native/Docker) is exercised by CI; see
 qa/README.md for how the pieces fit together.
@@ -56,22 +54,19 @@ def make_png(w, h, rgb):
 
 
 def photo_bytes():
-    """A small valid photo the metadata pipeline accepts (12x8 forest-ish)."""
+    """A small valid image file (12x8 forest-ish) for generic file fixtures."""
     return make_png(12, 8, (90, 140, 90))
 
 
-def make_library(root, big=False):
-    """Populate a library root with fixtures matching a real user's library."""
+def make_library(root):
+    """Populate a library root with a few generic file fixtures."""
     os.makedirs(root, exist_ok=True)
     with open(os.path.join(root, "IMG_0001.png"), "wb") as f:
         f.write(photo_bytes())
     with open(os.path.join(root, "notes.txt"), "w") as f:
         f.write("holiday plans and packing list\n")
     with open(os.path.join(root, "clip.mp4"), "wb") as f:
-        f.write(os.urandom(3 * 1024 * 1024))  # random bytes, video by extension
-    if big:
-        with open(os.path.join(root, "big.mp4"), "wb") as f:
-            f.write(os.urandom(120 * 1024 * 1024))  # large video (~120 MiB)
+        f.write(os.urandom(3 * 1024 * 1024))  # random bytes, classified by extension
 
 
 def free_port():
@@ -152,7 +147,7 @@ class Client:
 
     def upload(self, lib_id, rel_path, local_path, content_type="image/jpeg"):
         """Multipart form upload: fields file + path."""
-        boundary = "----cairnqa" + random_hex(12)
+        boundary = "----orchardqa" + random_hex(12)
         with open(local_path, "rb") as f:
             file_bytes = f.read()
         parts = []
@@ -191,9 +186,9 @@ class Server:
         base_env = dict(os.environ)
         base_env.update(
             {
-                "CAIRN_DATA_DIR": self.data,
-                "CAIRN_HTTP_ADDR": f"127.0.0.1:{self.port}",
-                "CAIRN_LOG_LEVEL": "info",
+                "ORCHARD_DATA_DIR": self.data,
+                "ORCHARD_HTTP_ADDR": f"127.0.0.1:{self.port}",
+                "ORCHARD_LOG_LEVEL": "info",
             }
         )
         if env:
@@ -277,7 +272,7 @@ def main():
     import argparse
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--binary", default="bin/cairn")
+    ap.add_argument("--binary", default="bin/orchard")
     ap.add_argument("--keep", action="store_true", help="keep temp dirs on failure")
     args = ap.parse_args()
 
@@ -285,16 +280,16 @@ def main():
     if not os.path.exists(binary):
         print("building binary...")
         subprocess.run(
-            ["go", "build", "-o", binary, "./cmd/cairn"], check=True, cwd=repo_root()
+            ["go", "build", "-o", binary, "./cmd/orchard"], check=True, cwd=repo_root()
         )
 
-    work = tempfile.mkdtemp(prefix="cairn-qa-", dir="/tmp/opencode")
+    work = tempfile.mkdtemp(prefix="orchard-qa-", dir="/tmp/opencode")
     libs = os.path.join(work, "libraries")
     os.makedirs(libs)
     servers = []
 
     def start_server(name, env=None):
-        base = {"CAIRN_BACKUP_DIR": os.path.join(work, "backups")}
+        base = {"ORCHARD_BACKUP_DIR": os.path.join(work, "backups")}
         if env:
             base.update(env)
         s = Server(name, work, env=base)
@@ -391,35 +386,6 @@ def main():
             f"{dup}",
         )
 
-        # ---- S19 duplicate grouping API -----------------------------------
-        # The group endpoint must flag same-content files (including the copy
-        # created in S07 and IMG_0001.png, which shares its bytes).
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/files/duplicates")
-        groups = (body or {}).get("groups", [])
-        total = (body or {}).get("total", -1)
-        h = next(iter(hashes), None)
-        hit = next((g for g in groups if g.get("content_hash") == h), None)
-        members = sorted(m.get("rel_path", "") for m in (hit or {}).get("files", []))
-        sizes = {m.get("size_bytes") for m in (hit or {}).get("files", [])}
-        REPORT.check(
-            "S19", "duplicate groups API flags same-content files",
-            s == 200 and total == 1 and hit is not None
-            and any("IMG_0002.png" in p for p in members)
-            and any("IMG_0002_copy.png" in p for p in members),
-            f"total={total} group_hash={bool(hit)} members={members}",
-        )
-        REPORT.check(
-            "S19", "duplicate group members carry hash + equal size",
-            hit is not None and len(sizes) == 1 and None not in sizes and len(members) == 3,
-            f"sizes={sizes} members={members}",
-        )
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/files/duplicates?limit=1")
-        REPORT.check(
-            "S19", "duplicate groups respond to limit param",
-            s == 200 and len((body or {}).get("groups", [])) <= 1,
-            f"groups={len((body or {}).get('groups', []))}",
-        )
-
         # ---- S08 search ----------------------------------------------------
         s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/search?q=0002&limit=10")
         hit = [f["name"] for f in (body or {}).get("files", [])]
@@ -495,26 +461,10 @@ def main():
         REPORT.check("S12", "password-protected share created", s == 201 and token2, f"{s}")
         s, _, _ = A.json("GET", f"/api/v1/shares/{token2}/files")
         REPORT.check("S12", "protected share denies without password", s == 401, f"{s}")
-        s, _, _ = A.json("GET", f"/api/v1/shares/{token2}/files", headers={"X-Cairn-Share-Password": "wrong-password"})
+        s, _, _ = A.json("GET", f"/api/v1/shares/{token2}/files", headers={"X-Orchard-Share-Password": "wrong-password"})
         REPORT.check("S12", "protected share denies wrong password", s == 401, f"{s}")
-        s, body, _ = A.json("GET", f"/api/v1/shares/{token2}/files", headers={"X-Cairn-Share-Password": "share-secret-9"})
+        s, body, _ = A.json("GET", f"/api/v1/shares/{token2}/files", headers={"X-Orchard-Share-Password": "share-secret-9"})
         REPORT.check("S12", "protected share grants with correct password", s == 200 and isinstance((body or {}).get("files"), list), f"{s}")
-
-        # ---- S13 memories --------------------------------------------------
-        s, body, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/memories", {"title": "Honeymoon", "body": "# Honeymoon\n\nWe visited **Munich** and the Alps."})
-        mem_id = (body or {}).get("memory", {}).get("id")
-        REPORT.check("S13", "memory created with markdown", s == 201 and mem_id, f"{s}")
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/memories")
-        REPORT.check("S13", "memory listed", s == 200 and any(m.get("id") == mem_id for m in (body or {}).get("memories", [])), f"{s}")
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/memories/{mem_id}")
-        mem = (body or {}).get("memory", {})
-        REPORT.check("S13", "memory readable with markdown body", s == 200 and mem.get("title") == "Honeymoon" and "# Honeymoon" in mem.get("body", ""), f"{s}")
-        s, body, _ = C.json("PUT", f"/api/v1/libraries/{lib_id}/memories/{mem_id}", {"title": "Honeymoon", "body": "# Honeymoon\n\nUpdated."})
-        REPORT.check("S13", "memory updated", s == 200 and "Updated." in (body or {}).get("memory", {}).get("body", ""), f"{s}")
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/memories/{mem_id}/versions")
-        REPORT.check("S13", "memory versions tracked", s == 200 and len((body or {}).get("versions", [])) >= 2, f"{s}")
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/memories/{mem_id}/refs")
-        REPORT.check("S13", "memory refs endpoint works", s == 200, f"{s}")
 
         # ---- S14 backups ---------------------------------------------------
         s, body, _ = C.json("POST", "/api/v1/backups")
@@ -530,14 +480,6 @@ def main():
         s, body, _ = C.json("POST", f"/api/v1/backups/{backup_id}/restore", {"destination": dest})
         restored = os.path.isdir(dest) and len(os.listdir(dest)) > 0
         REPORT.check("S14", "backup restore to fresh destination", s == 200 and restored, f"{s} dest_exists={os.path.isdir(dest)}")
-
-        # ---- S15 ML disabled ----------------------------------------------
-        s, body, _ = C.json("GET", f"/api/v1/libraries/{lib_id}/ml")
-        REPORT.check("S15", "ML status reports disabled", s == 200 and body.get("enabled") is False, f"{s} {body}")
-        s, _, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/ml/similarity/pass", {})
-        REPORT.check("S15", "similarity pass refused when disabled", s == 503, f"{s}")
-        s, _, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/ml/faces/cluster", {})
-        REPORT.check("S15", "face cluster refused when disabled", s == 503, f"{s}")
 
         # ---- S16 disconnect / reconnect (external drive) -------------------
         lib_drive = os.path.join(libs, "drive")
@@ -575,8 +517,8 @@ def main():
         REPORT.check("S16b", "backup after reconnect completes", bool(rec) and rec.get("status") == "completed", f"{str(rec)[:120]}")
         dest2 = os.path.join(work, "restore-dest2")
         s, _, _ = C.json("POST", f"/api/v1/backups/{backup2}/restore", {"destination": dest2})
-        # Restore mirrors the documented layout: server/cairn.db + libraries/<id>/...
-        srv_db = os.path.join(dest2, "server", "cairn.db")
+        # Restore mirrors the documented layout: server/orchard.db + libraries/<id>/...
+        srv_db = os.path.join(dest2, "server", "orchard.db")
         lib1_db = os.path.join(dest2, "libraries", lib_id, "library.db")
         lib2_db = os.path.join(dest2, "libraries", drive_id, "library.db")
         media_ok = any(os.path.isfile(os.path.join(dest2, "libraries", lib_id, "files", p)) for p in ("notes.txt", "IMG_0001.png"))
@@ -585,7 +527,7 @@ def main():
         REPORT.check("S16b", "restore brings back media files", media_ok, f"media={media_ok}")
 
         # ---- S17 upload cap (413) -----------------------------------------
-        cap_srv = start_server("cap", env={"CAIRN_MAX_UPLOAD_BYTES": "2048"})
+        cap_srv = start_server("cap", env={"ORCHARD_MAX_UPLOAD_BYTES": "2048"})
         CC = Client(cap_srv.base)
         CC.json("POST", "/api/v1/auth/bootstrap", {"username": "admin", "password": "admin-pass-1234"})
         lib_cap = os.path.join(libs, "cap-lib")
@@ -597,33 +539,6 @@ def main():
             f.write(os.urandom(4096))
         s, hdrs, raw = CC.upload(cap_id, "toobig.bin", bigup, content_type="application/octet-stream")
         REPORT.check("S17", "oversized upload rejected with 413", s == 413, f"{s}")
-
-        # ---- S18 ML enabled ------------------------------------------------
-        ml_srv = start_server("ml", env={"CAIRN_ML_ENABLED": "true", "CAIRN_ML_FACES": "true"})
-        M = Client(ml_srv.base)
-        M.json("POST", "/api/v1/auth/bootstrap", {"username": "admin", "password": "admin-pass-1234"})
-        lib_ml = os.path.join(libs, "photos-ml")
-        make_library(lib_ml)
-        s, body, _ = M.json("POST", "/api/v1/libraries", {"path": lib_ml})
-        ml_id = (body or {}).get("library", {}).get("id")
-        M.json("POST", f"/api/v1/libraries/{ml_id}/index", {})
-        wait_index_done(M, ml_id, "S18", timeout=120)
-        s, body, _ = M.json("GET", f"/api/v1/libraries/{ml_id}/ml")
-        REPORT.check("S18", "ML reports enabled", s == 200 and body.get("enabled") is True and body.get("provider"), f"{s} {body}")
-        s, _, _ = M.json("POST", f"/api/v1/libraries/{ml_id}/ml/similarity/pass", {})
-        REPORT.check("S18", "similarity pass accepted when enabled", s == 202, f"{s}")
-
-        def ml_status():
-            _, b, _ = M.json("GET", f"/api/v1/libraries/{ml_id}/ml")
-            return b or {}
-        got = poll(lambda: ml_status().get("signatured"), lambda v: v and v >= 1, 120, "similarity signatures appear", "S18")
-        REPORT.check("S18", "signatures computed for indexed photos", (got or 0) >= 1, f"signatured={got}")
-        s, _, _ = M.json("POST", f"/api/v1/libraries/{ml_id}/ml/faces/cluster", {})
-        REPORT.check("S18", "face clustering accepted when enabled", s == 202, f"{s}")
-        s, body, _ = M.json("GET", f"/api/v1/libraries/{ml_id}/ml/faces")
-        REPORT.check("S18", "face status endpoint healthy", s == 200 and isinstance((body or {}).get("faces"), int) and (body or {}).get("enabled") is True, f"{s} {str(body)[:100]}")
-        s, body, _ = M.json("GET", f"/api/v1/libraries/{ml_id}/faces")
-        REPORT.check("S18", "face list endpoint healthy", s == 200 and isinstance((body or {}).get("faces"), list), f"{s} {str(body)[:80]}")
 
         # ---- cleanup and report -------------------------------------------
         for srv in servers:

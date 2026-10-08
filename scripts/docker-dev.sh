@@ -1,20 +1,20 @@
 #!/bin/sh
-# Rebuild the Cairn Docker image from the current source tree and (re)run it,
+# Rebuild the Orchard Docker image from the current source tree and (re)run it,
 # replacing any previously running dev container. Run this after every change
 # you want to see live:
 #
 #   ./scripts/docker-dev.sh
 #
-# Every run starts from a clean slate: ./cairn-data (DB, sessions, sign-in) is
+# Every run starts from a clean slate: ./orchard-data (DB, sessions, sign-in) is
 # wiped before the container starts, so you always land on first-run setup.
 set -eu
 
 cd "$(dirname "$0")/.."
 
-IMAGE="cairn:dev"
-CONTAINER="cairn-dev"
-PORT="${CAIRN_PORT:-8715}"
-DATA_DIR="$(pwd)/cairn-data"
+IMAGE="orchard:dev"
+CONTAINER="orchard-dev"
+PORT="${ORCHARD_PORT:-8715}"
+DATA_DIR="$(pwd)/orchard-data"
 
 rm -rf "$DATA_DIR"
 mkdir -p "$DATA_DIR"
@@ -34,5 +34,5 @@ docker run -d \
   -v "$DATA_DIR:/data" \
   "$IMAGE" >/dev/null
 
-echo "==> Cairn running at http://localhost:$PORT"
+echo "==> Orchard running at http://localhost:$PORT"
 echo "==> Logs: docker logs -f $CONTAINER"
