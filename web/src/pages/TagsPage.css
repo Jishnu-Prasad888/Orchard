@@ -1,0 +1,101 @@
+.page-muted {
+  padding: var(--space-6);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.error-text {
+  color: var(--color-danger);
+}
+
+.tags-page select {
+  font: inherit;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+/* Google Photos–style tag shelf: a flowing cloud of pill chips rather than
+   a rigid card grid. */
+.tag-grid {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tag-card {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.tag-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-1);
+}
+
+.tag-card .tag-chip {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  padding: 2px 10px;
+}
+
+.tag-date {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tag-empty {
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.tag-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tag-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.tag-detail-header h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .tags-page {
+    padding: var(--space-3) var(--space-2) var(--space-6);
+  }
+}

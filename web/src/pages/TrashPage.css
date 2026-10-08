@@ -1,0 +1,13 @@
+.trash-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.trash-note svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}

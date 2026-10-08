@@ -1,0 +1,166 @@
+/* Permissions: the grant form and the table of who-can-do-what. */
+
+/* -------------------------------- form -------------------------------- */
+
+.grant-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.grant-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.grant-field > span {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.grant-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.grant-input:focus-visible {
+  border-color: var(--color-primary-ink);
+}
+
+.grant-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.grant-key {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  border-radius: var(--radius-md);
+  background: var(--color-border-subtle);
+  overflow-wrap: anywhere;
+}
+
+.grant-key code {
+  font-size: 0.9em;
+}
+
+.grant-caps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.grant-caps legend {
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.grant-cap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.grant-cap input {
+  accent-color: var(--color-primary-ink);
+}
+
+.grant-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* -------------------------------- table ------------------------------- */
+
+.grant-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+}
+
+.grant-table th,
+.grant-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.grant-table thead th {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.grant-person {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grant-user-id {
+  font-weight: 400;
+  font-size: var(--font-size-sm);
+}
+
+.grant-key {
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+}
+
+.grant-key code {
+  font-size: var(--font-size-md);
+}
+
+.grant-caps-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+@media (max-width: 899px) {
+  .grant-table thead {
+    display: none;
+  }
+
+  .grant-table tbody tr {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .grant-table td,
+  .grant-table th {
+    border: 0;
+    padding: 0;
+  }
+
+  .grant-key {
+    max-width: none;
+  }
+}

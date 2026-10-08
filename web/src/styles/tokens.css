@@ -1,0 +1,328 @@
+/**
+ * Cairn design tokens.
+ *
+ * Smooth pebbles, handmade clay, warm paper. Every color in the interface comes
+ * from the palette below; components consume the semantic `--color-*` names and
+ * never a raw hex value, so a theme is one block of declarations.
+ *
+ * Breakpoints cannot be custom properties (media queries do not read them), so
+ * they are fixed here by convention and mirrored in `src/lib/breakpoints.ts`:
+ *
+ *   compact   < 600px   phones: bottom navigation, 3-column grid
+ *   medium    < 900px   tablets: navigation drawer, fewer columns
+ *   expanded  < 1200px  small laptops: persistent sidebar
+ *   wide     >= 1200px  desktops
+ *
+ * Every media query in the app uses one of `max-width: 599px`, `899px`, or
+ * `1199px` (or the matching `min-width` values) and nothing else.
+ */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* ---------- palette (light) ---------- */
+  --color-background: #f7ede2;
+  --color-surface: #fff7ef;
+  --color-surface-elevated: #fffdfc;
+
+  --color-text-primary: #3d332d;
+  --color-text-secondary: #77675d;
+  --color-text-muted: #a59488;
+
+  --color-border: #e8d5c5;
+  --color-border-subtle: #f0e4da;
+
+  --color-primary: #c96f52;
+  --color-primary-hover: #b95f45;
+
+  --color-accent: #e89a63;
+  --color-accent-soft: #f5c7a5;
+
+  --color-yellow: #e8be62;
+  --color-green: #8da878;
+  --color-blue: #82a9b8;
+  --color-pink: #d9908d;
+
+  --color-selection: #f3cdb4;
+
+  --color-success: #7f9d72;
+  --color-warning: #d39a4e;
+  --color-danger: #c96a61;
+
+  /* ---------- derived roles ---------- */
+  /* Text and icons drawn on a filled primary or danger surface. */
+  --color-on-primary: var(--color-surface-elevated);
+  /* Quiet fills for hover rows, inactive chips, and the search field. */
+  --color-fill-subtle: var(--color-border-subtle);
+  --color-fill-hover: color-mix(in srgb, var(--color-border) 55%, transparent);
+  /* The active navigation entry and selected chips. */
+  --color-fill-active: color-mix(in srgb, var(--color-accent-soft) 70%, var(--color-surface));
+  /* Dims the page behind dialogs and drawers. */
+  --color-scrim: color-mix(in srgb, var(--color-text-primary) 42%, transparent);
+  /* A soft highlight along the top edge of raised controls: the clay sheen. */
+  --color-sheen: color-mix(in srgb, var(--color-surface-elevated) 70%, transparent);
+  /* Status text on a tinted status background, legible in both themes. */
+  /* The brand terracotta as readable text: the palette's primary mixed toward
+     the text color until it reaches 4.5:1 on the warm backgrounds. */
+  /* Filled primary surfaces that carry text: the primary deepened just enough
+     for the light on-primary text to read at 4.5:1. */
+  --color-primary-strong: color-mix(in srgb, var(--color-primary) 78%, var(--color-text-primary));
+  --color-primary-strong-hover: color-mix(
+    in srgb,
+    var(--color-primary-hover) 78%,
+    var(--color-text-primary)
+  );
+  --color-primary-ink: color-mix(in srgb, var(--color-primary) 62%, var(--color-text-primary));
+  --color-primary-ink-hover: color-mix(
+    in srgb,
+    var(--color-primary-hover) 62%,
+    var(--color-text-primary)
+  );
+  --color-success-ink: color-mix(in srgb, var(--color-success) 38%, var(--color-text-primary));
+  --color-danger-ink: color-mix(in srgb, var(--color-danger) 80%, var(--color-text-primary));
+  --color-warning-ink: color-mix(in srgb, var(--color-warning) 70%, var(--color-text-primary));
+
+  /* ---------- elevation ---------- */
+  --shadow-1: 0 1px 2px color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  --shadow-2:
+    0 1px 2px color-mix(in srgb, var(--color-text-primary) 6%, transparent),
+    0 4px 12px color-mix(in srgb, var(--color-text-primary) 9%, transparent);
+  --shadow-3:
+    0 2px 6px color-mix(in srgb, var(--color-text-primary) 8%, transparent),
+    0 12px 32px color-mix(in srgb, var(--color-text-primary) 16%, transparent);
+  /* Raised clay controls: a top highlight and a short contact shadow. */
+  --shadow-clay:
+    inset 0 1px 0 var(--color-sheen),
+    0 1px 2px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+/* Dark: deep clay and river stones at evening. Never pure black. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-background: #29221f;
+  --color-surface: #352b27;
+  --color-surface-elevated: #40332e;
+
+  --color-text-primary: #f5e8dc;
+  --color-text-secondary: #c5b3a5;
+  --color-text-muted: #907f74;
+
+  --color-border: #4c3d35;
+  --color-border-subtle: #40342f;
+
+  --color-primary: #e28a68;
+  --color-primary-hover: #ed9a76;
+
+  --color-accent: #f0aa70;
+  --color-accent-soft: #62443a;
+
+  --color-yellow: #e5bc68;
+  --color-green: #9caf86;
+  --color-blue: #88b0bc;
+  --color-pink: #d99792;
+
+  --color-selection: #5a4036;
+
+  --color-success: #91aa82;
+  --color-warning: #d6a45a;
+  --color-danger: #d77b70;
+
+  --color-on-primary: var(--color-background);
+  --color-fill-active: var(--color-accent-soft);
+  --color-scrim: color-mix(in srgb, #29221f 70%, transparent);
+  --color-sheen: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  --color-primary-strong: var(--color-primary);
+  --color-primary-strong-hover: var(--color-primary-hover);
+  --color-primary-ink: var(--color-primary);
+  --color-primary-ink-hover: var(--color-primary-hover);
+  --color-success-ink: color-mix(in srgb, var(--color-success) 75%, var(--color-text-primary));
+  --color-danger-ink: color-mix(in srgb, var(--color-danger) 75%, var(--color-text-primary));
+  --color-warning-ink: var(--color-warning);
+
+  --shadow-1: 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
+  --shadow-2: 0 4px 12px color-mix(in srgb, #29221f 55%, transparent);
+  --shadow-3: 0 12px 32px color-mix(in srgb, #29221f 70%, transparent);
+  --shadow-clay:
+    inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
+}
+
+/*
+ * "System" removes the data-theme attribute, so the operating system decides.
+ * This block repeats the dark declarations above for that case; keep the two
+ * in step.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --color-background: #29221f;
+    --color-surface: #352b27;
+    --color-surface-elevated: #40332e;
+
+    --color-text-primary: #f5e8dc;
+    --color-text-secondary: #c5b3a5;
+    --color-text-muted: #907f74;
+
+    --color-border: #4c3d35;
+    --color-border-subtle: #40342f;
+
+    --color-primary: #e28a68;
+    --color-primary-hover: #ed9a76;
+
+    --color-accent: #f0aa70;
+    --color-accent-soft: #62443a;
+
+    --color-yellow: #e5bc68;
+    --color-green: #9caf86;
+    --color-blue: #88b0bc;
+    --color-pink: #d99792;
+
+    --color-selection: #5a4036;
+
+    --color-success: #91aa82;
+    --color-warning: #d6a45a;
+    --color-danger: #d77b70;
+
+    --color-on-primary: var(--color-background);
+    --color-fill-active: var(--color-accent-soft);
+    --color-scrim: color-mix(in srgb, #29221f 70%, transparent);
+    --color-sheen: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+    --color-primary-strong: var(--color-primary);
+    --color-primary-strong-hover: var(--color-primary-hover);
+    --color-primary-ink: var(--color-primary);
+    --color-primary-ink-hover: var(--color-primary-hover);
+    --color-success-ink: color-mix(in srgb, var(--color-success) 75%, var(--color-text-primary));
+    --color-danger-ink: color-mix(in srgb, var(--color-danger) 75%, var(--color-text-primary));
+    --color-warning-ink: var(--color-warning);
+
+    --shadow-1: 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
+    --shadow-2: 0 4px 12px color-mix(in srgb, #29221f 55%, transparent);
+    --shadow-3: 0 12px 32px color-mix(in srgb, #29221f 70%, transparent);
+    --shadow-clay:
+      inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
+  }
+}
+
+/* Theme-independent tokens. */
+:root {
+  /* ---------- the viewer ----------
+   * Media is judged against a dark surround whatever the app theme, so the
+   * viewer always uses the dark palette. */
+  --viewer-background: #29221f;
+  --viewer-surface: color-mix(in srgb, #352b27 92%, transparent);
+  --viewer-ink: #f5e8dc;
+  --viewer-ink-muted: #c5b3a5;
+  --viewer-panel: #352b27;
+  --viewer-panel-raised: #40332e;
+  --viewer-accent: #e28a68;
+  --viewer-accent-hover: #ed9a76;
+  --viewer-fill-active: #62443a;
+  --viewer-danger: #d77b70;
+  --viewer-line: color-mix(in srgb, #f5e8dc 14%, transparent);
+  --viewer-fill: color-mix(in srgb, #f5e8dc 10%, transparent);
+  --viewer-fill-hover: color-mix(in srgb, #f5e8dc 20%, transparent);
+
+  /* Scrims laid over photos so light controls stay legible on any image. */
+  --media-scrim-top: linear-gradient(
+    to bottom,
+    color-mix(in srgb, #29221f 55%, transparent),
+    transparent
+  );
+  --media-scrim-bottom: linear-gradient(
+    to top,
+    color-mix(in srgb, #29221f 62%, transparent),
+    transparent
+  );
+  --media-ink: #fffdfc;
+
+  /* ---------- typography ---------- */
+  --font-brand: 'Handlee', cursive;
+  --font-ui: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+
+  /* ---------- spacing (4px grid) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---------- radii ----------
+   * Chosen by component type: media tiles `media`, chips and small controls
+   * `sm`, buttons and inputs `md`, panels and cards `lg`, dialogs and sheets
+   * `xl`. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --radius-media: var(--radius-xs);
+
+  /* ---------- control sizes ---------- */
+  --control-height-sm: 32px;
+  --control-height-md: 40px;
+  --control-height-lg: 48px;
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+  /* The smallest comfortable touch target. */
+  --touch-target: 44px;
+
+  /* ---------- motion ---------- */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /* ---------- layering ----------
+   * Every z-index in the app is one of these. Dialogs sit above the viewer
+   * because the viewer opens them (rename, move, delete). */
+  --z-base: 0;
+  --z-raised: 1;
+  --z-sticky: 100;
+  --z-navigation: 200;
+  --z-dropdown: 300;
+  --z-drawer: 400;
+  --z-viewer: 500;
+  --z-modal: 600;
+  --z-popover: 650;
+  --z-toast: 700;
+
+  /* ---------- layout ---------- */
+  --sidebar-width: 256px;
+  --topbar-height: 64px;
+  --bottom-nav-height: 64px;
+  --content-max-width: 1120px;
+  --content-gutter: var(--space-5);
+  /* The gap between media tiles. */
+  --media-gap: 4px;
+}
+
+@media (max-width: 599px) {
+  :root {
+    --content-gutter: var(--space-4);
+    --media-gap: 2px;
+  }
+}

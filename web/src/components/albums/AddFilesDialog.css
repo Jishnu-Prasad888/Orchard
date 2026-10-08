@@ -1,0 +1,115 @@
+.add-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.add-files-tabs {
+  align-self: flex-start;
+}
+
+.add-files-folders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add-files-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-3);
+  color: var(--color-text-primary);
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.add-files-folder:hover {
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+}
+
+.add-files-folder svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.add-files-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-files-search-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.add-files-search-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-results {
+  display: flex;
+  flex-direction: column;
+  max-height: 46vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.picker-row:hover {
+  background: var(--color-fill-hover);
+}
+
+.picker-label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.picker-thumb {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  color: var(--color-text-secondary);
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-xs);
+}
+
+.picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-note {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+}

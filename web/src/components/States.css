@@ -1,0 +1,227 @@
+/* Shared page states. None of them is a heavy card: they sit on the page. */
+
+.loading-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.loading-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.loading-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: loading-bob 1.2s var(--ease-standard) infinite;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+  background: var(--color-primary-strong);
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+  background: var(--color-text-secondary);
+}
+
+@keyframes loading-bob {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: none;
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.list-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.list-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.list-skeleton-thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.list-skeleton-line {
+  height: 12px;
+}
+
+/* ------------------------------ icons ------------------------------- */
+
+.state-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+}
+
+.state-icon-error {
+  color: var(--color-danger-ink);
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+
+.state-icon-warning {
+  color: var(--color-warning-ink);
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+}
+
+/* ------------------------------ error ------------------------------- */
+
+.error-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-danger) 22%, var(--color-border-subtle));
+  border-radius: var(--radius-lg);
+}
+
+.error-state-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.error-state-text p {
+  margin: 0;
+}
+
+.error-state-title {
+  font-weight: var(--font-weight-medium);
+}
+
+.error-state .error-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------ empty ------------------------------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 440px;
+  margin: var(--space-7) auto;
+  padding: 0 var(--space-4);
+  text-align: center;
+}
+
+/* A soft pebble behind the icon — the only clay flourish on the page. */
+.empty-state-pebble {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 64px;
+  margin-bottom: var(--space-2);
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+  border-radius: 46% 54% 50% 50% / 58% 56% 44% 42%;
+  box-shadow: var(--shadow-clay);
+}
+
+.empty-state-title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: var(--font-size-2xl);
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.empty-state-body {
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.empty-state-body p {
+  margin: 0 0 var(--space-2);
+}
+
+.empty-state-body p:last-child {
+  margin-bottom: 0;
+}
+
+.empty-state-body .muted {
+  color: var(--color-text-secondary);
+}
+
+.empty-state-action {
+  margin-top: var(--space-2);
+}
+
+/* --------------------------- notice banner -------------------------- */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+}
+
+.notice-warning {
+  background: color-mix(in srgb, var(--color-warning) 9%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 26%, var(--color-border-subtle));
+}
+
+.notice-text {
+  min-width: 0;
+}
+
+.notice-text p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.notice-text .notice-title {
+  margin-bottom: 2px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.notice-detail {
+  margin-top: var(--space-2) !important;
+  font-size: var(--font-size-sm);
+}
+
+.notice code {
+  padding: 1px 5px;
+  font-size: 0.85em;
+  word-break: break-all;
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-xs);
+}
+
+/* ------------------------- library picker --------------------------- */
+
+.library-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}

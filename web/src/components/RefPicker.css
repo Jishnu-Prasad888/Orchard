@@ -1,0 +1,107 @@
+/* The memory editor's reference picker: kind tabs, a search box, and results. */
+
+.ref-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.ref-picker-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.ref-kind {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-md);
+  cursor: pointer;
+}
+
+.ref-kind:hover {
+  border-color: var(--color-primary-ink);
+  color: var(--color-text-primary);
+}
+
+.ref-kind.active {
+  background: var(--color-accent-soft);
+  border-color: var(--color-primary-ink);
+  color: var(--color-primary-ink);
+  font-weight: 600;
+}
+
+.ref-picker-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ref-picker-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.ref-picker-input:focus-visible {
+  border-color: var(--color-primary-ink);
+}
+
+.ref-picker-status,
+.ref-picker-empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.ref-picker-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ref-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ref-result:hover,
+.ref-result:focus-visible {
+  background: var(--color-border-subtle);
+}
+
+.ref-result-label {
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.ref-result-detail {
+  font-size: var(--font-size-xs);
+}

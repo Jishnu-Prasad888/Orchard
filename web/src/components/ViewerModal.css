@@ -1,0 +1,914 @@
+/*
+ * The viewer. Always the dark palette, whatever the app theme: a photo is
+ * judged against a dark surround. Chrome floats over the photo on soft scrims
+ * and fades away when idle; the details panel slides in from the right and
+ * pushes the photo over rather than covering it.
+ */
+
+.viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-viewer);
+  background: var(--viewer-background);
+  animation: viewer-fade var(--duration-slow) var(--ease-out);
+}
+
+@keyframes viewer-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.viewer-modal {
+  --viewer-drawer: 360px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  color: var(--viewer-ink);
+  background: var(--viewer-background);
+  color-scheme: dark;
+}
+
+.viewer-modal:focus {
+  outline: none;
+}
+
+/* ------------------------------ chrome ------------------------------- */
+
+.viewer-chrome {
+  transition:
+    opacity var(--duration-slow) var(--ease-standard),
+    transform var(--duration-slow) var(--ease-standard);
+}
+
+.viewer-modal.chrome-hidden .viewer-chrome {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewer-modal.chrome-hidden {
+  cursor: none;
+}
+
+.viewer-toolbar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: var(--z-raised);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--topbar-height);
+  padding: 0 var(--space-3);
+  padding-top: env(safe-area-inset-top);
+  background: var(--media-scrim-top);
+}
+
+.viewer-modal.panel-open .viewer-toolbar {
+  right: var(--viewer-drawer);
+}
+
+.viewer-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.viewer-title-name {
+  overflow: hidden;
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-title-sub {
+  font-size: var(--font-size-xs);
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.viewer-tool {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  padding: 0;
+  font-size: var(--font-size-sm);
+  color: var(--viewer-ink);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.viewer-tool:hover {
+  color: var(--viewer-ink);
+  background: var(--viewer-fill-hover);
+}
+
+.viewer-tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.viewer-tool:disabled:hover {
+  background: transparent;
+}
+
+.viewer-tool.active {
+  color: var(--viewer-accent);
+}
+
+.viewer-tool[data-testid='viewer-favorite'].active {
+  color: var(--color-yellow);
+}
+
+.viewer-tool:focus-visible {
+  outline: 2px solid var(--viewer-accent);
+  outline-offset: 0;
+}
+
+.viewer-tool-group {
+  display: flex;
+  align-items: center;
+  margin-right: var(--space-2);
+  background: var(--viewer-fill);
+  border-radius: var(--radius-pill);
+}
+
+.viewer-tool-wide {
+  width: auto;
+  min-width: 52px;
+  padding: 0 var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------ stage -------------------------------- */
+
+.viewer-stage-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  transition: margin var(--duration-slow) var(--ease-standard);
+}
+
+.viewer-modal.panel-open .viewer-stage-wrap {
+  margin-right: var(--viewer-drawer);
+}
+
+.viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+/* Zoomed: the photo is transformed, not scrolled; dragging pans it. */
+.viewer-stage[data-zoomed='true'] {
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.viewer-stage[data-dragging='true'] {
+  cursor: grabbing;
+}
+
+.viewer-stage[data-zoomed='true'] .viewer-media {
+  transform-origin: center;
+  will-change: transform;
+}
+
+.viewer-media {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+video.viewer-media {
+  background: var(--viewer-background);
+}
+
+/* Progressive loading: the blurred preview sits beneath, the original fades
+   in over it. */
+.viewer-preview {
+  position: absolute;
+  inset: 0;
+  filter: blur(12px);
+  transform: scale(1.02);
+}
+
+.viewer-media.is-loading {
+  opacity: 0;
+}
+
+.viewer-media:not(.viewer-preview) {
+  position: relative;
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
+.viewer-generic {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 420px;
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.viewer-generic-icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  color: var(--viewer-ink-muted);
+  background: var(--viewer-fill);
+  border-radius: var(--radius-xl);
+}
+
+.viewer-generic-name {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.viewer-generic-note {
+  margin: 0;
+  color: var(--viewer-ink-muted);
+}
+
+/* ----------------------------- navigation ---------------------------- */
+
+.viewer-nav {
+  position: absolute;
+  top: 50%;
+  z-index: var(--z-raised);
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-top: -26px;
+  color: var(--viewer-ink);
+  background: color-mix(in srgb, var(--viewer-background) 45%, transparent);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    opacity var(--duration-slow) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.viewer-nav:hover {
+  background: var(--viewer-fill-hover);
+}
+
+.viewer-nav-prev {
+  left: var(--space-4);
+}
+
+.viewer-nav-next {
+  right: var(--space-4);
+}
+
+.viewer-modal.panel-open .viewer-nav-next {
+  right: calc(var(--viewer-drawer) + var(--space-4));
+}
+
+.viewer-slideshow-note {
+  position: absolute;
+  top: calc(var(--topbar-height) + var(--space-2));
+  left: 50%;
+  z-index: var(--z-raised);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--viewer-ink);
+  background: var(--viewer-surface);
+  border-radius: var(--radius-pill);
+  transform: translateX(-50%);
+}
+
+/* ------------------------- caption and strip ------------------------- */
+
+.viewer-bottom {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: var(--z-raised);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  background: var(--media-scrim-bottom);
+  pointer-events: none;
+}
+
+.viewer-bottom > * {
+  pointer-events: auto;
+}
+
+.viewer-modal.panel-open .viewer-bottom {
+  right: var(--viewer-drawer);
+}
+
+.viewer-caption {
+  width: min(720px, 100%);
+}
+
+.viewer-caption-view {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.viewer-caption-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 22vh;
+  overflow-y: auto;
+  font-size: var(--font-size-md);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.viewer-caption-body > :first-child {
+  margin-top: 0;
+}
+
+.viewer-caption-body > :last-child {
+  margin-bottom: 0;
+}
+
+.viewer-caption-body a {
+  color: var(--viewer-ink);
+  text-decoration-color: var(--viewer-accent);
+}
+
+.viewer-caption-add,
+.viewer-caption-button {
+  flex: none;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--viewer-ink);
+  background: var(--viewer-fill);
+  border: 1px solid var(--viewer-line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.viewer-caption-add {
+  display: block;
+  margin: 0 auto;
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-caption-add:hover,
+.viewer-caption-button:hover {
+  color: var(--viewer-ink);
+  background: var(--viewer-fill-hover);
+}
+
+.viewer-caption-button.primary {
+  color: var(--viewer-background);
+  background: var(--viewer-accent);
+  border-color: var(--viewer-accent);
+}
+
+.viewer-caption-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--viewer-surface);
+  border: 1px solid var(--viewer-line);
+  border-radius: var(--radius-lg);
+}
+
+.viewer-caption-edit .viewer-note-input {
+  width: 100%;
+  color: var(--viewer-ink);
+  background: var(--viewer-fill);
+  border-color: var(--viewer-line);
+}
+
+.viewer-caption-edit .viewer-note-input::placeholder {
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-caption-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.viewer-caption-actions .note-status {
+  margin-right: auto;
+  font-size: var(--font-size-xs);
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-filmstrip {
+  display: flex;
+  max-width: 100%;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 2px;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.viewer-filmstrip li {
+  flex: none;
+}
+
+.viewer-film {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--viewer-ink-muted);
+  background: var(--viewer-fill);
+  border: 0;
+  border-radius: var(--radius-xs);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.viewer-film:hover {
+  opacity: 0.9;
+}
+
+.viewer-film.active {
+  opacity: 1;
+  outline: 2px solid var(--viewer-ink);
+  outline-offset: 1px;
+}
+
+.viewer-film img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.viewer-error {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-8);
+  z-index: var(--z-raised);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--viewer-ink);
+  background: color-mix(in srgb, var(--viewer-danger) 85%, var(--viewer-background));
+  border-radius: var(--radius-pill);
+  transform: translateX(-50%);
+}
+
+/* ------------------------------ panel ------------------------------- */
+
+.viewer-panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: var(--z-raised);
+  display: flex;
+  flex-direction: column;
+  width: var(--viewer-drawer);
+  padding-top: env(safe-area-inset-top);
+  background: var(--viewer-panel);
+  border-left: 1px solid var(--viewer-line);
+  animation: panel-slide var(--duration-slow) var(--ease-out);
+}
+
+@keyframes panel-slide {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.viewer-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-height);
+  padding: 0 var(--space-2) 0 var(--space-5);
+}
+
+.viewer-panel-head h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--viewer-ink);
+}
+
+.viewer-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--viewer-line);
+}
+
+.viewer-tab {
+  flex: none;
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--viewer-ink-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.viewer-tab:hover {
+  color: var(--viewer-ink);
+  background: var(--viewer-fill);
+}
+
+.viewer-tab.active {
+  color: var(--viewer-background);
+  background: var(--viewer-ink);
+}
+
+.viewer-tabpanel {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-4) var(--space-5) var(--space-6);
+  overflow-y: auto;
+  font-size: var(--font-size-md);
+}
+
+.viewer-tabpanel:focus-visible {
+  outline: 2px solid var(--viewer-accent);
+  outline-offset: -2px;
+}
+
+/* Panel content is drawn on the dark surface, so the app's text roles are
+   remapped to the viewer's inks inside it. */
+.viewer-panel {
+  --color-text-primary: var(--viewer-ink);
+  --color-text-secondary: var(--viewer-ink-muted);
+  --color-text-muted: var(--viewer-ink-muted);
+  --color-surface: var(--viewer-panel-raised);
+  --color-surface-elevated: var(--viewer-panel-raised);
+  --color-border: var(--viewer-line);
+  --color-border-subtle: var(--viewer-line);
+  --color-fill-subtle: var(--viewer-fill);
+  --color-fill-hover: var(--viewer-fill-hover);
+  --color-fill-active: var(--viewer-fill-active);
+  --color-primary: var(--viewer-accent);
+  --color-primary-hover: var(--viewer-accent-hover);
+  --color-on-primary: var(--viewer-background);
+  --color-danger-ink: var(--viewer-danger);
+  --color-sheen: transparent;
+  color: var(--viewer-ink);
+}
+
+.viewer-panel .muted {
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-panel a {
+  color: var(--viewer-ink);
+  text-decoration-color: var(--viewer-accent);
+}
+
+.viewer-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.viewer-fact {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.viewer-fact-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-fact-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.viewer-fact-primary {
+  overflow-wrap: anywhere;
+}
+
+.viewer-fact-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--viewer-ink-muted);
+}
+
+.viewer-tag-list,
+.viewer-person-list,
+.viewer-memory-list,
+.viewer-similar-list,
+.viewer-album-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.viewer-tag-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.viewer-tag-form,
+.viewer-share-result {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.viewer-tag-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.viewer-person,
+.viewer-similar-item,
+.viewer-album-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.viewer-person-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  background: var(--viewer-fill);
+  border-radius: 50%;
+}
+
+.viewer-person-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.viewer-person .muted {
+  margin-left: auto;
+  font-size: var(--font-size-sm);
+}
+
+.viewer-similar-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--viewer-fill);
+  border: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+
+.viewer-similar-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.viewer-similar-name,
+.viewer-album-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-album-btn {
+  min-height: 32px;
+  font-size: var(--font-size-sm);
+}
+
+.viewer-panel-footnote {
+  font-size: var(--font-size-sm);
+}
+
+.viewer-share-key code {
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------- small screens ------------------------- */
+
+@media (max-width: 899px) {
+  .viewer-modal {
+    --viewer-drawer: 0px;
+  }
+
+  /* The panel becomes a sheet from the bottom over the photo. */
+  .viewer-panel {
+    inset: auto 0 0 0;
+    width: auto;
+    max-height: 70vh;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-left: none;
+    border-top: 1px solid var(--viewer-line);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation-name: sheet-up;
+  }
+
+  .viewer-zoom,
+  .viewer-nav {
+    display: none;
+  }
+
+  .viewer-toolbar-actions {
+    gap: 0;
+  }
+}
+
+@media (max-width: 599px) {
+  .viewer-toolbar .viewer-tool[aria-label='Share'],
+  .viewer-toolbar .viewer-tool[aria-label='Download'] {
+    display: none;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .viewer-tool {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+}
+
+/* ---------------------------- caption status --------------------------- */
+
+.note-status-saving,
+.note-status-saved,
+.note-status-error {
+  font-size: var(--font-size-xs);
+}
+
+.note-status-saved {
+  color: var(--color-green);
+}
+
+.note-status-error {
+  color: var(--viewer-danger);
+}
+
+.viewer-fact-name {
+  font-weight: var(--font-weight-medium);
+}
+
+.viewer-fact-part:not(:last-child)::after {
+  content: '·';
+  margin-left: var(--space-3);
+}
+
+/* ------------------------------ motion -------------------------------- */
+
+/* Opening: the photo settles into place as the surround fades up. Moving to
+   the next photo crossfades the same way, because each photo is a new element. */
+.viewer-stage .viewer-media:not(.viewer-preview) {
+  animation: viewer-media-in var(--duration-slow) var(--ease-out) backwards;
+}
+
+@keyframes viewer-media-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.viewer-modal .viewer-toolbar,
+.viewer-modal .viewer-bottom {
+  animation: viewer-chrome-in var(--duration-slow) var(--ease-out) backwards;
+}
+
+@keyframes viewer-chrome-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The photo slides over as the details panel opens and closes. */
+.viewer-stage-wrap,
+.viewer-toolbar,
+.viewer-bottom,
+.viewer-nav-next {
+  transition:
+    margin var(--duration-slow) var(--ease-standard),
+    right var(--duration-slow) var(--ease-standard),
+    opacity var(--duration-slow) var(--ease-standard);
+}
+
+.viewer-speed select {
+  height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.viewer-speed select option {
+  color: initial;
+}
+
+.viewer-speed select:focus-visible {
+  outline: 2px solid var(--viewer-accent);
+}
+
+/* Frame preview above a video's timeline (see viewer/VideoScrubPreview). */
+.scrub-preview {
+  position: fixed;
+  z-index: calc(var(--z-viewer) + 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-50%, -100%);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: rgba(20, 15, 13, 0.92);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.scrub-preview-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.scrub-preview-time {
+  color: #fff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A video keeps clear of the toolbar above and the caption/filmstrip strip
+   below, so its own controls are never covered. Fullscreen reclaims it all. */
+.viewer-stage[data-video='true'] {
+  top: var(--topbar-height);
+  bottom: var(--viewer-bottom-h, 0);
+}
+
+.viewer-stage[data-video='true'] video.viewer-media {
+  max-height: 100%;
+}

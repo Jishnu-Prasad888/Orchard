@@ -1,0 +1,121 @@
+.upload-tray {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100vw - 2 * var(--space-4)));
+  max-height: min(60vh, 480px);
+  overflow: hidden;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  animation: tray-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes tray-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.upload-tray-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
+}
+
+.upload-tray-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upload-tray-heading {
+  font-weight: var(--font-weight-medium);
+}
+
+.upload-tray-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.upload-tray .progress {
+  margin: 0 var(--space-4) var(--space-3);
+}
+
+.upload-tray .progress.is-complete .progress-fill {
+  background: var(--color-success);
+}
+
+.is-flipped {
+  transform: rotate(180deg);
+}
+
+.upload-tray-list {
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.upload-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+}
+
+.upload-item > svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.upload-item.is-done > svg {
+  color: var(--color-success);
+}
+
+.upload-item.is-error > svg {
+  color: var(--color-danger);
+}
+
+.upload-item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upload-item-name {
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-item-status {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.upload-item.is-error .upload-item-status {
+  color: var(--color-danger-ink);
+}
+
+@media (max-width: 899px) {
+  .upload-tray {
+    right: var(--space-3);
+    bottom: calc(var(--bottom-nav-height) + var(--space-3) + env(safe-area-inset-bottom));
+  }
+}
+
+.upload-tray-reason {
+  color: var(--color-danger-ink);
+  overflow-wrap: anywhere;
+}

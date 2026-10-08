@@ -1,0 +1,143 @@
+/* The media browser: toolbar, footer, and the drop target. */
+
+.media-page {
+  position: relative;
+  gap: var(--space-4);
+}
+
+.media-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-height: var(--control-height-md);
+}
+
+.media-toolbar-spacer {
+  flex: 1;
+}
+
+/* Files set aside by Cut or Copy, waiting for a Paste. */
+.clipboard-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+}
+
+.clipboard-count {
+  flex: 1;
+  color: var(--color-text-primary);
+}
+
+.media-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.media-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height-md);
+  padding: 0 var(--space-3);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.media-search:focus-within {
+  border-color: var(--color-primary-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.media-search input {
+  width: 180px;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none !important;
+}
+
+.upload-button {
+  position: relative;
+}
+
+.upload-button:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.media-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.media-count {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Dropping files from the desktop: a quiet outline, not a flash. */
+.media-page.is-dropping::after {
+  content: '';
+  position: absolute;
+  inset: var(--space-2);
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  pointer-events: none;
+}
+
+.drop-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-7);
+  z-index: var(--z-dropdown);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.drop-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-on-primary);
+  background: var(--color-primary-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-3);
+}
+
+@media (max-width: 599px) {
+  .media-toolbar-actions {
+    width: 100%;
+  }
+
+  .media-search {
+    flex: 1;
+  }
+
+  .media-search input {
+    width: 100%;
+  }
+}

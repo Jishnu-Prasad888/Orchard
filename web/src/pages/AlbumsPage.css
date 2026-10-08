@@ -1,0 +1,72 @@
+.albums-center {
+  display: flex;
+  justify-content: center;
+}
+
+.album-grid-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-5) var(--space-4);
+}
+
+.album-grid-skeleton .skeleton {
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+}
+
+/* One album: a back arrow, the album's name, and its actions. */
+.album-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.album-head > .icon-button {
+  margin-top: 2px;
+}
+
+.album-head-titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.album-head h1 {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.album-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.album-head-description {
+  max-width: 64ch;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  white-space: pre-line;
+}
+
+@media (max-width: 599px) {
+  .album-head {
+    flex-wrap: wrap;
+  }
+
+  .album-head h1 {
+    font-size: var(--font-size-2xl);
+  }
+
+  .album-head .header-controls {
+    width: 100%;
+  }
+}

@@ -1,0 +1,162 @@
+/*
+ * A ruler, not a toolbar: a hairline, small ticks, a numeral at each year in
+ * the reading serif used for memories. It sits over the page rather than in
+ * the flow, so it never shifts the grid underneath it.
+ */
+
+.timeline {
+  position: fixed;
+  left: var(--sidebar-width);
+  right: 0;
+  bottom: var(--space-4);
+  z-index: var(--z-sticky);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.timeline-track {
+  position: relative;
+  width: min(100%, 960px);
+  height: 30px;
+  margin: 0 var(--space-6);
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.timeline-track-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.timeline-track-empty::before {
+  content: none;
+}
+
+.timeline-empty-label {
+  font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-4);
+}
+
+.timeline-track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.timeline-track::after {
+  /* The card the ruler sits on, always visible — a hairline on bare page
+     would be lost under a grid of photos. */
+  content: '';
+  position: absolute;
+  inset: 4px -16px;
+  z-index: -1;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface-elevated) 96%, transparent);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(6px);
+  transition: box-shadow var(--duration-base) var(--ease-standard);
+}
+
+.timeline-track:hover::after,
+.timeline-track:focus-visible::after,
+.timeline-track.is-scrubbing::after {
+  box-shadow: var(--shadow-3);
+}
+
+.timeline-tick {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  background: var(--color-text-secondary);
+}
+
+.timeline-tick.is-year {
+  height: 12px;
+  width: 1.5px;
+  background: var(--color-text-primary);
+}
+
+.timeline-year {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-bottom: 4px;
+  transform: translateX(-50%);
+  font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.timeline-flag {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
+  transition: left var(--duration-fast) var(--ease-standard);
+  pointer-events: none;
+}
+
+.timeline-track.is-scrubbing .timeline-flag {
+  transition: none;
+}
+
+.timeline-label {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-3);
+  font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+}
+
+@media (max-width: 899px) {
+  .timeline {
+    left: 0;
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + var(--space-3));
+  }
+
+  .timeline-track {
+    margin: 0 var(--space-4);
+  }
+}
+
+@media (max-width: 599px) {
+  .timeline-year {
+    font-size: 10px;
+  }
+}
+
+@media (pointer: coarse) {
+  .timeline-track {
+    height: var(--touch-target);
+  }
+}

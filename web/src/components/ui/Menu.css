@@ -1,0 +1,116 @@
+.menu {
+  position: fixed;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  padding: var(--space-1);
+  overflow-y: auto;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  animation: menu-in var(--duration-fast) var(--ease-out);
+  transform-origin: top left;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.menu-item svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.menu-item-spacer {
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  color: var(--color-text-primary);
+  background: var(--color-fill-hover);
+  outline: none;
+}
+
+.menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.menu-item-danger,
+.menu-item-danger svg {
+  color: var(--color-danger-ink);
+}
+
+.menu-item-danger:hover,
+.menu-item-danger:focus-visible {
+  color: var(--color-danger-ink);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--color-border-subtle);
+}
+
+/* On the viewer's dark surface. */
+.menu-dark {
+  background: var(--viewer-surface);
+  border-color: var(--viewer-line);
+  color: var(--viewer-ink);
+  backdrop-filter: blur(12px);
+}
+
+.menu-dark .menu-item {
+  color: var(--viewer-ink);
+}
+
+.menu-dark .menu-item svg {
+  color: var(--viewer-ink-muted);
+}
+
+.menu-dark .menu-item:hover,
+.menu-dark .menu-item:focus-visible {
+  background: var(--viewer-fill-hover);
+}
+
+.menu-dark .menu-separator {
+  background: var(--viewer-line);
+}
+
+@media (pointer: coarse) {
+  .menu-item {
+    min-height: var(--touch-target);
+  }
+}
+
+.menu-header {
+  padding: var(--space-2) var(--space-3);
+}

@@ -1,0 +1,10 @@
+.search-page-box {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  .search-page-box {
+    display: flex;
+    padding: var(--space-3) var(--content-gutter) 0;
+  }
+}

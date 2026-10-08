@@ -1,0 +1,313 @@
+/* The file manager's pieces: breadcrumbs, folder tiles, the list view, filters. */
+
+/* ---------------------------- breadcrumbs ---------------------------- */
+
+.breadcrumbs {
+  min-width: 0;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.crumb-sep {
+  color: var(--color-text-muted);
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  max-width: 220px;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.crumb:hover {
+  color: var(--color-text-primary);
+  background: var(--color-fill-hover);
+}
+
+.crumb[aria-current='page'] {
+  color: var(--color-text-primary);
+}
+
+.crumb.is-drop-target {
+  border-color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+}
+
+/* ---------------------------- folder tiles --------------------------- */
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 56px;
+  padding: 0 var(--space-4);
+  color: var(--color-text-primary);
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.folder-tile:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+}
+
+.folder-tile.is-drop-target {
+  border-color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+}
+
+.folder-tile-icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.folder-tile-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.folder-tile-name {
+  overflow: hidden;
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-tile-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 599px) {
+  .folder-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ------------------------------ list view ---------------------------- */
+
+.file-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+}
+
+.file-table th,
+.file-table td {
+  height: 52px;
+  padding: 0 var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.file-table thead th {
+  height: 40px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.file-table tbody th {
+  font-weight: var(--font-weight-regular);
+}
+
+.col-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.col-sort:hover {
+  color: var(--color-text-primary);
+}
+
+.col-check {
+  width: 44px;
+}
+
+.col-name {
+  width: auto;
+  max-width: 0;
+}
+
+.col-type,
+.col-size,
+.col-date {
+  width: 1%;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.col-location {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-actions {
+  width: 52px;
+  text-align: right;
+}
+
+.file-row {
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.file-row:hover {
+  background: var(--color-fill-hover);
+}
+
+.file-row.is-selected {
+  background: color-mix(in srgb, var(--color-selection) 55%, transparent);
+}
+
+.file-row .col-actions .icon-button {
+  opacity: 0;
+}
+
+.file-row:hover .col-actions .icon-button,
+.file-row:focus-within .col-actions .icon-button {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .file-row .col-actions .icon-button {
+    opacity: 1;
+  }
+}
+
+.file-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  padding: 0;
+  font: inherit;
+  color: var(--color-text-primary);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.file-row-thumb {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  color: var(--color-text-secondary);
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-xs);
+}
+
+.file-row-thumb.is-folder {
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+.file-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-row-main:hover .file-row-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 899px) {
+  .file-table .col-type,
+  .file-table .col-location {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .file-table .col-date {
+    display: none;
+  }
+}
+
+/* ------------------------------- filters ------------------------------ */
+
+.filter-panel {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  animation: panel-in var(--duration-base) var(--ease-out);
+}
+
+.filter-panel .field input {
+  width: 160px;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

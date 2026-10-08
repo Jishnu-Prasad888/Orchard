@@ -1,0 +1,194 @@
+/* Sharing: the create form, the one-time token reveal, and the list of links
+   you have already handed out. */
+
+/* ------------------------------ create form ---------------------------- */
+
+.share-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.share-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.share-field > span {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.share-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.share-input:focus-visible {
+  border-color: var(--color-primary-ink);
+}
+
+.share-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.share-hint code {
+  padding: 1px 5px;
+  font-size: 0.85em;
+  background: var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.share-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.share-caps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.share-caps legend {
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.share-cap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.share-cap input {
+  accent-color: var(--color-primary-ink);
+}
+
+/* ------------------------- one-time token reveal ----------------------- */
+
+/* Deliberately loud: this is the only moment the token exists on screen. */
+.share-fresh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-green) 40%, var(--color-border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-green) 12%, var(--color-surface));
+  box-shadow: var(--shadow-1);
+}
+
+.share-fresh h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.share-fresh p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.share-fresh-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.share-fresh-row .share-input {
+  flex: 1 1 260px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: var(--font-size-md);
+}
+
+/* --------------------------------- table -------------------------------- */
+
+.share-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+}
+
+.share-table th,
+.share-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.share-table thead th {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.share-key {
+  max-width: 22rem;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+}
+
+.share-key code {
+  font-size: var(--font-size-md);
+}
+
+.share-caps-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.share-note {
+  margin: 0;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+@media (max-width: 899px) {
+  .share-table thead {
+    display: none;
+  }
+
+  .share-table tbody tr {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .share-table td,
+  .share-table th {
+    border: 0;
+    padding: 0;
+  }
+
+  .share-key {
+    max-width: none;
+  }
+}

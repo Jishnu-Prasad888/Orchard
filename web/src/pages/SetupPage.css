@@ -1,0 +1,4 @@
+/* First-run account creation. The card styling is shared with the sign-in page
+   (auth.css); nothing page-specific is needed yet. */
+
+@import './auth.css';

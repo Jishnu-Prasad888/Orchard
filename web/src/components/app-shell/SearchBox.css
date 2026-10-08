@@ -1,0 +1,178 @@
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 720px;
+  height: 48px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  background: var(--color-fill-subtle);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.search-box:hover {
+  background: var(--color-fill-hover);
+}
+
+.search-box:focus-within {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-2);
+}
+
+.search-box.is-open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.search-box-icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+}
+
+.search-box input:focus-visible {
+  box-shadow: none;
+}
+
+/* The browser's own clear control duplicates ours. */
+.search-box input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.search-box-clear {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.search-box-clear:hover {
+  color: var(--color-text-primary);
+  background: var(--color-fill-hover);
+}
+
+.search-box-kbd {
+  margin-right: var(--space-2);
+}
+
+.search-box:focus-within .search-box-kbd {
+  display: none;
+}
+
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: -1px;
+  right: -1px;
+  z-index: var(--z-dropdown);
+  padding: var(--space-1) 0 var(--space-2);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-top-color: var(--color-border-subtle);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+
+.search-suggestions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-suggestions-heading,
+.search-suggestions-hint {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.search-suggestions-hint {
+  padding-bottom: var(--space-2);
+  font-weight: var(--font-weight-regular);
+}
+
+.search-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  cursor: pointer;
+}
+
+.search-option > svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.search-option.is-active {
+  background: var(--color-fill-hover);
+}
+
+.search-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-option-hint {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.search-option-remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.search-option-remove:hover {
+  color: var(--color-text-primary);
+  background: var(--color-fill-hover);
+}
+
+@media (pointer: coarse) {
+  .search-box-kbd {
+    display: none;
+  }
+
+  .search-option {
+    min-height: var(--touch-target);
+  }
+}

@@ -1,0 +1,241 @@
+/* Library management: list rows, the add/reconnect forms, and the probe result. */
+
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-row {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.library-row-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.library-row-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.library-row-titles h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.library-row-path {
+  margin: 0;
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.library-row-index {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.library-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.library-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.library-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.library-field > span,
+.library-field > label {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.library-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.library-input:focus-visible {
+  border-color: var(--color-primary-ink);
+}
+
+.library-path-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.library-path-row .library-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.library-browse {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.folder-browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.folder-browser-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.folder-browser-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.folder-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.folder-browser-list li {
+  padding: var(--space-1) 0;
+}
+
+.folder-browser-item {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  text-align: left;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.folder-browser-item:hover,
+.folder-browser-item:focus-visible {
+  background: var(--color-selection);
+}
+
+.folder-browser-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.library-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.library-probe {
+  padding: var(--space-3);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.library-probe p {
+  margin: 0 0 var(--space-2);
+}
+
+.library-probe p:last-child {
+  margin-bottom: 0;
+}
+
+.library-probe-ok {
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-green) 12%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-green) 34%, var(--color-border));
+}
+
+.library-probe-warn {
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-warning) 34%, var(--color-border));
+}
+
+.library-probe-error {
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-danger) 32%, var(--color-border));
+}
+
+.library-form code {
+  padding: 1px 5px;
+  font-size: 0.85em;
+  background: var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.libraries-note {
+  margin-top: var(--space-5);
+  font-size: var(--font-size-md);
+}
+
+.library-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 899px) {
+  .library-row-main {
+    flex-direction: column;
+  }
+
+  .library-row-actions {
+    justify-content: flex-start;
+  }
+}

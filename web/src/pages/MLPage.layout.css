@@ -1,0 +1,199 @@
+/*
+ * MLPage layout. Spacing and structure only — colours, fonts and surfaces
+ * still come from MLPage.css and the app theme. Import this after MLPage.css.
+ *
+ * Buttons (.button, .primary-button, .danger-button), text inputs and
+ * .status-badge already carry their full look from styles/controls.css;
+ * nothing here should restate their colour, size or radius.
+ */
+
+.ml-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Cards: the existing .ml-section look, laid out as a vertical stack. */
+.ml-page .ml-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.ml-page .ml-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.ml-page .ml-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.ml-page .ml-section-head h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Similar images + Faces side by side, stacked when narrow. */
+.ml-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  gap: 2rem;
+  align-items: start;
+}
+
+/* Stats */
+.ml-page .ml-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.ml-page .ml-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ml-page .ml-progress {
+  margin: 1rem 0;
+}
+
+/* Actions */
+.ml-page .ml-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+/* Feedback inside the card that triggered it */
+.ml-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+/* Sub-blocks (settings, danger zone) divided from the content above */
+.ml-block {
+  display: grid;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+
+.ml-field {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ml-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ml-field strong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ml-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ml-field input[type='number'] {
+  width: 8rem;
+  max-width: 100%;
+}
+
+.ml-field input[type='range'] {
+  width: 100%;
+  min-width: 200px;
+}
+
+.ml-threshold-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0 0.5rem;
+}
+
+/* Danger zone: explanation on the left, button on the right */
+.ml-danger {
+  grid-auto-flow: column;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.ml-danger .ml-note {
+  margin: 0;
+}
+
+.ml-danger .danger-button {
+  min-width: 140px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ml-page {
+    gap: 1.5rem;
+  }
+
+  .ml-grid {
+    gap: 1.5rem;
+  }
+
+  .ml-page .ml-actions .button {
+    flex: 1 1 calc(50% - 0.375rem);
+    min-width: 140px;
+  }
+
+  .ml-danger {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .ml-danger .danger-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .ml-page {
+    gap: 1.25rem;
+  }
+
+  .ml-page .ml-card {
+    gap: 1.25rem;
+  }
+
+  .ml-page .ml-actions .button {
+    flex: 1 1 100%;
+    min-width: unset;
+  }
+
+  .ml-section {
+    padding: var(--space-4);
+  }
+
+  .ml-page .ml-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -1,0 +1,525 @@
+/*
+ * Shared controls: buttons, fields, chips, and badges.
+ *
+ * The class names are the design system's API. `.button` is the secondary
+ * action; add `.primary-button` for the one main action on a surface,
+ * `.danger-button` for destructive ones, and `.ghost-button` for low-emphasis
+ * actions that should read as text until hovered. `.icon-button` is a compact
+ * square for a single icon and always carries an accessible label.
+ */
+
+/* ------------------------------ buttons ------------------------------ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-clay);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.button:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+}
+
+.button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.button svg {
+  flex-shrink: 0;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+}
+
+.button.active,
+.button[aria-pressed='true'] {
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button:disabled:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+}
+
+.primary-button {
+  color: var(--color-on-primary);
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
+
+.primary-button:hover {
+  color: var(--color-on-primary);
+  background: var(--color-primary-strong-hover);
+  border-color: var(--color-primary-strong-hover);
+}
+
+.primary-button:disabled:hover {
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
+
+.danger-button {
+  color: var(--color-danger-ink);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
+}
+
+.danger-button:hover {
+  color: var(--color-on-primary);
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.ghost-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--color-text-secondary);
+}
+
+.ghost-button:hover {
+  background: var(--color-fill-hover);
+  border-color: transparent;
+  color: var(--color-text-primary);
+}
+
+.button-sm {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-sm);
+}
+
+/* A text-style action: no box, just the accent color. */
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  font-size: inherit;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-ink);
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--color-primary-ink-hover);
+  text-decoration: underline;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  padding: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.icon-button:hover {
+  color: var(--color-text-primary);
+  background: var(--color-fill-hover);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.icon-button[aria-pressed='true'],
+.icon-button.active {
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+}
+
+.icon-button svg {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+}
+
+@media (pointer: coarse) {
+  .icon-button {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  .button {
+    min-height: var(--touch-target);
+  }
+}
+
+/* ------------------------------- fields ------------------------------- */
+
+/*
+ * Every text field looks the same whatever page it is on. `:where()` keeps the
+ * specificity at zero so a page that needs a variation can still say so with
+ * one class.
+ */
+:where(
+  input[type='text'],
+  input[type='search'],
+  input[type='password'],
+  input[type='email'],
+  input[type='number'],
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='url'],
+  input:not([type]),
+  textarea
+) {
+  min-height: var(--control-height-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+:where(textarea) {
+  min-height: 96px;
+  line-height: var(--line-height-base);
+  resize: vertical;
+}
+
+:where(input, textarea)::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+:where(input, textarea):hover:not(:disabled, :focus) {
+  border-color: color-mix(in srgb, var(--color-text-muted) 60%, var(--color-border));
+}
+
+:where(input, textarea, select):focus-visible {
+  outline: none;
+  border-color: var(--color-primary-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+:where(input, textarea, select):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+:where(input, textarea)[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-primary-ink);
+  cursor: pointer;
+}
+
+/*
+ * One look for every dropdown: the native arrow becomes a chevron, and the
+ * control matches the text fields in height, border, and radius.
+ */
+select {
+  appearance: none;
+  min-height: var(--control-height-md);
+  padding: 0 34px 0 var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-elevated);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23a59488' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1.5 1.5 4.5 4.5 4.5-4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+select:hover {
+  border-color: color-mix(in srgb, var(--color-text-muted) 60%, var(--color-border));
+}
+
+select option {
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
+}
+
+/* A label stacked over its control, with an optional hint underneath. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.field-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------- chips -------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.chip:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+.chip[aria-pressed='true'],
+.chip.active {
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+}
+
+.chip svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+/* A tag attached to something, with an optional remove button. */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1) 2px var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.tag-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.tag-chip button:hover {
+  color: var(--color-danger);
+  background: var(--color-fill-hover);
+}
+
+/* ------------------------------- badges ------------------------------- */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  border-radius: var(--radius-pill);
+}
+
+.status-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-badge-online {
+  color: var(--color-success-ink);
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+}
+
+.status-badge-offline {
+  color: var(--color-danger-ink);
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+
+.status-badge-warning {
+  color: var(--color-warning-ink);
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+}
+
+.status-badge-neutral {
+  color: var(--color-text-secondary);
+  background: var(--color-fill-subtle);
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-xs);
+}
+
+/* ------------------------------ progress ------------------------------ */
+
+.progress {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-primary-strong);
+  border-radius: inherit;
+  transition: width var(--duration-base) var(--ease-standard);
+}
+
+/* For work whose size is unknown (an index pass reports no total). */
+.progress-indeterminate .progress-fill {
+  width: 35%;
+  animation: progress-slide 1.4s var(--ease-standard) infinite;
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+/* ------------------------------ skeletons ----------------------------- */
+
+.skeleton {
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ----------------------------- segmented ------------------------------ */
+
+/* Two or three mutually exclusive views (grid / list). */
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-md);
+}
+
+.segmented-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 36px;
+  height: calc(var(--control-height-md) - 4px);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.segmented-item:hover {
+  color: var(--color-text-primary);
+}
+
+.segmented-item.active,
+.segmented-item[aria-pressed='true'],
+.segmented-item[aria-selected='true'] {
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-clay);
+}
+
+.segmented-item svg {
+  width: 18px;
+  height: 18px;
+}

@@ -1,0 +1,185 @@
+.similar-summary {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.similar-footnote {
+  font-size: var(--font-size-sm);
+}
+
+/* ------------------------------ group stack ------------------------------ */
+
+.similar-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-5);
+}
+
+.similar-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2) var(--space-2);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.similar-stack-cards {
+  position: relative;
+  width: 108px;
+  height: 108px;
+}
+
+.similar-stack-card {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-media);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--duration-base) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard);
+}
+
+.similar-stack:hover .similar-stack-card,
+.similar-stack:focus-visible .similar-stack-card {
+  box-shadow: var(--shadow-2);
+}
+
+.similar-stack:hover .similar-stack-card:first-child,
+.similar-stack:focus-visible .similar-stack-card:first-child {
+  transform: translate(0, -4px) rotate(0deg) !important;
+}
+
+.similar-stack-count {
+  position: absolute;
+  top: calc(var(--space-4) * -1 + 2px);
+  right: calc(50% - 60px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-strong);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.similar-stack-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* -------------------------------- modal ----------------------------------- */
+
+.similar-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.similar-modal-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.similar-modal-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.similar-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.similar-member {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.similar-member-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.similar-member-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--color-border-subtle);
+}
+
+.similar-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.similar-member-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.similar-member-badge {
+  flex-shrink: 0;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-fill-active);
+  color: var(--color-primary-ink);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.similar-member-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .similar-groups {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  }
+
+  .similar-stack-cards {
+    width: 88px;
+    height: 88px;
+  }
+}

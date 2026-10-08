@@ -1,0 +1,35 @@
+# Cairn local data
+cairn-data/
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Build output
+bin/
+/dist/
+web/dist/
+node_modules/
+*.tsbuildinfo
+
+# Embedded frontend build artifact. The placeholder index.html is committed so
+# `go build`/`go test` work on a fresh clone; everything else is produced by
+# `make build` and must not be committed.
+internal/webui/dist/*
+!internal/webui/dist/index.html
+
+# Go
+vendor/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Developer scratch
+# Python bytecode artifacts
+__pycache__/
+dev ntoes/
+todos/
+package-lock.json

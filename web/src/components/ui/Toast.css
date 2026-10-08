@@ -1,0 +1,94 @@
+.toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--space-4));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  max-width: 520px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+  /* Inverted surface: dark on the light theme, light on the dark one. */
+  color: var(--color-background);
+  background: var(--color-text-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  pointer-events: auto;
+  animation: toast-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.toast svg {
+  flex-shrink: 0;
+}
+
+.toast-success > svg:first-child {
+  color: var(--color-green);
+}
+
+.toast-error > svg:first-child {
+  color: var(--color-accent);
+}
+
+.toast-message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-action {
+  padding: var(--space-2) var(--space-3);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.toast-action:hover {
+  background: color-mix(in srgb, var(--color-background) 12%, transparent);
+}
+
+.toast-dismiss {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.toast-dismiss:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--color-background) 12%, transparent);
+}
+
+@media (max-width: 899px) {
+  .toast-region {
+    bottom: calc(var(--bottom-nav-height) + var(--space-3) + env(safe-area-inset-bottom));
+  }
+}

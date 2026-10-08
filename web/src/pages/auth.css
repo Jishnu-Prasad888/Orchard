@@ -1,0 +1,157 @@
+/* Shared look for the signed-out pages: sign in (/login) and first-run account
+   creation (/setup). One centred card on the page background, built from the
+   same surface, border, and accent tokens as the rest of the app. */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5) var(--space-4);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  text-align: center;
+}
+
+.auth-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.auth-brand {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: var(--font-size-3xl);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--color-primary-ink);
+}
+
+.auth-title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.auth-subtitle {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.auth-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.auth-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.auth-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-1);
+}
+
+.auth-input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+.auth-submit {
+  font: inherit;
+  margin-top: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-strong);
+  color: var(--color-on-primary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: var(--color-primary-strong-hover);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Secondary action: the create-account link on the sign-in form, and the
+   back-to-sign-in link when first-run setup is already done. */
+.auth-secondary {
+  font: inherit;
+  display: inline-block;
+  align-self: center;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-primary-ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.auth-secondary:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+@media (max-width: 599px) {
+  .auth-card {
+    padding: var(--space-5) var(--space-4);
+  }
+}
