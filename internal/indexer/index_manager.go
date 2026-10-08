@@ -5,16 +5,24 @@ package indexer
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"sync"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/jobs"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/metadata"
+	"github.com/Jishnu-Prasad888/Orchard/internal/jobs"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
+
+// MediaProcessor derives data from a single indexed file after a scan — for
+// example extracting document metadata or generating a cover thumbnail. It is
+// a generic extension point: Orchard registers no processor yet, so
+// process_media jobs are accepted and no-op until one is set.
+type MediaProcessor interface {
+	Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error
+}
 
 // IndexStatus is the current state of a library's index.
 type IndexStatus struct {
@@ -37,9 +45,9 @@ type IndexManager struct {
 	// run in the background once indexing settles.
 	AfterScan func(libraryID, root string)
 
-	// mediaProcessor, when set, handles process_media jobs (metadata
-	// extraction and thumbnail generation) on every library worker.
-	mediaProcessor *metadata.Processor
+	// mediaProcessor, when set, handles process_media jobs on every library
+	// worker.
+	mediaProcessor MediaProcessor
 
 	// baseCtx is the server-lifetime context (signal context from main) that
 	// library workers live under. Request-scoped contexts must never parent a
@@ -71,10 +79,9 @@ func NewIndexManager(logger *slog.Logger) *IndexManager {
 	return &IndexManager{logger: logger, workers: make(map[string]*workerHandle)}
 }
 
-// SetMediaProcessor configures the handler for process_media jobs. When nil,
-// process_media jobs are executed anyway but metadata and thumbnails are not
-// produced (jobs fail with "no handler" only when the processor is required).
-func (m *IndexManager) SetMediaProcessor(p *metadata.Processor) {
+// SetMediaProcessor configures the handler for process_media jobs. When nil
+// (the default), process_media jobs are accepted and simply do nothing.
+func (m *IndexManager) SetMediaProcessor(p MediaProcessor) {
 	m.mediaProcessor = p
 }
 
@@ -106,7 +113,7 @@ func (m *IndexManager) StartLibraryWorker(ctx context.Context, libraryID, root s
 	if p := m.mediaProcessor; p != nil {
 		db := ldb.DB()
 		w.Register(jobs.KindProcessMedia, func(jctx context.Context, job *jobs.Job) error {
-			return p.Handle(metadata.WithDB(jctx, db), job)
+			return p.Handle(jctx, db, job)
 		})
 	}
 	handle := &workerHandle{cancel: cancel, token: &struct{}{}}

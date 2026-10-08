@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
-	"github.com/Jishnu-Prasad888/Cairn/internal/likeutil"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/likeutil"
 )
 
 // GrantInput describes an intended grant for creation.

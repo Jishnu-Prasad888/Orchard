@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/authz"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // sharePasswordHeader carries an optional share password on public requests.

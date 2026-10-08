@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/backups"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/backups"
 )
 
 // backupResponse is the API representation of a backup record.

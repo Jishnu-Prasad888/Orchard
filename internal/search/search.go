@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/fts"
-	"github.com/Jishnu-Prasad888/Cairn/internal/likeutil"
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/fts"
+	"github.com/Jishnu-Prasad888/Orchard/internal/likeutil"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // ErrInvalidQuery is returned when a search query cannot be expressed safely
@@ -42,13 +42,6 @@ type SearchQuery struct {
 	// Tag restricts results to files carrying a tag with this name (case-
 	// insensitive). Empty means all.
 	Tag string
-
-	// AlbumID restricts results to files in this album. Empty means all.
-	AlbumID string
-
-	// PersonID restricts results to files containing a face assigned to this
-	// person. Empty means all.
-	PersonID string
 
 	// MinSize and MaxSize restrict results by file size in bytes. Zero values
 	// are ignored.
@@ -229,17 +222,6 @@ func buildExtraFilters(q SearchQuery) ([]string, []any) {
 			JOIN tags tg ON tg.id = ft.tag_id
 			WHERE tg.name = ? COLLATE NOCASE)`)
 		args = append(args, q.Tag)
-	}
-	if q.AlbumID != "" {
-		conditions = append(conditions, "f.id IN (SELECT file_id FROM album_files WHERE album_id = ?)")
-		args = append(args, q.AlbumID)
-	}
-	if q.PersonID != "" {
-		conditions = append(conditions, `f.id IN (
-			SELECT fa.file_id FROM person_faces pf
-			JOIN faces fa ON fa.id = pf.face_id
-			WHERE pf.person_id = ?)`)
-		args = append(args, q.PersonID)
 	}
 	if q.MinSize > 0 {
 		conditions = append(conditions, "f.size_bytes >= ?")

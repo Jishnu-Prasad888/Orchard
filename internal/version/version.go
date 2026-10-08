@@ -12,7 +12,7 @@ import (
 
 // These values may be set at build time:
 //
-//	-X "github.com/Jishnu-Prasad888/Cairn/internal/version.Version=..."
+//	-X "github.com/Jishnu-Prasad888/Orchard/internal/version.Version=..."
 var (
 	// Version is the semantic version of the build. "dev" indicates a
 	// local development build.

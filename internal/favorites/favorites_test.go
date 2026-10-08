@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/favorites"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/favorites"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // --- helpers ---

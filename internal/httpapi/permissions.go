@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
 )
 
 // grantRequest is the accepted grant creation payload.

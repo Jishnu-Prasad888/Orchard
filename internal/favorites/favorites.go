@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // ErrAlreadyFavorited is returned when trying to favorite a file that is already favorited.

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
-	"github.com/Jishnu-Prasad888/Cairn/internal/metrics"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
 )
 
 func testLogger() *slog.Logger {

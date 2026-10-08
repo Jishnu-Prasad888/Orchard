@@ -19,9 +19,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/sanitize"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/sanitize"
 )
 
 // Config drives the backup subsystem.

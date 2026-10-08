@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(os.Stderr, nil)) }

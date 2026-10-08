@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 )
 
 // fsDir is one sub-directory offered by the folder browser.

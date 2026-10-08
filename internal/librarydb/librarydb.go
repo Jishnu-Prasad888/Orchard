@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
 )

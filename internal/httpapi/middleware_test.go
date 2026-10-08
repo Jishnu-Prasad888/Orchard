@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
 )
 
 // newCaptureServer is newTestServer with a logger that writes into the

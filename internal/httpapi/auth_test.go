@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
 )
 
 // newAuthTestServer wires the full dependency graph (database, audit, auth)

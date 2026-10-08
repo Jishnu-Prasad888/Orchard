@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/authz"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 )
 
 // libraryRequest is the accepted create/adopt payload.

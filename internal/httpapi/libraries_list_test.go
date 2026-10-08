@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/authz"
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 )
 
 // newLibraryListServer wires a server with two registered libraries so tests

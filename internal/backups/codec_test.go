@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
 )
 
 // testKey is the fixed 32-byte key used by codec tests.

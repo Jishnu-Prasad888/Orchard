@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/sanitize"
+	"github.com/Jishnu-Prasad888/Orchard/internal/sanitize"
 )
 
 const trashDirName = ".cairn/trash"

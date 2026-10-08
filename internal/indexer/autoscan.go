@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/jobs"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/jobs"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 )
 
 // StartAutoScan rescans every online library on a timer, so files added,

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
 )
 
 // newTestService opens a fresh migrated server database and returns an auth

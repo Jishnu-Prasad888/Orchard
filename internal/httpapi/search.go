@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/authz"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
-	"github.com/Jishnu-Prasad888/Cairn/internal/search"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/search"
 )
 
 // openSearchStore opens the per-library DB and returns a SearchStore.
@@ -43,8 +43,6 @@ func (s *Server) openSearchStore(
 //	type    – media type filter (photo, video, audio, document, other)
 //	folder  – folder path prefix filter
 //	tag     – tag name filter (case-insensitive)
-//	album   – album id filter
-//	person  – person id filter (files containing a face assigned to person)
 //	min_size – minimum file size in bytes
 //	max_size – maximum file size in bytes
 //	from    – RFC3339 date lower bound on mod_time
@@ -107,12 +105,6 @@ func parseSearchQuery(r *http.Request) search.SearchQuery {
 		FolderPath: q.Get("folder"),
 		Tag:        q.Get("tag"),
 		Cursor:     q.Get("cursor"),
-	}
-	if alb := q.Get("album"); alb != "" {
-		sq.AlbumID = alb
-	}
-	if per := q.Get("person"); per != "" {
-		sq.PersonID = per
 	}
 	if v := q.Get("min_size"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {

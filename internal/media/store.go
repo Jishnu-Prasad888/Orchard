@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/likeutil"
+	"github.com/Jishnu-Prasad888/Orchard/internal/likeutil"
 )
 
 // FileStore is the read/write repository for files and folders in a per-library

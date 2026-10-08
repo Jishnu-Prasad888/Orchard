@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 )
 
 // sessionCookieName is the cookie carrying the opaque session token. It is

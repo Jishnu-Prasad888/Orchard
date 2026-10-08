@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // seedIndexedFile inserts an indexed_files row directly with an explicit

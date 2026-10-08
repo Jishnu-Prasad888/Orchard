@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
 )
 
 func newTestService(t *testing.T) (*Service, *sql.DB) {

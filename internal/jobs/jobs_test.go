@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/jobs"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/jobs"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 func newTestQueue(t *testing.T) *jobs.Queue {

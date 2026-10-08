@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
 )
 
 // timingEqualizerHash is a valid argon2id hash used only to burn the same CPU

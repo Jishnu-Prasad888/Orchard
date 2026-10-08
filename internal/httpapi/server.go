@@ -6,17 +6,16 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/authz"
-	"github.com/Jishnu-Prasad888/Cairn/internal/backups"
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
-	"github.com/Jishnu-Prasad888/Cairn/internal/indexer"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/metrics"
-	"github.com/Jishnu-Prasad888/Cairn/internal/ml"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/backups"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
 )
 
-// Server is the Cairn HTTP application. It is a small composition of the
+// Server is the Orchard HTTP application. It is a small composition of the
 // routes and shared dependencies; individual handlers stay in their own
 // files.
 type Server struct {
@@ -27,11 +26,6 @@ type Server struct {
 	authz          *authz.Service
 	libraries      *library.Manager
 	indexer        *indexer.IndexManager
-	ml             *ml.Manager
-	faces          *ml.FaceManager
-	mlRuntime      *ml.Runtime
-	faceModel      *ml.ModelDownloader
-	faceDetector   *ml.ModelDownloader
 	backups        *backups.Manager
 	keys           *crypto.Keys
 	secureCookies  bool
@@ -62,25 +56,12 @@ type Dependencies struct {
 	// Indexer manages per-library scan jobs and index status. It may be nil,
 	// in which case the indexing endpoints return SERVICE_UNAVAILABLE.
 	Indexer *indexer.IndexManager
-	// ML runs optional local similarity passes. It may be nil, in which case
-	// the ML endpoints return SERVICE_UNAVAILABLE.
-	ML *ml.Manager
-	// Faces runs optional local face recognition passes and people curation.
-	// It may be nil, in which case the face endpoints return
-	// SERVICE_UNAVAILABLE.
-	Faces *ml.FaceManager
-	// MLRuntime is the administrator's ML on/off switch. May be nil.
-	MLRuntime *ml.Runtime
-	// FaceModel downloads the face-recognition (ArcFace) model on request. May be nil.
-	FaceModel *ml.ModelDownloader
-	// FaceDetector downloads the SCRFD face-detector model on request. May be nil.
-	FaceDetector *ml.ModelDownloader
 	// Backups runs server and library backups. It may be nil, in which case
 	// the backup-management endpoints return SERVICE_UNAVAILABLE.
 	Backups *backups.Manager
-	// Keys is the optional at-rest encryption key (Phase 13) used to seal the
-	// .cairn identity and thumbnails. It may be nil or disabled, in which
-	// case metadata is written in the clear.
+	// Keys is the optional at-rest encryption key used to seal the .orchard
+	// identity file. It may be nil or disabled, in which case metadata is
+	// written in the clear.
 	Keys *crypto.Keys
 	// SecureCookies forces the Secure flag on session cookies even when the
 	// server did not observe TLS (e.g. behind a TLS-terminating proxy).
@@ -108,11 +89,6 @@ func New(deps Dependencies) *Server {
 		authz:          deps.Authz,
 		libraries:      deps.Libraries,
 		indexer:        deps.Indexer,
-		ml:             deps.ML,
-		faces:          deps.Faces,
-		mlRuntime:      deps.MLRuntime,
-		faceModel:      deps.FaceModel,
-		faceDetector:   deps.FaceDetector,
 		backups:        deps.Backups,
 		keys:           deps.Keys,
 		secureCookies:  deps.SecureCookies,
@@ -154,12 +130,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/logout", s.requireSession(s.handleLogout))
 	mux.Handle("GET /api/v1/auth/me", s.withAuth(allowAny, s.handleMe))
 
-	mux.Handle("GET /api/v1/system/capabilities", s.withAuth(allowAny, s.handleCapabilities))
-
-	// Per-user preferences.
-	mux.Handle("GET /api/v1/settings/memories", s.withAuth(allowAny, s.handleGetMemorySettings))
-	mux.Handle("PATCH /api/v1/settings/memories", s.withAuth(allowAny, s.handleUpdateMemorySettings))
-
 	// Admin surface.
 	mux.Handle("GET /api/v1/users", s.withAuth(allowAdmin, s.handleListUsers))
 	mux.Handle("POST /api/v1/users", s.withAuth(allowAdmin, s.handleCreateUser))
@@ -183,47 +153,6 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /api/v1/libraries/{id}/index", s.withAuth(allowAdmin, s.handleTriggerIndex))
 		mux.Handle("GET /api/v1/libraries/{id}/index/status", s.withAuth(allowAdmin, s.handleIndexStatus))
 
-		// Local ML surface (admin): similarity passing, status, and purge are
-		// server operations like indexing. Reading "similar files" follows
-		// per-resource capabilities like any other content route.
-		if s.mlRuntime != nil {
-			mux.Handle("GET /api/v1/ml/settings", s.withAuth(allowAny, s.handleGetMLSettings))
-			mux.Handle("PUT /api/v1/ml/settings", s.withAuth(allowAdmin, s.handlePutMLSettings))
-			if s.faceModel != nil {
-				mux.Handle("GET /api/v1/ml/model", s.withAuth(allowAdmin, s.handleGetFaceModel))
-				mux.Handle("POST /api/v1/ml/model/download", s.withAuth(allowAdmin, s.handleDownloadFaceModel))
-			}
-		}
-		if s.ml != nil {
-			mux.Handle("GET /api/v1/libraries/{id}/ml", s.withAuth(allowAdmin, s.handleMLStatus))
-			mux.Handle("POST /api/v1/libraries/{id}/ml/similarity/pass", s.withAuth(allowAdmin, s.handleMLPass))
-			mux.Handle("POST /api/v1/libraries/{id}/ml/purge", s.withAuth(allowAdmin, s.handleMLPurge))
-			mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/similar", s.withAuth(allowAny, s.handleSimilarFiles))
-			mux.Handle("GET /api/v1/libraries/{id}/ml/similarity/groups", s.withAuth(allowAny, s.handleSimilarityGroups))
-		}
-		if s.faces != nil {
-			mux.Handle("GET /api/v1/libraries/{id}/ml/faces", s.withAuth(allowAdmin, s.handleFaceStatus))
-			mux.Handle("POST /api/v1/libraries/{id}/ml/faces/pass", s.withAuth(allowAdmin, s.handleFacePass))
-			mux.Handle("POST /api/v1/libraries/{id}/ml/faces/cluster", s.withAuth(allowAdmin, s.handleFaceCluster))
-			mux.Handle("POST /api/v1/libraries/{id}/ml/faces/purge", s.withAuth(allowAdmin, s.handleFacePurge))
-
-			// People curation reads follow resource capabilities like other
-			// content routes; curation writes use the library edit/create/
-			// delete capabilities.
-			mux.Handle("GET /api/v1/libraries/{id}/people", s.withAuth(allowAny, s.handleListPeople))
-			mux.Handle("POST /api/v1/libraries/{id}/people", s.withAuth(allowAny, s.handleCreatePerson))
-			mux.Handle("GET /api/v1/libraries/{id}/people/{personID}", s.withAuth(allowAny, s.handleGetPerson))
-			mux.Handle("POST /api/v1/libraries/{id}/people/{personID}/rename", s.withAuth(allowAny, s.handleRenamePerson))
-			mux.Handle("POST /api/v1/libraries/{id}/people/{personID}/cover", s.withAuth(allowAny, s.handleSetPersonCover))
-			mux.Handle("POST /api/v1/libraries/{id}/people/{personID}/merge", s.withAuth(allowAny, s.handleMergePeople))
-			mux.Handle("DELETE /api/v1/libraries/{id}/people/{personID}", s.withAuth(allowAny, s.handleDeletePerson))
-			mux.Handle("POST /api/v1/libraries/{id}/people/{personID}/faces/{faceID}", s.withAuth(allowAny, s.handleAssignFace))
-			mux.Handle("DELETE /api/v1/libraries/{id}/people/{personID}/faces/{faceID}", s.withAuth(allowAny, s.handleUnassignFace))
-			mux.Handle("GET /api/v1/libraries/{id}/faces", s.withAuth(allowAny, s.handleListFaces))
-			mux.Handle("GET /api/v1/libraries/{id}/faces/{faceID}/image", s.withAuth(allowAny, s.handleFaceImage))
-			mux.Handle("DELETE /api/v1/libraries/{id}/faces/{faceID}", s.withAuth(allowAny, s.handleDeleteFace))
-		}
-
 		// Permissions and shares administration (library scope).
 		mux.Handle("GET /api/v1/libraries/{id}/permissions", s.withAuth(allowAny, s.handleListGrants))
 		mux.Handle("POST /api/v1/libraries/{id}/permissions", s.withAuth(allowAny, s.handleCreateGrant))
@@ -232,11 +161,10 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /api/v1/libraries/{id}/shares", s.withAuth(allowAny, s.handleCreateShare))
 		mux.Handle("DELETE /api/v1/libraries/{id}/shares/{shareID}", s.withAuth(allowAny, s.handleRevokeShare))
 
-		// Media/files surface. Capabilities are enforced per resource inside
-		// each handler via requireCap.
+		// Files surface. Capabilities are enforced per resource inside each
+		// handler via requireCap.
 		mux.Handle("GET /api/v1/libraries/{id}/files", s.withAuth(allowAny, s.handleListFiles))
 		mux.Handle("GET /api/v1/libraries/{id}/files/counts", s.withAuth(allowAny, s.handleFileCounts))
-		mux.Handle("GET /api/v1/libraries/{id}/files/duplicates", s.withAuth(allowAny, s.handleListDuplicates))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}", s.withAuth(allowAny, s.handleGetFile))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/download", s.withAuth(allowAny, s.handleDownloadFile))
 		mux.Handle("POST /api/v1/libraries/{id}/files/upload", s.withAuth(allowAny, s.handleUploadFile))
@@ -246,9 +174,6 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}", s.withAuth(allowAny, s.handleDeleteFile))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/restore", s.withAuth(allowAny, s.handleRestoreFile))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/permanent", s.withAuth(allowAny, s.handlePermanentDeleteFile))
-		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/metadata", s.withAuth(allowAny, s.handleGetFileMetadata))
-		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/thumbnail", s.withAuth(allowAny, s.handleGetThumbnail))
-		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/thumbnail", s.withAuth(allowAny, s.handlePutThumbnail))
 
 		// Per-file Markdown notes (captions).
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/note", s.withAuth(allowAny, s.handleGetFileNote))
@@ -271,15 +196,6 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/tags", s.withAuth(allowAny, s.handleAddFileTag))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/tags/{tagID}", s.withAuth(allowAny, s.handleRemoveFileTag))
 
-		// Albums.
-		mux.Handle("GET /api/v1/libraries/{id}/albums", s.withAuth(allowAny, s.handleListAlbums))
-		mux.Handle("POST /api/v1/libraries/{id}/albums", s.withAuth(allowAny, s.handleCreateAlbum))
-		mux.Handle("PATCH /api/v1/libraries/{id}/albums/{albumID}", s.withAuth(allowAny, s.handleUpdateAlbum))
-		mux.Handle("DELETE /api/v1/libraries/{id}/albums/{albumID}", s.withAuth(allowAny, s.handleDeleteAlbum))
-		mux.Handle("GET /api/v1/libraries/{id}/albums/{albumID}/files", s.withAuth(allowAny, s.handleListAlbumFiles))
-		mux.Handle("POST /api/v1/libraries/{id}/albums/{albumID}/files/{fileID}", s.withAuth(allowAny, s.handleAddAlbumFile))
-		mux.Handle("DELETE /api/v1/libraries/{id}/albums/{albumID}/files/{fileID}", s.withAuth(allowAny, s.handleRemoveAlbumFile))
-
 		// Favorites.
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/favorite", s.withAuth(allowAny, s.handleAddFavorite))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/favorite", s.withAuth(allowAny, s.handleRemoveFavorite))
@@ -294,29 +210,6 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("POST /api/v1/backups/{id}/verify", s.withAuth(allowAdmin, s.handleVerifyBackup))
 			mux.Handle("POST /api/v1/backups/{id}/restore", s.withAuth(allowAdmin, s.handleRestoreBackup))
 		}
-
-		// Memories (Markdown documents with version history and references).
-		mux.Handle("GET /api/v1/libraries/{id}/memories", s.withAuth(allowAny, s.handleListMemories))
-		mux.Handle("POST /api/v1/libraries/{id}/memories", s.withAuth(allowAny, s.handleCreateMemory))
-		mux.Handle("GET /api/v1/libraries/{id}/memories/{memoryID}", s.withAuth(allowAny, s.handleGetMemory))
-		mux.Handle("PUT /api/v1/libraries/{id}/memories/{memoryID}", s.withAuth(allowAny, s.handleUpdateMemory))
-		mux.Handle("DELETE /api/v1/libraries/{id}/memories/{memoryID}", s.withAuth(allowAny, s.handleDeleteMemory))
-		mux.Handle("POST /api/v1/libraries/{id}/memories/{memoryID}/restore", s.withAuth(allowAny, s.handleRestoreMemory))
-		mux.Handle("GET /api/v1/libraries/{id}/memories/{memoryID}/versions", s.withAuth(allowAny, s.handleListMemoryVersions))
-		mux.Handle("GET /api/v1/libraries/{id}/memories/{memoryID}/versions/{version}", s.withAuth(allowAny, s.handleGetMemoryVersion))
-		mux.Handle("GET /api/v1/libraries/{id}/memories/{memoryID}/refs", s.withAuth(allowAny, s.handleListMemoryRefs))
-		mux.Handle("PATCH /api/v1/libraries/{id}/memories/{memoryID}", s.withAuth(allowAny, s.handlePatchMemory))
-		mux.Handle("PUT /api/v1/libraries/{id}/memories/{memoryID}/document", s.withAuth(allowAny, s.handlePutMemoryDocument))
-		mux.Handle("POST /api/v1/libraries/{id}/memories/{memoryID}/blocks", s.withAuth(allowAny, s.handleCreateMemoryBlock))
-		mux.Handle("PUT /api/v1/libraries/{id}/memories/{memoryID}/blocks/order", s.withAuth(allowAny, s.handleReorderMemoryBlocks))
-		mux.Handle("PATCH /api/v1/libraries/{id}/memories/{memoryID}/blocks/{blockID}", s.withAuth(allowAny, s.handlePatchMemoryBlock))
-		mux.Handle("DELETE /api/v1/libraries/{id}/memories/{memoryID}/blocks/{blockID}", s.withAuth(allowAny, s.handleDeleteMemoryBlock))
-		mux.Handle("POST /api/v1/libraries/{id}/memories/{memoryID}/blocks/{blockID}/duplicate", s.withAuth(allowAny, s.handleDuplicateMemoryBlock))
-		mux.Handle("POST /api/v1/libraries/{id}/memories/{memoryID}/blocks/{blockID}/images", s.withAuth(allowAny, s.handleAddMemoryImages))
-		mux.Handle("PUT /api/v1/libraries/{id}/memories/{memoryID}/blocks/{blockID}/images/order", s.withAuth(allowAny, s.handleReorderMemoryImages))
-		mux.Handle("PATCH /api/v1/libraries/{id}/memories/{memoryID}/images/{imageID}", s.withAuth(allowAny, s.handlePatchMemoryImage))
-		mux.Handle("DELETE /api/v1/libraries/{id}/memories/{memoryID}/images/{imageID}", s.withAuth(allowAny, s.handleDeleteMemoryImage))
-		mux.Handle("GET /api/v1/libraries/{id}/memories/{memoryID}/images/{imageID}/derived", s.withAuth(allowAny, s.handleGetMemoryImageDerived))
 
 		// Public shares read content without a session. The token/password
 		// authenticate the share; capability evaluation still governs access.
@@ -334,7 +227,7 @@ func (s *Server) Handler() http.Handler {
 	} else {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeError(w, s.logger, requestIDOrEmpty(r), http.StatusNotFound, CodeNotFound,
-				"No web frontend is configured. Build the frontend or point CAIRN_WEB_DIST at a built web/dist directory.")
+				"No web frontend is configured. Build the frontend or point ORCHARD_WEB_DIST at a built web/dist directory.")
 		})
 	}
 

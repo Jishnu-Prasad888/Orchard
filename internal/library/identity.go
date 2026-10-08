@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
 )
 
 // cairnDirName is the single metadata directory Cairn keeps inside each

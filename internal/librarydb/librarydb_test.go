@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 func TestOpenCreatesAndMigrates(t *testing.T) {

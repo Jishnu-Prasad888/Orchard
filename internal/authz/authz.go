@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
 )
 
 // Capability is a single operation a principal may perform on a resource.

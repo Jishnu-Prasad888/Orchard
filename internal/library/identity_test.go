@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
 )
 
 func TestMetadataDirNaming(t *testing.T) {

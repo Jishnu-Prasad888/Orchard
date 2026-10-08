@@ -10,17 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/albums"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/media"
-	"github.com/Jishnu-Prasad888/Cairn/internal/search"
-	"github.com/Jishnu-Prasad888/Cairn/internal/tags"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/search"
+	"github.com/Jishnu-Prasad888/Orchard/internal/tags"
 )
 
 // --- test helpers ---
 
 // newTestStoreWithMediaStore returns a SearchStore, FileStore, and the raw
-// database so tests can seed indexed_files, tags, and albums.
+// database so tests can seed indexed_files and tags.
 func newTestStoreWithMediaStore(t *testing.T) (*search.SearchStore, *media.FileStore, *sql.DB) {
 	t.Helper()
 	root := t.TempDir()
@@ -271,93 +270,6 @@ func TestSearchTagFilter(t *testing.T) {
 	}
 	if page.Results[0].File.Name != "beach.jpg" {
 		t.Errorf("wrong file for tag filter: got %q", page.Results[0].File.Name)
-	}
-}
-
-func TestSearchAlbumFilter(t *testing.T) {
-	ss, fs, db := newTestStoreWithMediaStore(t)
-	ctx := context.Background()
-
-	seedFile(t, fs, "a.jpg")
-	seedFile(t, fs, "b.jpg")
-	seedFile(t, fs, "c.jpg")
-
-	albumStore := albums.NewAlbumStore(db, "lib1")
-	album, err := albumStore.Create(ctx, "Summer", "")
-	if err != nil {
-		t.Fatalf("create album: %v", err)
-	}
-	for _, path := range []string{"a.jpg", "c.jpg"} {
-		f, err := fs.GetByRelPath(ctx, path)
-		if err != nil {
-			t.Fatalf("GetByRelPath %s: %v", path, err)
-		}
-		if err := albumStore.AddFile(ctx, album.ID, f.ID); err != nil {
-			t.Fatalf("add to album: %v", err)
-		}
-	}
-
-	page, err := ss.Search(ctx, search.SearchQuery{AlbumID: album.ID})
-	if err != nil {
-		t.Fatalf("Search by album: %v", err)
-	}
-	if len(page.Results) != 2 {
-		t.Fatalf("album filter returned %d results, want 2", len(page.Results))
-	}
-}
-
-func TestSearchPersonFilter(t *testing.T) {
-	ss, fs, db := newTestStoreWithMediaStore(t)
-	ctx := context.Background()
-
-	seedFile(t, fs, "a.jpg")
-	seedFile(t, fs, "b.jpg")
-	seedFile(t, fs, "c.jpg")
-
-	// Person "Mom" assigned the face in a.jpg and c.jpg.
-	personID := "person-mom-1"
-	faceIDs := []string{"face-a", "face-b"}
-	now := "2026-01-01T00:00:00.000Z"
-	for i, rel := range []string{"a.jpg", "c.jpg"} {
-		f, err := fs.GetByRelPath(ctx, rel)
-		if err != nil {
-			t.Fatalf("GetByRelPath %s: %v", rel, err)
-		}
-		if _, err := db.ExecContext(ctx, `
-			INSERT INTO faces (id, file_id, provider, version, x, y, width, height,
-			                   confidence, descriptor, created_at, updated_at)
-			VALUES (?, ?, 'test', 1, 0, 0, 20, 20, 0.9, X'00000000', ?, ?)`,
-			faceIDs[i], f.ID, now, now); err != nil {
-			t.Fatalf("insert face: %v", err)
-		}
-	}
-	if _, err := db.ExecContext(ctx, `
-		INSERT INTO people (id, name, created_at, updated_at) VALUES (?, 'Mom', ?, ?)`,
-		personID, now, now); err != nil {
-		t.Fatalf("insert person: %v", err)
-	}
-	for _, faceID := range faceIDs {
-		if _, err := db.ExecContext(ctx, `
-			INSERT INTO person_faces (person_id, face_id, assigned_by, created_at)
-			VALUES (?, ?, 'auto', ?)`, personID, faceID, now); err != nil {
-			t.Fatalf("assign face: %v", err)
-		}
-	}
-
-	page, err := ss.Search(ctx, search.SearchQuery{PersonID: personID})
-	if err != nil {
-		t.Fatalf("Search by person: %v", err)
-	}
-	if len(page.Results) != 2 {
-		t.Fatalf("person filter returned %d results, want 2", len(page.Results))
-	}
-
-	page, err = ss.Search(ctx, search.SearchQuery{PersonID: "no-such-person"})
-	if err != nil {
-		t.Fatalf("Search by missing person: %v", err)
-	}
-	if len(page.Results) != 0 {
-		t.Fatalf("person filter for missing person returned %d results, want 0", len(page.Results))
 	}
 }
 

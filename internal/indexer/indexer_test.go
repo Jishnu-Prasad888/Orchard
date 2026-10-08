@@ -11,10 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
-	"github.com/Jishnu-Prasad888/Cairn/internal/indexer"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
-	"github.com/Jishnu-Prasad888/Cairn/internal/metadata"
+	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 // --- helpers ---
@@ -223,7 +221,6 @@ func TestIndexManagerWorkerExecutesScanJob(t *testing.T) {
 	mgr := indexer.NewIndexManager(discardLogger())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mgr.SetMediaProcessor(metadata.NewProcessor(discardLogger(), crypto.NewKeys("")))
 	if err := mgr.StartLibraryWorker(ctx, "lib1", root); err != nil {
 		t.Fatalf("start library worker: %v", err)
 	}

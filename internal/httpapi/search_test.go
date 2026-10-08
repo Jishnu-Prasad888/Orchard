@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jishnu-Prasad888/Cairn/internal/audit"
-	"github.com/Jishnu-Prasad888/Cairn/internal/auth"
-	"github.com/Jishnu-Prasad888/Cairn/internal/crypto"
-	"github.com/Jishnu-Prasad888/Cairn/internal/db"
-	"github.com/Jishnu-Prasad888/Cairn/internal/library"
-	"github.com/Jishnu-Prasad888/Cairn/internal/librarydb"
+	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
+	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
+	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 // --- shared test infrastructure ---
@@ -282,108 +282,6 @@ func TestHandleListTags_AfterCreate(t *testing.T) {
 	}
 }
 
-// --- albums tests ---
-
-func TestHandleListAlbums_Empty(t *testing.T) {
-	_, client, libID, _ := newSearchTestServer(t)
-
-	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/albums", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestHandleCreateAlbum(t *testing.T) {
-	_, client, libID, _ := newSearchTestServer(t)
-
-	rec := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/albums",
-		map[string]string{"name": "Summer Trip", "description": "2023 Italy"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
-	}
-	var resp struct {
-		Album struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Description string `json:"description"`
-		} `json:"album"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if resp.Album.ID == "" {
-		t.Error("album ID is empty")
-	}
-	if resp.Album.Name != "Summer Trip" {
-		t.Errorf("name = %q, want Summer Trip", resp.Album.Name)
-	}
-	if resp.Album.Description != "2023 Italy" {
-		t.Errorf("description = %q, want 2023 Italy", resp.Album.Description)
-	}
-}
-
-func TestHandleCreateAlbum_MissingName(t *testing.T) {
-	_, client, libID, _ := newSearchTestServer(t)
-
-	rec := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/albums",
-		map[string]string{"description": "no name"})
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", rec.Code)
-	}
-}
-
-func TestHandleDeleteAlbum(t *testing.T) {
-	_, client, libID, _ := newSearchTestServer(t)
-
-	create := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/albums",
-		map[string]string{"name": "to-delete"})
-	var cr struct {
-		Album struct {
-			ID string `json:"id"`
-		} `json:"album"`
-	}
-	if err := json.Unmarshal(create.Body.Bytes(), &cr); err != nil {
-		t.Fatalf("unmarshal create: %v", err)
-	}
-
-	rec := client.do(t, http.MethodDelete,
-		"/api/v1/libraries/"+libID+"/albums/"+cr.Album.ID, nil)
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want 204", rec.Code)
-	}
-}
-
-func TestHandleDeleteAlbum_NotFound(t *testing.T) {
-	_, client, libID, _ := newSearchTestServer(t)
-
-	rec := client.do(t, http.MethodDelete,
-		"/api/v1/libraries/"+libID+"/albums/ghost", nil)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", rec.Code)
-	}
-}
-
-func TestHandleListAlbumFiles_Empty(t *testing.T) {
-	_, client, libID, _ := newSearchTestServer(t)
-
-	create := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/albums",
-		map[string]string{"name": "empty"})
-	var cr struct {
-		Album struct {
-			ID string `json:"id"`
-		} `json:"album"`
-	}
-	if err := json.Unmarshal(create.Body.Bytes(), &cr); err != nil {
-		t.Fatalf("unmarshal create: %v", err)
-	}
-
-	rec := client.do(t, http.MethodGet,
-		"/api/v1/libraries/"+libID+"/albums/"+cr.Album.ID+"/files", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
-	}
-}
-
 // --- favorites tests ---
 
 func TestHandleListFavorites_Empty(t *testing.T) {
@@ -495,51 +393,6 @@ func TestHandleSearch_TagFilter(t *testing.T) {
 	}
 }
 
-func TestHandleSearch_AlbumFilter(t *testing.T) {
-	_, client, libID, libRoot := newSearchTestServer(t)
-
-	if err := seedLibraryFile(t, libRoot, "f1", "a.jpg", 100); err != nil {
-		t.Fatal(err)
-	}
-	if err := seedLibraryFile(t, libRoot, "f2", "b.jpg", 200); err != nil {
-		t.Fatal(err)
-	}
-
-	var albumResp struct {
-		Album struct {
-			ID string `json:"id"`
-		} `json:"album"`
-	}
-	rec := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/albums",
-		map[string]string{"name": "Summer"})
-	if err := json.Unmarshal(rec.Body.Bytes(), &albumResp); err != nil {
-		t.Fatalf("unmarshal album: %v", err)
-	}
-
-	rec = client.do(t, http.MethodPost,
-		"/api/v1/libraries/"+libID+"/albums/"+albumResp.Album.ID+"/files/f1", nil)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("add to album status = %d body=%s", rec.Code, rec.Body.String())
-	}
-
-	rec = client.do(t, http.MethodGet,
-		"/api/v1/libraries/"+libID+"/search?album="+albumResp.Album.ID, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
-	}
-	var resp struct {
-		Files []struct {
-			ID string `json:"id"`
-		} `json:"files"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if len(resp.Files) != 1 || resp.Files[0].ID != "f1" {
-		t.Errorf("album filter returned %+v, want [f1]", resp.Files)
-	}
-}
-
 func TestHandleSearch_SizeFilter(t *testing.T) {
 	_, client, libID, libRoot := newSearchTestServer(t)
 
@@ -582,17 +435,6 @@ func TestHandleSearchUnauthenticated(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("tags unauthenticated status = %d, want 401", rec.Code)
-	}
-}
-
-func TestHandleAlbumsUnauthenticated(t *testing.T) {
-	h, _, libID, _ := newSearchTestServer(t)
-	req := httptest.NewRequest(http.MethodGet,
-		"/api/v1/libraries/"+libID+"/albums", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("albums unauthenticated status = %d, want 401", rec.Code)
 	}
 }
 
