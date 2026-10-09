@@ -3,9 +3,8 @@
  *
  * Search is how a large library is actually used, so it is the most prominent
  * control in the top bar, `/` focuses it from anywhere, and it suggests as you
- * type: the query itself, the query narrowed to photos or videos, and any
- * people, albums, or tags whose names match — all from the real library, never
- * invented. With nothing typed it offers recent searches.
+ * type: the query itself, and any tags whose names match — all from the real
+ * library, never invented. With nothing typed it offers recent searches.
  *
  * It follows the ARIA combobox pattern: the input owns a listbox, arrow keys
  * move the active option, Enter takes it, Escape closes the list.
@@ -15,8 +14,7 @@ import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
-import { mlWorthAsking } from '../../api/mlSwitch';
-import { listAlbums, listPeople, listTags } from '../../api/queries';
+import { listTags } from '../../api/queries';
 import { forgetSearch, readRecentSearches, rememberSearch } from '../../lib/recentSearches';
 import { Icon, type IconName } from '../ui/Icon';
 import './SearchBox.css';
@@ -35,8 +33,6 @@ interface Suggestion {
 
 interface Entities {
   libraryId: string;
-  people: Array<{ id: string; name: string }>;
-  albums: Array<{ id: string; name: string }>;
   tags: Array<{ id: string; name: string }>;
 }
 
@@ -78,27 +74,16 @@ export function SearchBox({
   const [entities, setEntities] = useState<Entities | null>(null);
 
   // Names for suggestions, loaded once per library the first time the box is
-  // opened. Each list is optional: a server without face support has no people.
+  // opened.
   useEffect(() => {
     if (!open || !libraryId || entities?.libraryId === libraryId) return;
     let cancelled = false;
-    void Promise.all([
-      mlWorthAsking().then((ask) =>
-        ask
-          ? listPeople(libraryId)
-              .then((r) => r.people ?? [])
-              .catch(() => [])
-          : [],
-      ),
-      listAlbums(libraryId)
-        .then((r) => r.albums ?? [])
-        .catch(() => []),
-      listTags(libraryId)
-        .then((r) => r.tags ?? [])
-        .catch(() => []),
-    ]).then(([people, albums, tags]) => {
-      if (!cancelled) setEntities({ libraryId, people, albums, tags });
-    });
+    void listTags(libraryId)
+      .then((r) => r.tags ?? [])
+      .catch(() => [])
+      .then((tags) => {
+        if (!cancelled) setEntities({ libraryId, tags });
+      });
     return () => {
       cancelled = true;
     };
@@ -126,49 +111,9 @@ export function SearchBox({
         to: `/search?q=${encoded}`,
         remember: q,
       },
-      {
-        id: 'photos',
-        label: q,
-        hint: 'in Photos',
-        icon: 'photo',
-        to: `/search?q=${encoded}&type=photo`,
-        remember: q,
-      },
-      {
-        id: 'videos',
-        label: q,
-        hint: 'in Videos',
-        icon: 'video',
-        to: `/search?q=${encoded}&type=video`,
-        remember: q,
-      },
     ];
     const current = entities?.libraryId === libraryId ? entities : null;
     if (current) {
-      current.people
-        .filter((p) => p.name && matches(p.name, q))
-        .slice(0, MAX_PER_KIND)
-        .forEach((p) =>
-          list.push({
-            id: `person:${p.id}`,
-            label: p.name,
-            hint: 'Person',
-            icon: 'person',
-            to: `/search?person=${p.id}`,
-          }),
-        );
-      current.albums
-        .filter((a) => matches(a.name, q))
-        .slice(0, MAX_PER_KIND)
-        .forEach((a) =>
-          list.push({
-            id: `album:${a.id}`,
-            label: a.name,
-            hint: 'Album',
-            icon: 'album',
-            to: `/albums/${a.id}`,
-          }),
-        );
       current.tags
         .filter((t) => matches(t.name, q))
         .slice(0, MAX_PER_KIND)
@@ -254,12 +199,12 @@ export function SearchBox({
         ref={inputRef}
         type="search"
         role="combobox"
-        aria-label="Search Cairn"
+        aria-label="Search Orchard"
         aria-expanded={showList}
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${listboxId}-${active}` : undefined}
-        placeholder="Search your photos, files, people…"
+        placeholder="Search your library…"
         autoComplete="off"
         spellCheck={false}
         autoFocus={autoFocus}
@@ -295,7 +240,7 @@ export function SearchBox({
         <div className="search-suggestions">
           {suggestions.length === 0 ? (
             <p className="search-suggestions-hint">
-              Search by file name, folder, tag, album, or person.
+              Search by file name, folder, or tag.
             </p>
           ) : (
             <>

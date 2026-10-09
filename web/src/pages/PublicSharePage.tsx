@@ -7,7 +7,7 @@
  * has no library, no chrome, and no session — just what the share exposes.
  *
  * A share that has a password needs unlocking before the file list is visible.
- * The password travels in the `X-Cairn-Share-Password` header on every request
+ * The password travels in the `X-Orchard-Share-Password` header on every request
  * and is kept in component state only; it is never written to storage, because
  * putting a share credential in localStorage outlives the decision to share.
  */
@@ -171,7 +171,7 @@ export default function PublicSharePage() {
   return (
     <main className="share-view" data-testid="public-share-page">
       <header className="share-view-header">
-        <span className="brand share-brand">Cairn</span>
+        <span className="brand share-brand">Orchard</span>
         {state.kind === 'unlocked' && state.share.library && (
           <p className="muted">Shared from {state.share.library}</p>
         )}

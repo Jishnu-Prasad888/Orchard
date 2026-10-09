@@ -181,9 +181,9 @@ function BackupDetailDialog({
           open
           title="Restore this backup"
           label="Destination directory"
-          placeholder="/srv/cairn-restore"
+          placeholder="/srv/orchard-restore"
           confirmLabel="Restore"
-          hint="Files are written here. Cairn's own libraries are not modified — restore to a new directory and point a library at it."
+          hint="Files are written here. Orchard's own libraries are not modified — restore to a new directory and point a library at it."
           busy={busy}
           onCancel={() => setRestoring(false)}
           onConfirm={(destination) => {

@@ -1,15 +1,6 @@
 /* Fonts, the element baseline, and accessibility utilities. */
 
-/* Handlee — branding only. Bundled locally; no runtime network dependency. */
-@font-face {
-  font-family: 'Handlee';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('../fonts/handlee-latin-400.woff2') format('woff2');
-}
-
-/* Fira Sans — every functional surface. */
+/* Fira Sans — every surface, including the brand wordmark (see --font-brand). */
 @font-face {
   font-family: 'Fira Sans';
   font-style: normal;
@@ -118,7 +109,7 @@ kbd {
   border-radius: var(--radius-xs);
 }
 
-/* The Cairn wordmark and other branded moments. Never for dense UI. */
+/* The Orchard wordmark and other branded moments. Never for dense UI. */
 .brand {
   font-family: var(--font-brand);
   font-weight: 400;

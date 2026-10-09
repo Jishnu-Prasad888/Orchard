@@ -43,28 +43,13 @@ const video = fileFixture({
 });
 
 const pageOne = { files: [photo, video], next_cursor: '', total: 2 };
-const metadata = {
-  metadata: {
-    file_id: 'f1',
-    media_type: 'photo',
-    mime_type: 'image/png',
-    width: 4032,
-    height: 3024,
-    camera_make: 'Apple',
-    camera_model: 'iPhone 15',
-    taken_at: '2026-06-01T12:00:00Z',
-    latitude: 51.5074,
-    longitude: -0.1278,
-    has_thumbnail: true,
-  },
-};
 
 const note = { note: { file_id: 'f1', body: '', updated_at: '' } };
 
 /**
  * The endpoints the browser and the viewer touch, in the order they have to be
- * matched: `/files/f1/note` and `/files/f1/metadata` also contain `/files`, so
- * the longer paths come first.
+ * matched: `/files/f1/note` also contains `/files`, so the longer path comes
+ * first.
  */
 function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
   return [
@@ -78,8 +63,6 @@ function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
       url.includes('/api/v1/libraries/lib1/files/f2/note')
         ? json(note)
         : undefined,
-    (url) =>
-      url.includes('/api/v1/libraries/lib1/files/f1/metadata') ? json(metadata) : undefined,
     (url) =>
       url.includes('/api/v1/libraries/lib1/files/f1/favorite') ||
       url.includes('/api/v1/libraries/lib1/files/f2/favorite')
@@ -412,7 +395,7 @@ describe('MediaPage', () => {
     await waitFor(() => {
       expect(within(dialog).getByRole('img')).toHaveAttribute(
         'src',
-        '/api/v1/libraries/lib1/files/f1/thumbnail',
+        '/api/v1/libraries/lib1/files/f1/download',
       );
     });
   });
@@ -452,28 +435,6 @@ describe('MediaPage', () => {
     await waitFor(() => {
       expect(screen.getByText('1 of 2')).toBeInTheDocument();
     });
-  });
-
-  it('jumps to a file from the filmstrip and marks the current one', async () => {
-    setup();
-
-    await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('IMG_0001.png'));
-    const viewer = await screen.findByTestId('viewer');
-
-    const strip = within(viewer).getByRole('list', { name: 'Files in this view' });
-    const items = within(strip).getAllByRole('button');
-    expect(items).toHaveLength(2);
-    expect(items[0]).toHaveAttribute('aria-current', 'true');
-
-    fireEvent.click(within(strip).getByRole('button', { name: 'Open clip.mp4' }));
-    await waitFor(() => {
-      expect(screen.getByText('2 of 2')).toBeInTheDocument();
-    });
-    expect(within(strip).getByRole('button', { name: 'Open clip.mp4' })).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
   });
 
   it('toggles zoom with a double-click on the photo', async () => {
@@ -599,7 +560,7 @@ describe('MediaPage', () => {
   it('opens with the photo alone and the details closed', async () => {
     setup();
     // setup() starts returning users with the drawer open; this one is new.
-    localStorage.setItem('cairn.viewer.panel', 'closed');
+    localStorage.setItem('orchard.viewer.panel', 'closed');
 
     await screen.findByTestId('file-grid');
     fireEvent.click(screen.getByText('IMG_0001.png'));
@@ -612,7 +573,7 @@ describe('MediaPage', () => {
     fireEvent.keyDown(window, { key: 't' });
     expect(await screen.findByTestId('viewer-details-panel')).toBeInTheDocument();
     // The choice is remembered for the next photo.
-    expect(localStorage.getItem('cairn.viewer.panel')).toBe('open');
+    expect(localStorage.getItem('orchard.viewer.panel')).toBe('open');
   });
 
   it('hides the controls on request and brings them back on movement', async () => {
@@ -656,7 +617,7 @@ describe('MediaPage', () => {
     expect(await screen.findByTestId('viewer-details-panel')).toBeInTheDocument();
   });
 
-  it('shows extracted metadata and toggles the favorite', async () => {
+  it('shows file facts and toggles the favorite', async () => {
     const fetchMock = setup();
 
     await screen.findByTestId('file-grid');
@@ -664,13 +625,9 @@ describe('MediaPage', () => {
     const viewer = await screen.findByTestId('viewer');
     const dialog = within(viewer).getByRole('dialog');
 
-    await within(dialog).findByTestId('viewer-details');
-    expect(within(dialog).getByText('4032 × 3024px')).toBeInTheDocument();
-    expect(within(dialog).getByText('Apple iPhone 15')).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: '51.50740, -0.12780' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('openstreetmap.org'),
-    );
+    const details = await within(dialog).findByTestId('viewer-details');
+    expect(within(details).getByText('IMG_0001.png')).toBeInTheDocument();
+    expect(within(details).getByText('PNG')).toBeInTheDocument();
 
     // Nothing is favorited yet, so the control offers to add one.
     const favorite = await within(dialog).findByRole('button', { name: 'Add to favorites' });
@@ -887,49 +844,6 @@ describe('MediaPage', () => {
     });
   });
 
-  it('lists the memories that mention a file', async () => {
-    setup([
-      (url) =>
-        url.includes('/api/v1/libraries/lib1/memories?')
-          ? json({
-              memories: [
-                { id: 'm1', title: 'Beach day', body: '', memory_date: '2026-06-01' },
-                { id: 'm2', title: 'Quiet Sunday', body: '', memory_date: '' },
-              ],
-            })
-          : undefined,
-      (url) =>
-        url.includes('/api/v1/libraries/lib1/memories/m1/refs')
-          ? json({ refs: [{ type: 'media', id: 'f1' }] })
-          : undefined,
-      (url) =>
-        url.includes('/api/v1/libraries/lib1/memories/m2/refs') ? json({ refs: [] }) : undefined,
-    ]);
-
-    await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('IMG_0001.png'));
-    fireEvent.click(await screen.findByTestId('viewer-tab-memories'));
-
-    const linked = await screen.findByTestId('viewer-memories');
-    expect(within(linked).getByText('Beach day')).toBeInTheDocument();
-    expect(within(linked).queryByText('Quiet Sunday')).not.toBeInTheDocument();
-  });
-
-  it('says so plainly when similarity search is unavailable', async () => {
-    setup([
-      (url) =>
-        url.includes('/api/v1/libraries/lib1/files/f1/similar')
-          ? apiError(503, 'ML_DISABLED', 'ML is disabled')
-          : undefined,
-    ]);
-
-    await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('IMG_0001.png'));
-    fireEvent.click(await screen.findByTestId('viewer-tab-similar'));
-
-    expect(await screen.findByTestId('viewer-similar-unavailable')).toBeInTheDocument();
-  });
-
   it('creates a read-only share link for a file', async () => {
     const fetchMock = setup([
       (url, init) =>
@@ -1052,179 +966,4 @@ describe('MediaPage', () => {
     await waitFor(() => expect(box.value).toBe(''));
   });
 
-  describe('the timeline', () => {
-    const sep = fileFixture({ mod_time: '2026-09-01T00:00:00Z' });
-    const aug = fileFixture({
-      id: 'f2',
-      rel_path: 'aug.png',
-      name: 'aug.png',
-      mod_time: '2026-08-01T00:00:00Z',
-    });
-    const twoMonths = { files: [sep, aug], next_cursor: '', total: 2 };
-
-    function filesCalls(fetchMock: ReturnType<typeof mockApi>) {
-      return fetchMock.mock.calls.filter(([input]) =>
-        String(input).includes('/api/v1/libraries/lib1/files?'),
-      );
-    }
-
-    it('fetches a recursive listing of the folder to scope the timeline to it and its sub-folders', async () => {
-      const fetchMock = mockApi([
-        (url) => (url.includes('recursive=true') ? json(twoMonths) : undefined),
-        (url) =>
-          url.includes('/api/v1/libraries/lib1/folders') ? json({ folders: [] }) : undefined,
-        (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(twoMonths) : undefined),
-      ]);
-      renderPage(<MediaPage config={{ ...CONFIG, showTimeline: true }} />);
-
-      await screen.findByTestId('file-grid');
-      fireEvent.click(screen.getByTestId('toggle-timeline'));
-      await screen.findByTestId('timeline');
-      const calls = filesCalls(fetchMock);
-      expect(calls.some(([input]) => String(input).includes('recursive=true'))).toBe(true);
-      expect(calls.some(([input]) => !String(input).includes('recursive=true'))).toBe(true);
-    });
-
-    it("loads further pages of the folder's own recursive listing the same way", async () => {
-      const page1 = {
-        files: [fileFixture({ mod_time: '2026-09-01T00:00:00Z' })],
-        next_cursor: 'p2',
-        total: 2,
-      };
-      const page2 = {
-        files: [
-          fileFixture({
-            id: 'f2',
-            rel_path: 'july.png',
-            name: 'july.png',
-            mod_time: '2026-07-01T00:00:00Z',
-          }),
-        ],
-        next_cursor: '',
-        total: 2,
-      };
-      const fetchMock = mockApi([
-        (url) =>
-          url.includes('/api/v1/libraries/lib1/files?') &&
-          url.includes('recursive=true') &&
-          url.includes('cursor=p2')
-            ? json(page2)
-            : undefined,
-        (url) =>
-          url.includes('/api/v1/libraries/lib1/files?') && url.includes('recursive=true')
-            ? json(page1)
-            : undefined,
-        (url) =>
-          url.includes('/api/v1/libraries/lib1/folders') ? json({ folders: [] }) : undefined,
-        (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(page1) : undefined),
-      ]);
-      renderPage(<MediaPage config={{ ...CONFIG, showTimeline: true }} />);
-
-      await screen.findByTestId('file-grid');
-      fireEvent.click(screen.getByTestId('toggle-timeline'));
-
-      await screen.findByTestId('timeline');
-      expect(
-        fetchMock.mock.calls.some(
-          ([input]) =>
-            String(input).includes('cursor=p2') && String(input).includes('recursive=true'),
-        ),
-      ).toBe(true);
-    });
-
-    it('reuses the page listing instead of a second request when there are no folders', async () => {
-      const fetchMock = mockApi([
-        (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(twoMonths) : undefined),
-      ]);
-      renderPage(
-        <MediaPage
-          config={{
-            title: 'Photos',
-            type: 'photo',
-            showTimeline: true,
-            emptyTitle: 'No photos',
-            emptyBody: 'None yet',
-          }}
-        />,
-      );
-
-      await screen.findByTestId('file-grid');
-      fireEvent.click(screen.getByTestId('toggle-timeline'));
-      await screen.findByTestId('timeline');
-      expect(filesCalls(fetchMock)).toHaveLength(1);
-    });
-
-    it('loads further pages on its own when the first one is not enough to show anything', async () => {
-      const page1 = {
-        files: [fileFixture({ mod_time: '2026-09-01T00:00:00Z' })],
-        next_cursor: 'p2',
-        total: 2,
-      };
-      const page2 = {
-        files: [
-          fileFixture({
-            id: 'f2',
-            rel_path: 'july.png',
-            name: 'july.png',
-            mod_time: '2026-07-01T00:00:00Z',
-          }),
-        ],
-        next_cursor: '',
-        total: 2,
-      };
-      const fetchMock = mockApi([
-        (url) =>
-          url.includes('/api/v1/libraries/lib1/files?') && url.includes('cursor=p2')
-            ? json(page2)
-            : undefined,
-        (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(page1) : undefined),
-      ]);
-      renderPage(
-        <MediaPage
-          config={{
-            title: 'Photos',
-            type: 'photo',
-            showTimeline: true,
-            emptyTitle: 'No photos',
-            emptyBody: 'None yet',
-          }}
-        />,
-      );
-
-      await screen.findByTestId('file-grid');
-      fireEvent.click(screen.getByTestId('toggle-timeline'));
-
-      await screen.findByTestId('timeline');
-      expect(called(fetchMock, 'GET', 'cursor=p2')).toBe(true);
-    });
-
-    it('stays off until explicitly turned on', async () => {
-      mockApi([
-        (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(twoMonths) : undefined),
-      ]);
-      renderPage(
-        <MediaPage
-          config={{
-            title: 'Photos',
-            type: 'photo',
-            showTimeline: true,
-            emptyTitle: 'No photos',
-            emptyBody: 'None yet',
-          }}
-        />,
-      );
-
-      await screen.findByTestId('file-grid');
-      expect(screen.queryByTestId('timeline')).not.toBeInTheDocument();
-      const toggle = screen.getByTestId('toggle-timeline');
-      expect(toggle).toHaveAttribute('aria-pressed', 'false');
-
-      fireEvent.click(toggle);
-      await screen.findByTestId('timeline');
-      expect(toggle).toHaveAttribute('aria-pressed', 'true');
-
-      fireEvent.click(toggle);
-      await waitFor(() => expect(screen.queryByTestId('timeline')).not.toBeInTheDocument());
-    });
-  });
 });

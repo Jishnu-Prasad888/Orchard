@@ -1,8 +1,7 @@
 /**
- * A small, safe Markdown renderer and live highlighter for Cairn memories.
+ * A small, safe Markdown renderer and live highlighter.
  *
- * Markdown is the canonical content of a memory's text blocks. This module
- * renders it two ways:
+ * This module renders Markdown two ways:
  *
  *   - {@link renderMarkdown} — reading HTML for previews and the article
  *     view;

@@ -81,7 +81,7 @@ describe('LibrariesPage', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Check path' }));
     const probe = await screen.findByTestId('library-probe');
-    expect(probe).toHaveTextContent('No Cairn metadata here yet.');
+    expect(probe).toHaveTextContent('No Orchard metadata here yet.');
     expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/probe')).toEqual({ path: '/mnt/photos' });
 
     fireEvent.change(screen.getByTestId('library-path-input'), { target: { value: '/mnt' } });
@@ -208,7 +208,7 @@ describe('LibrariesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check path' }));
 
     expect(await screen.findByTestId('library-probe')).toHaveTextContent(
-      'Cairn cannot write to that directory',
+      'Orchard cannot write to that directory',
     );
     // A warning, not a block: browsing a read-only archive is still useful.
     expect(screen.getByTestId('confirm-add-library')).toBeEnabled();
@@ -242,7 +242,7 @@ describe('LibrariesPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('add-library-dialog')).not.toBeInTheDocument();
     });
-    expect(localStorage.getItem('cairn.library')).toBe('lib9');
+    expect(localStorage.getItem('orchard.library')).toBe('lib9');
   });
 
   it('triggers a scan and refreshes the index status afterwards', async () => {

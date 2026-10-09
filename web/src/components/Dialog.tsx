@@ -316,4 +316,4 @@ function PromptForm({
   );
 }
 
-const promptFormId = 'cairn-prompt-form';
+const promptFormId = 'orchard-prompt-form';

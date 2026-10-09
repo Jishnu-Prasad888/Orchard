@@ -1,7 +1,7 @@
 /**
- * Cairn design tokens.
+ * Orchard design tokens.
  *
- * Smooth pebbles, handmade clay, warm paper. Every color in the interface comes
+ * Warm paper, leaf green, orchard blossom. Every color in the interface comes
  * from the palette below; components consume the semantic `--color-*` names and
  * never a raw hex value, so a theme is one block of declarations.
  *
@@ -22,33 +22,33 @@
   color-scheme: light;
 
   /* ---------- palette (light) ---------- */
-  --color-background: #f7ede2;
-  --color-surface: #fff7ef;
-  --color-surface-elevated: #fffdfc;
+  --color-background: #f6f2e8;
+  --color-surface: #fdfbf4;
+  --color-surface-elevated: #ffffff;
 
-  --color-text-primary: #3d332d;
-  --color-text-secondary: #77675d;
-  --color-text-muted: #a59488;
+  --color-text-primary: #2f332b;
+  --color-text-secondary: #686f5f;
+  --color-text-muted: #9a9d8a;
 
-  --color-border: #e8d5c5;
-  --color-border-subtle: #f0e4da;
+  --color-border: #ddd8c3;
+  --color-border-subtle: #ece7d8;
 
-  --color-primary: #c96f52;
-  --color-primary-hover: #b95f45;
+  --color-primary: #5f8f52;
+  --color-primary-hover: #4e7c43;
 
-  --color-accent: #e89a63;
-  --color-accent-soft: #f5c7a5;
+  --color-accent: #d9a05a;
+  --color-accent-soft: #f0d6ad;
 
-  --color-yellow: #e8be62;
-  --color-green: #8da878;
-  --color-blue: #82a9b8;
-  --color-pink: #d9908d;
+  --color-yellow: #d8b65c;
+  --color-green: #86a06f;
+  --color-blue: #7fa3ad;
+  --color-pink: #d99aa6;
 
-  --color-selection: #f3cdb4;
+  --color-selection: #dbe8d2;
 
-  --color-success: #7f9d72;
-  --color-warning: #d39a4e;
-  --color-danger: #c96a61;
+  --color-success: #6f9d63;
+  --color-warning: #caa14a;
+  --color-danger: #c1685d;
 
   /* ---------- derived roles ---------- */
   /* Text and icons drawn on a filled primary or danger surface. */
@@ -60,10 +60,10 @@
   --color-fill-active: color-mix(in srgb, var(--color-accent-soft) 70%, var(--color-surface));
   /* Dims the page behind dialogs and drawers. */
   --color-scrim: color-mix(in srgb, var(--color-text-primary) 42%, transparent);
-  /* A soft highlight along the top edge of raised controls: the clay sheen. */
+  /* A soft highlight along the top edge of raised controls. */
   --color-sheen: color-mix(in srgb, var(--color-surface-elevated) 70%, transparent);
   /* Status text on a tinted status background, legible in both themes. */
-  /* The brand terracotta as readable text: the palette's primary mixed toward
+  /* The brand green as readable text: the palette's primary mixed toward
      the text color until it reaches 4.5:1 on the warm backgrounds. */
   /* Filled primary surfaces that carry text: the primary deepened just enough
      for the light on-primary text to read at 4.5:1. */
@@ -91,47 +91,47 @@
   --shadow-3:
     0 2px 6px color-mix(in srgb, var(--color-text-primary) 8%, transparent),
     0 12px 32px color-mix(in srgb, var(--color-text-primary) 16%, transparent);
-  /* Raised clay controls: a top highlight and a short contact shadow. */
+  /* Raised controls: a top highlight and a short contact shadow. */
   --shadow-clay:
     inset 0 1px 0 var(--color-sheen),
     0 1px 2px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
 }
 
-/* Dark: deep clay and river stones at evening. Never pure black. */
+/* Dark: deep orchard green at evening. Never pure black. */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --color-background: #29221f;
-  --color-surface: #352b27;
-  --color-surface-elevated: #40332e;
+  --color-background: #20241e;
+  --color-surface: #2a2f27;
+  --color-surface-elevated: #333a2f;
 
-  --color-text-primary: #f5e8dc;
-  --color-text-secondary: #c5b3a5;
-  --color-text-muted: #907f74;
+  --color-text-primary: #eef1e7;
+  --color-text-secondary: #c3c9b8;
+  --color-text-muted: #8e9484;
 
-  --color-border: #4c3d35;
-  --color-border-subtle: #40342f;
+  --color-border: #434a3c;
+  --color-border-subtle: #383e33;
 
-  --color-primary: #e28a68;
-  --color-primary-hover: #ed9a76;
+  --color-primary: #86b374;
+  --color-primary-hover: #96c184;
 
-  --color-accent: #f0aa70;
-  --color-accent-soft: #62443a;
+  --color-accent: #e3b36c;
+  --color-accent-soft: #4a4030;
 
-  --color-yellow: #e5bc68;
-  --color-green: #9caf86;
-  --color-blue: #88b0bc;
-  --color-pink: #d99792;
+  --color-yellow: #dec172;
+  --color-green: #9bbf86;
+  --color-blue: #8fb6c0;
+  --color-pink: #dba7ac;
 
-  --color-selection: #5a4036;
+  --color-selection: #3c4a35;
 
-  --color-success: #91aa82;
-  --color-warning: #d6a45a;
-  --color-danger: #d77b70;
+  --color-success: #8bb178;
+  --color-warning: #d9b069;
+  --color-danger: #d08077;
 
   --color-on-primary: var(--color-background);
   --color-fill-active: var(--color-accent-soft);
-  --color-scrim: color-mix(in srgb, #29221f 70%, transparent);
+  --color-scrim: color-mix(in srgb, #20241e 70%, transparent);
   --color-sheen: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
   --color-primary-strong: var(--color-primary);
   --color-primary-strong-hover: var(--color-primary-hover);
@@ -141,11 +141,11 @@
   --color-danger-ink: color-mix(in srgb, var(--color-danger) 75%, var(--color-text-primary));
   --color-warning-ink: var(--color-warning);
 
-  --shadow-1: 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
-  --shadow-2: 0 4px 12px color-mix(in srgb, #29221f 55%, transparent);
-  --shadow-3: 0 12px 32px color-mix(in srgb, #29221f 70%, transparent);
+  --shadow-1: 0 1px 2px color-mix(in srgb, #20241e 60%, transparent);
+  --shadow-2: 0 4px 12px color-mix(in srgb, #20241e 55%, transparent);
+  --shadow-3: 0 12px 32px color-mix(in srgb, #20241e 70%, transparent);
   --shadow-clay:
-    inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
+    inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #20241e 60%, transparent);
 }
 
 /*
@@ -157,37 +157,37 @@
   :root:not([data-theme]) {
     color-scheme: dark;
 
-    --color-background: #29221f;
-    --color-surface: #352b27;
-    --color-surface-elevated: #40332e;
+    --color-background: #20241e;
+    --color-surface: #2a2f27;
+    --color-surface-elevated: #333a2f;
 
-    --color-text-primary: #f5e8dc;
-    --color-text-secondary: #c5b3a5;
-    --color-text-muted: #907f74;
+    --color-text-primary: #eef1e7;
+    --color-text-secondary: #c3c9b8;
+    --color-text-muted: #8e9484;
 
-    --color-border: #4c3d35;
-    --color-border-subtle: #40342f;
+    --color-border: #434a3c;
+    --color-border-subtle: #383e33;
 
-    --color-primary: #e28a68;
-    --color-primary-hover: #ed9a76;
+    --color-primary: #86b374;
+    --color-primary-hover: #96c184;
 
-    --color-accent: #f0aa70;
-    --color-accent-soft: #62443a;
+    --color-accent: #e3b36c;
+    --color-accent-soft: #4a4030;
 
-    --color-yellow: #e5bc68;
-    --color-green: #9caf86;
-    --color-blue: #88b0bc;
-    --color-pink: #d99792;
+    --color-yellow: #dec172;
+    --color-green: #9bbf86;
+    --color-blue: #8fb6c0;
+    --color-pink: #dba7ac;
 
-    --color-selection: #5a4036;
+    --color-selection: #3c4a35;
 
-    --color-success: #91aa82;
-    --color-warning: #d6a45a;
-    --color-danger: #d77b70;
+    --color-success: #8bb178;
+    --color-warning: #d9b069;
+    --color-danger: #d08077;
 
     --color-on-primary: var(--color-background);
     --color-fill-active: var(--color-accent-soft);
-    --color-scrim: color-mix(in srgb, #29221f 70%, transparent);
+    --color-scrim: color-mix(in srgb, #20241e 70%, transparent);
     --color-sheen: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
     --color-primary-strong: var(--color-primary);
     --color-primary-strong-hover: var(--color-primary-hover);
@@ -197,11 +197,11 @@
     --color-danger-ink: color-mix(in srgb, var(--color-danger) 75%, var(--color-text-primary));
     --color-warning-ink: var(--color-warning);
 
-    --shadow-1: 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
-    --shadow-2: 0 4px 12px color-mix(in srgb, #29221f 55%, transparent);
-    --shadow-3: 0 12px 32px color-mix(in srgb, #29221f 70%, transparent);
+    --shadow-1: 0 1px 2px color-mix(in srgb, #20241e 60%, transparent);
+    --shadow-2: 0 4px 12px color-mix(in srgb, #20241e 55%, transparent);
+    --shadow-3: 0 12px 32px color-mix(in srgb, #20241e 70%, transparent);
     --shadow-clay:
-      inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #29221f 60%, transparent);
+      inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #20241e 60%, transparent);
   }
 }
 
@@ -210,35 +210,35 @@
   /* ---------- the viewer ----------
    * Media is judged against a dark surround whatever the app theme, so the
    * viewer always uses the dark palette. */
-  --viewer-background: #29221f;
-  --viewer-surface: color-mix(in srgb, #352b27 92%, transparent);
-  --viewer-ink: #f5e8dc;
-  --viewer-ink-muted: #c5b3a5;
-  --viewer-panel: #352b27;
-  --viewer-panel-raised: #40332e;
-  --viewer-accent: #e28a68;
-  --viewer-accent-hover: #ed9a76;
-  --viewer-fill-active: #62443a;
-  --viewer-danger: #d77b70;
-  --viewer-line: color-mix(in srgb, #f5e8dc 14%, transparent);
-  --viewer-fill: color-mix(in srgb, #f5e8dc 10%, transparent);
-  --viewer-fill-hover: color-mix(in srgb, #f5e8dc 20%, transparent);
+  --viewer-background: #20241e;
+  --viewer-surface: color-mix(in srgb, #2a2f27 92%, transparent);
+  --viewer-ink: #eef1e7;
+  --viewer-ink-muted: #c3c9b8;
+  --viewer-panel: #2a2f27;
+  --viewer-panel-raised: #333a2f;
+  --viewer-accent: #86b374;
+  --viewer-accent-hover: #96c184;
+  --viewer-fill-active: #4a4030;
+  --viewer-danger: #d08077;
+  --viewer-line: color-mix(in srgb, #eef1e7 14%, transparent);
+  --viewer-fill: color-mix(in srgb, #eef1e7 10%, transparent);
+  --viewer-fill-hover: color-mix(in srgb, #eef1e7 20%, transparent);
 
-  /* Scrims laid over photos so light controls stay legible on any image. */
+  /* Scrims laid over media so light controls stay legible on any image. */
   --media-scrim-top: linear-gradient(
     to bottom,
-    color-mix(in srgb, #29221f 55%, transparent),
+    color-mix(in srgb, #20241e 55%, transparent),
     transparent
   );
   --media-scrim-bottom: linear-gradient(
     to top,
-    color-mix(in srgb, #29221f 62%, transparent),
+    color-mix(in srgb, #20241e 62%, transparent),
     transparent
   );
-  --media-ink: #fffdfc;
+  --media-ink: #fffdfa;
 
   /* ---------- typography ---------- */
-  --font-brand: 'Handlee', cursive;
+  --font-brand: var(--font-ui);
   --font-ui: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 

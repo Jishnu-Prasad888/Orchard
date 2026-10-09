@@ -13,7 +13,6 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent } from 
 import type { FileSummary } from '../../api/types';
 import { Icon } from '../ui/Icon';
 import { thumbnailUrl, mediaTypeIcon } from '../media';
-import { VideoThumb } from './VideoThumb';
 
 const LONG_PRESS_MS = 450;
 const LONG_PRESS_SLOP = 10;
@@ -56,7 +55,7 @@ function MediaTileImpl({
   const longPressed = useRef(false);
 
   const isVideo = file.media_type === 'video';
-  const hasThumb = (file.media_type === 'photo' || isVideo) && !failed;
+  const hasThumb = file.media_type === 'photo' && !failed;
 
   const cancelPress = () => {
     if (press.current) clearTimeout(press.current.timer);
@@ -128,15 +127,13 @@ function MediaTileImpl({
         draggable
         onDragStart={(event) => {
           event.dataTransfer.setData(
-            'application/cairn-file',
+            'application/orchard-file',
             JSON.stringify({ id: file.id, rel_path: file.rel_path, name: file.name }),
           );
           event.dataTransfer.effectAllowed = 'copyMove';
         }}
       >
-        {hasThumb && isVideo ? (
-          <VideoThumb libraryId={libraryId} fileId={file.id} className="media-tile-img" />
-        ) : hasThumb ? (
+        {hasThumb ? (
           <img
             className="media-tile-img"
             src={thumbnailUrl(libraryId, file)}

@@ -157,7 +157,7 @@ export function renderPage(ui: ReactElement, options: RenderPageOptions = {}): R
   // The viewer opens its details drawer only when asked; most tests exercise
   // what is in it, so they start with it open, as a returning user's would be.
   try {
-    localStorage.setItem('cairn.viewer.panel', options.viewerPanel ?? 'open');
+    localStorage.setItem('orchard.viewer.panel', options.viewerPanel ?? 'open');
   } catch {
     // No storage: the viewer just starts closed.
   }

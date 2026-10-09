@@ -32,7 +32,7 @@ export function FolderGrid({
             className={over === folder.rel_path ? 'folder-tile is-drop-target' : 'folder-tile'}
             onClick={() => onOpen(folder)}
             onDragOver={(event) => {
-              if (!onDropFile || !event.dataTransfer.types.includes('application/cairn-file'))
+              if (!onDropFile || !event.dataTransfer.types.includes('application/orchard-file'))
                 return;
               event.preventDefault();
               setOver(folder.rel_path);

@@ -29,9 +29,14 @@ export function downloadUrl(libraryId: string, file: Pick<FileSummary, 'id'>): s
   return `${API_BASE}/libraries/${libraryId}/files/${file.id}/download`;
 }
 
-/** The small JPEG preview the grid uses. Only photos have one. */
+/**
+ * The grid preview for a photo. There is no derived thumbnail pipeline yet,
+ * so this serves the original bytes; the browser scales them down. A future
+ * cover/thumbnail generator can point this at a smaller derived image
+ * without any caller needing to change.
+ */
 export function thumbnailUrl(libraryId: string, file: Pick<FileSummary, 'id'>): string {
-  return `${API_BASE}/libraries/${libraryId}/files/${file.id}/thumbnail`;
+  return downloadUrl(libraryId, file);
 }
 
 /** The file's extension, upper-cased, for a list view's Type column ("JPG"). */
@@ -40,9 +45,9 @@ export function fileExtension(name: string): string {
   return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toUpperCase() : '';
 }
 
-/** Photo and video get a real preview; everything else falls back to a glyph. */
+/** Photos get a real preview; everything else falls back to a glyph. */
 export function isPreviewable(file: FileSummary): boolean {
-  return file.media_type === 'photo' || file.media_type === 'video';
+  return file.media_type === 'photo';
 }
 
 /** The icon that stands for a file's media type, for tiles without a preview. */

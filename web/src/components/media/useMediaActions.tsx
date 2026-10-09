@@ -1,10 +1,10 @@
 /**
  * What can be done to media, from a selection or a single tile's menu.
  *
- * Every grid offers the same core actions — download, add to an album,
- * favorite, rename/move/copy, move to trash — and pages add their own (Trash
- * adds Restore, an album adds Remove). Keeping them here means the wording,
- * the confirmations, and the toasts are identical everywhere.
+ * Every grid offers the same core actions — download, favorite, rename/move/
+ * copy, move to trash — and pages add their own (Trash adds Restore). Keeping
+ * them here means the wording, the confirmations, and the toasts are
+ * identical everywhere.
  *
  * Harmless actions run immediately and confirm with a toast. Moving to the
  * trash asks first, because it changes what is on disk, and says where the
@@ -15,7 +15,6 @@ import { type ReactElement, useCallback, useState } from 'react';
 
 import { softDeleteFile } from '../../api/queries';
 import type { FileSummary } from '../../api/types';
-import { AlbumPickerDialog } from '../albums/AlbumPickerDialog';
 import { ConfirmDialog } from '../Dialog';
 import type { FileOperations } from '../FileOperations';
 import { downloadUrl } from '../media';
@@ -35,7 +34,7 @@ export interface MediaActionOptions {
   /** Something changed on the server; reload the listing. */
   onChanged: () => void;
   /** Which of the standard actions this page offers. Defaults to all. */
-  allow?: Partial<Record<'download' | 'album' | 'favorite' | 'trash' | 'edit', boolean>>;
+  allow?: Partial<Record<'download' | 'favorite' | 'trash' | 'edit', boolean>>;
   /** Page-specific selection actions, shown before the standard ones. */
   extra?: SelectionAction[];
   /** Page-specific items for a single file's menu. */
@@ -85,13 +84,11 @@ export function useMediaActions({
 }: MediaActionOptions): MediaActions {
   const toast = useToast();
   const [trashing, setTrashing] = useState<FileSummary[] | null>(null);
-  const [albumTargets, setAlbumTargets] = useState<FileSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const can = {
     download: allow.download ?? true,
-    album: allow.album ?? true,
     favorite: (allow.favorite ?? true) && favorites !== undefined,
     trash: allow.trash ?? true,
     edit: (allow.edit ?? true) && ops !== undefined,
@@ -173,17 +170,6 @@ export function useMediaActions({
               },
         ]
       : []),
-    ...(can.album
-      ? [
-          {
-            id: 'album',
-            label: 'Add to album',
-            icon: 'album' as const,
-            onClick: () => setAlbumTargets(files),
-            testId: 'selection-album',
-          },
-        ]
-      : []),
     ...(can.favorite
       ? [
           {
@@ -216,7 +202,7 @@ export function useMediaActions({
       items.push({
         id: 'open',
         label: 'Open',
-        icon: 'photo',
+        icon: 'file',
         onSelect: () => ops.openViewer(file),
       });
     if (can.download) {
@@ -225,14 +211,6 @@ export function useMediaActions({
         label: 'Download',
         icon: 'download',
         href: downloadUrl(libraryId, file),
-      });
-    }
-    if (can.album) {
-      items.push({
-        id: 'album',
-        label: 'Add to album',
-        icon: 'album',
-        onSelect: () => setAlbumTargets([file]),
       });
     }
     if (can.favorite) {
@@ -312,28 +290,6 @@ export function useMediaActions({
         }}
         onConfirm={() => void confirmTrash()}
         testId="trash-many-dialog"
-      />
-      <AlbumPickerDialog
-        open={albumTargets !== null}
-        libraryId={libraryId}
-        fileIds={(albumTargets ?? []).map((f) => f.id)}
-        onClose={() => setAlbumTargets(null)}
-        onDone={({ album, added, failed }) => {
-          setAlbumTargets(null);
-          if (failed) {
-            toast({
-              message: `Added ${added} to ${album.name}; ${failed} couldn't be added`,
-              tone: 'error',
-            });
-          } else {
-            toast({
-              message: added === 1 ? `Added to ${album.name}` : `${added} added to ${album.name}`,
-              tone: 'success',
-            });
-            selection.clear();
-          }
-          onChanged();
-        }}
       />
     </>
   );

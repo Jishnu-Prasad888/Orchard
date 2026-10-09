@@ -100,7 +100,7 @@ describe('SetupPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Create your admin account' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/first account on your Cairn server/)).toBeInTheDocument();
+    expect(screen.getByText(/first account on your Orchard server/)).toBeInTheDocument();
     expect(screen.getByText('At least 8 characters.')).toBeInTheDocument();
   });
 

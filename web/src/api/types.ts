@@ -126,94 +126,6 @@ export interface IndexTriggerResponse {
   library_id?: string;
 }
 
-export type RefType = 'media' | 'memory' | 'album' | 'person' | 'tag';
-
-export interface MemoryRef {
-  type: RefType;
-  id: string;
-}
-
-export interface Memory {
-  id: string;
-  title: string;
-  body: string;
-  memory_date?: string;
-  deleted: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MemoryListResponse {
-  memories: Memory[];
-  next_cursor?: string;
-}
-
-export interface MemoryVersion {
-  memory_id: string;
-  version: number;
-  title: string;
-  body: string;
-  saved_at: string;
-}
-
-/** Optional local-ML capability status for a library. */
-export interface MLStatus {
-  enabled: boolean;
-  provider?: string;
-  provider_version?: number;
-  /** Photos with a stored signature. */
-  signatured?: number;
-  /** Present photos with no signature yet. */
-  pending?: number;
-  /** A similarity pass is running or queued on the server. */
-  running?: boolean;
-  last_pass_at?: string;
-  error?: string;
-}
-
-export interface FaceStatus {
-  enabled: boolean;
-  provider: string;
-  provider_version: number;
-  faces: number;
-  people: number;
-  unassigned: number;
-  /** A detection or grouping pass is running or queued on the server. */
-  running?: boolean;
-  /** Photos waiting for face detection. */
-  pending?: number;
-}
-
-export interface Person {
-  id: string;
-  name: string;
-  cover_face_id?: string;
-  cover_file_id?: string;
-  face_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PersonEnvelope {
-  person: Person;
-}
-
-/** `GET /people/{id}` returns the person with its faces alongside it. */
-export interface PersonDetail extends PersonEnvelope {
-  faces: FaceSummary[];
-}
-
-export interface FaceSummary {
-  id: string;
-  file_id: string;
-  file_path?: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  confidence: number;
-}
-
 export interface FileSummary {
   id: string;
   library_id: string;
@@ -238,44 +150,6 @@ export interface FileListResponse {
   total: number;
 }
 
-/** A nearest match from perceptual-hash similarity, when ML is enabled. */
-export interface SimilarFile {
-  file_id: string;
-  file_path: string;
-  distance: number;
-  similarity: number;
-  file?: FileSummary;
-}
-
-export interface SimilarFilesResponse {
-  similar: SimilarFile[];
-}
-
-export interface DuplicateGroup {
-  content_hash: string;
-  size_bytes: number;
-  files: FileSummary[];
-}
-
-export interface DuplicatesResponse {
-  groups: DuplicateGroup[];
-  next_cursor?: string;
-  total: number;
-}
-
-/** A cluster of present photos whose perceptual signatures are close enough
- * to one another to be visual near-duplicates. Unlike a `DuplicateGroup`
- * there is no single hash the group shares — members are connected by a
- * chain of near-enough distances, not an exact match. */
-export interface SimilarityGroup {
-  files: FileSummary[];
-}
-
-export interface SimilarityGroupsResponse {
-  groups: SimilarityGroup[];
-  total: number;
-}
-
 export interface Folder {
   id: string;
   library_id?: string;
@@ -287,27 +161,6 @@ export interface Folder {
 
 export interface FolderListResponse {
   folders: Folder[];
-}
-
-export interface Album {
-  id: string;
-  name: string;
-  description?: string;
-  cover_file_id?: string;
-  created_at: string;
-  updated_at: string;
-  /** How many files the album holds. */
-  file_count?: number;
-  /** The file that represents the album: its cover, else its first photo. */
-  preview_file_id?: string;
-}
-
-export interface AlbumListResponse {
-  albums: Album[];
-}
-
-export interface AlbumEnvelope {
-  album: Album;
 }
 
 export interface Tag {
@@ -333,23 +186,6 @@ export interface FileCollectionResponse {
 export interface FileNote {
   file_id: string;
   body: string;
-  updated_at?: string;
-}
-
-/** Extracted media metadata (dimensions, camera, GPS) for a file. */
-export interface FileMetadata {
-  file_id: string;
-  media_type?: string;
-  mime_type?: string;
-  width?: number;
-  height?: number;
-  duration_secs?: number;
-  taken_at?: string;
-  camera_make?: string;
-  camera_model?: string;
-  latitude?: number;
-  longitude?: number;
-  has_thumbnail: boolean;
   updated_at?: string;
 }
 

@@ -1,5 +1,5 @@
 /**
- * API client for Cairn's JSON API v1.
+ * API client for Orchard's JSON API v1.
  *
  * The frontend is deliberately a pure client of the backend HTTP API. Every
  * request goes through this module, which understands the API error envelope
@@ -24,12 +24,12 @@ interface ApiErrorEnvelope {
  * request with 403. The app shell listens for it and routes to the
  * access-denied page, so permission failures anywhere in the UI surface
  * consistently without every page handling the status itself. */
-export const FORBIDDEN_EVENT = 'cairn:forbidden';
+export const FORBIDDEN_EVENT = 'orchard:forbidden';
 
 /** Name of the window event fired when the server rejects a request with 401,
- * which for Cairn means the session is missing or has expired. The app shell
+ * which for Orchard means the session is missing or has expired. The app shell
  * re-reads the auth state and returns the visitor to the sign-in page. */
-export const UNAUTHORIZED_EVENT = 'cairn:unauthorized';
+export const UNAUTHORIZED_EVENT = 'orchard:unauthorized';
 
 /** Thrown for any non-2xx API response. */
 export class ApiError extends Error {

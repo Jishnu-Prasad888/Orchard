@@ -18,11 +18,9 @@ import { createUser, listUsers, revokeUserSessions } from '../api/queries';
 import type { HealthResponse, User, UserRole, VersionResponse } from '../api/types';
 import Brand from '../components/Brand';
 import { ConfirmDialog } from '../components/Dialog';
-import { useFfmpegAvailable } from '../api/ffmpeg';
 import { PageHeader } from '../components/States';
 import { Icon, type IconName } from '../components/ui/Icon';
 import { formatDate } from '../lib/dates';
-import { MemorySettingsSection } from '../memories/MemorySettingsSection';
 import { type ThemePreference, readStoredTheme, storeTheme } from '../lib/theme';
 import './SettingsPage.css';
 
@@ -103,7 +101,6 @@ function LinkRow({
 }
 
 export default function SettingsPage() {
-  const ffmpeg = useFfmpegAvailable();
   const { user, logout } = useAuth();
   const isAdmin = user?.role === 'admin';
   const { hash } = useLocation();
@@ -187,7 +184,6 @@ export default function SettingsPage() {
     { id: 'account', label: 'Account' },
     { id: 'appearance', label: 'Appearance' },
     { id: 'library', label: 'Library' },
-    { id: 'memories', label: 'Memories' },
     ...(isAdmin
       ? [
           { id: 'accounts', label: 'Accounts' },
@@ -200,12 +196,6 @@ export default function SettingsPage() {
   return (
     <main className="page page-narrow settings-page">
       <PageHeader title="Settings" />
-      {ffmpeg === false && (
-        <p className="settings-warning" role="alert" data-testid="ffmpeg-warning">
-          ffmpeg is not installed on the server, so some video thumbnails will not appear. Install
-          ffmpeg and restart Cairn.
-        </p>
-      )}
 
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
@@ -272,19 +262,13 @@ export default function SettingsPage() {
               to="/tags"
               icon="tag"
               title="Tags"
-              description="Labels you apply to media, and browsing by them."
+              description="Labels you apply to files, and browsing by them."
             />
             <LinkRow
               to="/shared"
               icon="share"
               title="Sharing"
               description="Links you've shared, and who can open them."
-            />
-            <LinkRow
-              to="/duplicates"
-              icon="copy"
-              title="Duplicates"
-              description="Files with identical contents, and which to keep."
             />
             <LinkRow
               to="/trash"
@@ -294,11 +278,9 @@ export default function SettingsPage() {
             />
           </Section>
 
-          <MemorySettingsSection />
-
           {isAdmin ? (
             <>
-              <Section id="accounts" title="Accounts" description="Who can sign in to Cairn.">
+              <Section id="accounts" title="Accounts" description="Who can sign in to Orchard.">
                 {users.error && (
                   <p className="error-text" role="alert">
                     {users.error}
@@ -412,16 +394,10 @@ export default function SettingsPage() {
                   description="Who can see, change, and share each library."
                 />
                 <LinkRow
-                  to="/ml"
-                  icon="spark"
-                  title="Machine learning"
-                  description="Similar-photo search and face grouping."
-                />
-                <LinkRow
                   to="/backups"
                   icon="archive"
                   title="Backups"
-                  description="Take, verify, and restore snapshots of Cairn's data."
+                  description="Take, verify, and restore snapshots of Orchard's data."
                 />
               </Section>
             </>
@@ -435,7 +411,7 @@ export default function SettingsPage() {
           )}
 
           <Section id="about" title="About">
-            <Row title={<Brand>Cairn</Brand>} description="Your personal media library." />
+            <Row title={<Brand>Orchard</Brand>} description="Your personal library." />
             {server.loading && <Row title="Server" description="Checking…" />}
             {server.error && (
               <Row title="Server" description={<span className="error-text">{server.error}</span>}>

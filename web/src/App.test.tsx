@@ -82,14 +82,14 @@ describe('App routing', () => {
 
   it('sends an anonymous deep link to the sign-in page', async () => {
     mockFetch({ authenticated: false });
-    setup('/albums');
+    setup('/files');
 
-    expect(await screen.findByRole('heading', { name: 'Sign in to Cairn' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Sign in to Orchard' })).toBeInTheDocument();
   });
 
   it('sends a brand-new server to the first-run setup page', async () => {
     mockFetch({ authenticated: false, bootstrapRequired: true });
-    setup('/albums');
+    setup('/files');
 
     expect(
       await screen.findByRole('heading', { name: 'Create your admin account' }),

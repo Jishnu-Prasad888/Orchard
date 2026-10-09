@@ -10,11 +10,10 @@
 import { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
-import { useMLSwitch } from '../../api/mlSwitch';
 import { Icon } from '../ui/Icon';
 import { MANAGE_NAV, type NavItem, PRIMARY_NAV, SETTINGS_NAV } from './navigation';
 
-const MANAGE_KEY = 'cairn.nav.manage';
+const MANAGE_KEY = 'orchard.nav.manage';
 
 function readManageOpen(): boolean {
   try {
@@ -40,9 +39,7 @@ function NavEntry({ item, onNavigate }: { item: NavItem; onNavigate?: (() => voi
 
 export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
   const location = useLocation();
-  // People only exist while machine learning is on.
-  const mlOn = useMLSwitch();
-  const primary = PRIMARY_NAV.filter((item) => item.to !== '/people' || mlOn !== false);
+  const primary = PRIMARY_NAV;
   const inManage = MANAGE_NAV.some((item) => location.pathname.startsWith(item.to));
   const [manageWanted, setManageWanted] = useState(readManageOpen);
   // Navigating into a page of the group opens it so the active entry is
@@ -73,13 +70,13 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
       aria-label="Navigation"
       data-testid="app-sidebar"
     >
-      <Link to="/" className="sidebar-brand" aria-label="Cairn home" onClick={onNavigate}>
-        <span className="cairn-mark" aria-hidden="true">
+      <Link to="/" className="sidebar-brand" aria-label="Orchard home" onClick={onNavigate}>
+        <span className="brand-mark" aria-hidden="true">
           <span />
           <span />
           <span />
         </span>
-        <span className="brand sidebar-wordmark">Cairn</span>
+        <span className="brand sidebar-wordmark">Orchard</span>
       </Link>
 
       <nav className="sidebar-nav" aria-label="Sections">

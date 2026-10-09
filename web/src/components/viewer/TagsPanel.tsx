@@ -46,7 +46,7 @@ export function TagsPanel({
     setBusy(true);
     setError(null);
     try {
-      // Typing a new name creates the tag; an existing one is reused. Cairn has
+      // Typing a new name creates the tag; an existing one is reused. Orchard has
       // no "find-or-create" endpoint, so the lookup is client-side.
       const existing = libraryTags.find((t) => t.name.toLowerCase() === name.toLowerCase());
       let tagId = existing?.id;

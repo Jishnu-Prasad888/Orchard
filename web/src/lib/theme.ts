@@ -9,7 +9,7 @@
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
-export const THEME_STORAGE_KEY = 'cairn.theme';
+export const THEME_STORAGE_KEY = 'orchard.theme';
 
 /** Read the stored preference, defaulting to following the OS setting. */
 export function readStoredTheme(): ThemePreference {

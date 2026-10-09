@@ -20,19 +20,15 @@
 import { Maximize, Minimize, X } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
-import { addFavorite, getFileMetadata, listFavorites, removeFavorite } from '../api/queries';
-import type { FileMetadata, FileSummary } from '../api/types';
+import { addFavorite, listFavorites, removeFavorite } from '../api/queries';
+import type { FileSummary } from '../api/types';
 import { formatDateTime } from '../lib/dates';
 import { useFocusTrap } from '../lib/focusTrap';
-import { VideoScrubPreview } from './viewer/VideoScrubPreview';
 import { FileNote } from './FileNote';
 import { downloadUrl, thumbnailUrl, mediaTypeIcon } from './media';
 import { Icon, type IconName } from './ui/Icon';
 import { Menu, useMenuButton, withDangerLast } from './ui/Menu';
-import { AlbumsPanel } from './viewer/AlbumsPanel';
 import { DetailsPanel } from './viewer/DetailsPanel';
-import { Filmstrip } from './viewer/Filmstrip';
-import { MemoriesPanel, PeoplePanel, SimilarPanel } from './viewer/RelatedPanels';
 import { SharePanel } from './viewer/SharePanel';
 import { TagsPanel } from './viewer/TagsPanel';
 import './ViewerModal.css';
@@ -56,15 +52,11 @@ export interface ViewerModalProps {
   onNearEnd?: (() => void) | undefined;
 }
 
-type PanelTab = 'details' | 'tags' | 'albums' | 'people' | 'memories' | 'similar' | 'share';
+type PanelTab = 'details' | 'tags' | 'share';
 
 const PANEL_TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'details', label: 'Details' },
   { id: 'tags', label: 'Tags' },
-  { id: 'albums', label: 'Albums' },
-  { id: 'people', label: 'People' },
-  { id: 'memories', label: 'Memories' },
-  { id: 'similar', label: 'Similar' },
   { id: 'share', label: 'Share' },
 ];
 
@@ -123,7 +115,7 @@ const TOP_REVEAL_PX = 90;
 const SWIPE_PX = 50;
 const NEAR_END = 3;
 
-const PANEL_STORAGE_KEY = 'cairn.viewer.panel';
+const PANEL_STORAGE_KEY = 'orchard.viewer.panel';
 
 /** Whether the person last left the details panel open. Closed by default. */
 function readPanelPreference(): boolean {
@@ -166,10 +158,6 @@ export function ViewerModal({
   // navigating never shows the previous photo's state.
   const [original, setOriginal] = useState<{ id: string; state: 'loaded' | 'failed' } | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<ReadonlySet<string> | null>(null);
-  const [metadataState, setMetadataState] = useState<{
-    fileId: string;
-    value: FileMetadata | null;
-  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const more = useMenuButton();
@@ -180,7 +168,6 @@ export function ViewerModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   // Chosen speed carries over to the next video while the viewer stays open.
   const [speed, setSpeed] = useState(1);
-  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Height of the caption/filmstrip strip, so a video's own controls are never
   // drawn underneath it.
@@ -547,23 +534,7 @@ export function ViewerModal({
     };
   }, [libraryId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const fileId = file.id;
-    getFileMetadata(libraryId, fileId)
-      .then((resp) => {
-        if (!cancelled) setMetadataState({ fileId, value: resp.metadata ?? null });
-      })
-      .catch(() => {
-        if (!cancelled) setMetadataState({ fileId, value: null });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [libraryId, file.id]);
-
   const favorite = favoriteIds === null ? null : favoriteIds.has(file.id);
-  const metadata = metadataState?.fileId === file.id ? metadataState.value : null;
 
   const setFavoriteLocally = (id: string, value: boolean) =>
     setFavoriteIds((ids) => {
@@ -609,7 +580,7 @@ export function ViewerModal({
         }
       : {};
 
-  const when = formatDateTime(metadata?.taken_at ?? file.mod_time);
+  const when = formatDateTime(file.mod_time);
 
   const moreItems = withDangerLast([
     {
@@ -625,7 +596,6 @@ export function ViewerModal({
       onSelect: () => onRequestAction('move', file),
     },
     { id: 'copy', label: 'Copy', icon: 'copy', onSelect: () => onRequestAction('copy', file) },
-    { id: 'albums', label: 'Add to album', icon: 'album', onSelect: () => openPanelAt('albums') },
     { id: 'share', label: 'Share', icon: 'share', onSelect: () => openPanelAt('share') },
     {
       id: 'download',
@@ -901,26 +871,20 @@ export function ViewerModal({
                 />
               </>
             ) : isVideo ? (
-              <>
-                <video
-                  key={file.id}
-                  ref={(el) => {
-                    videoRef.current = el;
-                    setVideoEl(el);
-                  }}
-                  className="viewer-media"
-                  src={downloadUrl(libraryId, file)}
-                  controls
-                  autoPlay
-                  onLoadedMetadata={(e) => {
-                    e.currentTarget.playbackRate = speed;
-                  }}
-                  playsInline
-                  preload="metadata"
-                  style={mediaStyle}
-                />
-                <VideoScrubPreview video={videoEl} src={downloadUrl(libraryId, file)} />
-              </>
+              <video
+                key={file.id}
+                ref={videoRef}
+                className="viewer-media"
+                src={downloadUrl(libraryId, file)}
+                controls
+                autoPlay
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.playbackRate = speed;
+                }}
+                playsInline
+                preload="metadata"
+                style={mediaStyle}
+              />
             ) : (
               <div className="viewer-generic">
                 <span className="viewer-generic-icon" aria-hidden="true">
@@ -971,14 +935,6 @@ export function ViewerModal({
         <div className="viewer-bottom viewer-chrome" ref={bottomRef}>
           {/* Keyed by file so navigating remounts it with a clean note. */}
           <FileNote key={file.id} libraryId={libraryId} fileId={file.id} />
-          {siblings.length > 1 && (
-            <Filmstrip
-              libraryId={libraryId}
-              siblings={siblings}
-              index={index}
-              onNavigate={onNavigate}
-            />
-          )}
         </div>
 
         {panelOpen && (
@@ -1032,24 +988,9 @@ export function ViewerModal({
               aria-labelledby={`viewer-tab-${tab}`}
               tabIndex={0}
             >
-              {tab === 'details' && <DetailsPanel key={file.id} file={file} metadata={metadata} />}
+              {tab === 'details' && <DetailsPanel key={file.id} file={file} />}
               {tab === 'tags' && (
                 <TagsPanel key={file.id} libraryId={libraryId} file={file} onChanged={onChanged} />
-              )}
-              {tab === 'albums' && (
-                <AlbumsPanel
-                  key={file.id}
-                  libraryId={libraryId}
-                  file={file}
-                  onChanged={onChanged}
-                />
-              )}
-              {tab === 'people' && <PeoplePanel key={file.id} libraryId={libraryId} file={file} />}
-              {tab === 'memories' && (
-                <MemoriesPanel key={file.id} libraryId={libraryId} file={file} />
-              )}
-              {tab === 'similar' && (
-                <SimilarPanel key={file.id} libraryId={libraryId} file={file} onOpen={onNavigate} />
               )}
               {tab === 'share' && <SharePanel key={file.id} libraryId={libraryId} file={file} />}
             </div>

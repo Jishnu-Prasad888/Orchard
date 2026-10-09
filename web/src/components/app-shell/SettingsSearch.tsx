@@ -38,34 +38,10 @@ const SETTING_ENTRIES: SettingEntry[] = [
     words: 'dark light system appearance colour color mode',
   },
   {
-    label: 'Tags, sharing, duplicates and trash',
+    label: 'Tags, sharing and trash',
     section: 'library',
     hint: 'Library',
-    words: 'library tags sharing shared duplicates trash deleted',
-  },
-  {
-    label: 'Memory slideshow interval',
-    section: 'memories',
-    hint: 'Memories',
-    words: 'slideshow interval seconds speed',
-  },
-  {
-    label: 'Edited copies of photos',
-    section: 'memories',
-    hint: 'Memories',
-    words: 'edited copies edits save separate copy',
-  },
-  {
-    label: 'Default memory layout and mode',
-    section: 'memories',
-    hint: 'Memories',
-    words: 'layout grid hero masonry mode edit preview',
-  },
-  {
-    label: 'Autosave memories',
-    section: 'memories',
-    hint: 'Memories',
-    words: 'autosave save automatically',
+    words: 'library tags sharing shared trash deleted',
   },
   {
     label: 'Accounts and users',
@@ -88,7 +64,7 @@ const SETTING_ENTRIES: SettingEntry[] = [
     words: 'access libraries permissions shared with you',
   },
   {
-    label: 'About Cairn',
+    label: 'About Orchard',
     section: 'about',
     hint: 'About',
     words: 'version build health status license',

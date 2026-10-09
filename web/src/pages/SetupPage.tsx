@@ -14,7 +14,7 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 1024;
 
 /**
- * First-run account creation. Cairn has no accounts until somebody creates
+ * First-run account creation. Orchard has no accounts until somebody creates
  * one, and the first account is always the administrator. The form is only
  * offered while the server reports `bootstrap_required`; on a server that
  * already has accounts, the same page explains that an administrator creates
@@ -42,7 +42,7 @@ export default function SetupPage() {
         <section className="auth-card" aria-labelledby="setup-title">
           <header className="auth-header">
             <h1 className="auth-brand">
-              <Brand>Cairn</Brand>
+              <Brand>Orchard</Brand>
             </h1>
             <h2 id="setup-title" className="auth-title">
               This server is already set up
@@ -102,7 +102,7 @@ export default function SetupPage() {
       setError(
         e instanceof ApiError
           ? e.message
-          : 'Could not reach the Cairn server. Check your connection and try again.',
+          : 'Could not reach the Orchard server. Check your connection and try again.',
       );
     } finally {
       setBusy(false);
@@ -114,13 +114,13 @@ export default function SetupPage() {
       <section className="auth-card" aria-labelledby="setup-title">
         <header className="auth-header">
           <h1 className="auth-brand">
-            <Brand>Cairn</Brand>
+            <Brand>Orchard</Brand>
           </h1>
           <h2 id="setup-title" className="auth-title">
             Create your admin account
           </h2>
           <p className="auth-subtitle">
-            This is the first account on your Cairn server. As the administrator you can manage
+            This is the first account on your Orchard server. As the administrator you can manage
             libraries, add other accounts, and run backups.
           </p>
         </header>

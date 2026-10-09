@@ -1,7 +1,7 @@
 /**
  * "The library changed on disk."
  *
- * Files can appear, move or vanish outside Cairn (a file manager, a sync
+ * Files can appear, move or vanish outside Orchard (a file manager, a sync
  * tool); the server notices on its next rescan. When the app learns of that —
  * the index counts moved, or the tab came back to the front — it announces it
  * here, and any open list quietly re-reads itself. Nothing flashes and no
@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 
-const EVENT = 'cairn:library-changed';
+const EVENT = 'orchard:library-changed';
 
 export function notifyLibraryChanged(libraryId: string) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { libraryId } }));

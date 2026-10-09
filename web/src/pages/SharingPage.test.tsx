@@ -129,7 +129,7 @@ describe('SharingPage', () => {
     const fresh = await screen.findByTestId('fresh-share');
     const link = screen.getByLabelText('Share link') as HTMLInputElement;
     expect(link.value).toMatch(/\/s\/tok9$/);
-    expect(fresh).toHaveTextContent('the only time Cairn shows the token');
+    expect(fresh).toHaveTextContent('the only time Orchard shows the token');
 
     fireEvent.click(within(fresh).getByRole('button', { name: 'Copy link' }));
     await waitFor(() => {

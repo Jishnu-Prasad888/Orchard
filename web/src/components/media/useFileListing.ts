@@ -1,13 +1,13 @@
 /**
  * Loading a listing of files, page by page.
  *
- * One hook for every media surface (Photos, Videos, Files, search), so the
- * rules are the same everywhere:
+ * One hook for every file-browsing surface (Files, search), so the rules are
+ * the same everywhere:
  *
  * - a plain listing uses `GET /files`, which honours sort order and folders;
- * - a query, a person/album/tag, or a date or size filter uses `GET /search`,
- *   because only search understands those (it returns relevance order, or id
- *   order without a query);
+ * - a query, a tag, or a date or size filter uses `GET /search`, because only
+ *   search understands those (it returns relevance order, or id order
+ *   without a query);
  * - pages are fetched with the server's cursor and appended; a new query
  *   discards the old pages and cancels anything in flight.
  */
@@ -37,8 +37,6 @@ export interface ListingQuery {
   /** `YYYY-MM-DD`, as a date input gives it. */
   from: string;
   to: string;
-  person?: string | undefined;
-  album?: string | undefined;
   tag?: string | undefined;
   /** Load the sub-folders of `folder` alongside the files. */
   withFolders?: boolean | undefined;
@@ -62,8 +60,6 @@ export interface FileListing {
 export function usesSearch(query: ListingQuery): boolean {
   return Boolean(
     query.q.trim() ||
-    query.person ||
-    query.album ||
     query.tag ||
     query.minSizeMb ||
     query.maxSizeMb ||
@@ -88,8 +84,6 @@ function fetchPage(
       q: query.q.trim() || undefined,
       type: query.type,
       folder: query.recursive ? undefined : query.folder || undefined,
-      person: query.person,
-      album: query.album,
       tag: query.tag,
       min_size: toBytes(query.minSizeMb),
       max_size: toBytes(query.maxSizeMb),

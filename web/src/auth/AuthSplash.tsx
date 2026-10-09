@@ -10,7 +10,7 @@ export default function AuthSplash() {
   return (
     <div className="auth-splash" data-testid="auth-splash">
       <h1 className="auth-splash-brand">
-        <Brand>Cairn</Brand>
+        <Brand>Orchard</Brand>
       </h1>
       <p className="auth-splash-note">Checking your session…</p>
     </div>

@@ -194,7 +194,7 @@ export function EmptyState({
 export function NoLibrariesState({ isAdmin }: { isAdmin: boolean }) {
   return (
     <EmptyState
-      title="Let's find your photos"
+      title="Let's find your library"
       testId="no-libraries"
       icon="drive"
       action={
@@ -206,7 +206,7 @@ export function NoLibrariesState({ isAdmin }: { isAdmin: boolean }) {
       }
     >
       <p>
-        Cairn organizes media that already lives on your disk. Point it at a folder and it will
+        Orchard organizes files that already live on your disk. Point it at a folder and it will
         index it in place — nothing is copied or changed.
       </p>
       {!isAdmin && (
@@ -218,8 +218,8 @@ export function NoLibrariesState({ isAdmin }: { isAdmin: boolean }) {
 
 /**
  * The library's drive is not connected. Not an error and not empty: the
- * details Cairn keeps (albums, tags, memories) are still here, the files are
- * not. Administrators also see where the drive was last mounted.
+ * details Orchard keeps (tags, notes) are still here, the files are not.
+ * Administrators also see where the drive was last mounted.
  */
 export function LibraryOfflineNotice({ library }: { library: Library }) {
   const { user } = useAuth();
@@ -231,8 +231,8 @@ export function LibraryOfflineNotice({ library }: { library: Library }) {
       <div className="notice-text">
         <p className="notice-title">{library.name} is unavailable</p>
         <p>
-          The drive holding this library is disconnected. Your albums, tags, and memories are safe —
-          reconnect it and Cairn will pick up where it left off.
+          The drive holding this library is disconnected. Your tags and notes are safe — reconnect
+          it and Orchard will pick up where it left off.
         </p>
         {user?.role === 'admin' && (
           <p className="notice-detail">

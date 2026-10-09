@@ -1,5 +1,5 @@
 /**
- * Cairn's one icon set.
+ * Orchard's one icon set.
  *
  * Every glyph is drawn on the same 24px grid with the same 1.75 stroke and
  * round joins, so icons from different parts of the app sit at the same visual
@@ -26,33 +26,6 @@ const ICONS = {
     <>
       <rect x="3" y="6" width="13" height="12" rx="2.5" />
       <path d="m16 10.5 4.4-2.6a.4.4 0 0 1 .6.35v7.5a.4.4 0 0 1-.6.35L16 13.5" />
-    </>
-  ),
-  album: (
-    <>
-      <rect x="4" y="4" width="12.5" height="12.5" rx="2.2" />
-      <path d="M7.5 20h10a2.5 2.5 0 0 0 2.5-2.5v-10" />
-      <path d="m16.5 13-3.2-3.2a1 1 0 0 0-1.4 0L6.5 15.2" />
-    </>
-  ),
-  people: (
-    <>
-      <circle cx="9.5" cy="8.5" r="3.5" />
-      <path d="M3.5 19.5c.6-3.1 3-5 6-5s5.4 1.9 6 5" />
-      <path d="M16 5.2a3.4 3.4 0 0 1 0 6.6M17.8 14.6c1.5.7 2.5 2.4 2.7 4.9" />
-    </>
-  ),
-  person: (
-    <>
-      <circle cx="12" cy="8.5" r="3.8" />
-      <path d="M5 20c.7-3.6 3.5-5.6 7-5.6s6.3 2 7 5.6" />
-    </>
-  ),
-  memory: (
-    <>
-      <path d="M6 3.5h10.5a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z" />
-      <path d="M9 3.5v17" />
-      <path d="M12 8.5h3.5M12 12h3.5" />
     </>
   ),
   folder: (
@@ -303,12 +276,6 @@ const ICONS = {
     <>
       <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
       <circle cx="12" cy="10" r="2.3" />
-    </>
-  ),
-  camera: (
-    <>
-      <path d="M4.5 8.5a2 2 0 0 1 2-2h1.8l1.5-2h4.4l1.5 2h1.8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
-      <circle cx="12" cy="13" r="3.4" />
     </>
   ),
   ruler: (

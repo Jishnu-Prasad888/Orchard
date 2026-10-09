@@ -14,7 +14,7 @@ function shell(route = '/') {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<p>home content</p>} />
-            <Route path="/photos" element={<p>photos content</p>} />
+            <Route path="/files" element={<p>files content</p>} />
             <Route path="/settings" element={<p>settings content</p>} />
           </Route>
         </Routes>
@@ -37,18 +37,7 @@ describe('AppShell', () => {
     const labels = within(sections)
       .getAllByRole('link')
       .map((link) => link.textContent);
-    expect(labels).toEqual([
-      'Home',
-      'Photos',
-      'Videos',
-      'Albums',
-      'People',
-      'Memories',
-      'Files',
-      'Favorites',
-      'Shared',
-      'Trash',
-    ]);
+    expect(labels).toEqual(['Home', 'Files', 'Favorites', 'Tags', 'Shared', 'Trash']);
     // Settings sits apart, at the foot.
     expect(
       within(screen.getByRole('navigation', { name: 'Settings' })).getByRole('link', {
@@ -71,23 +60,15 @@ describe('AppShell', () => {
       within(manage)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual([
-      'Tags',
-      'Duplicates',
-      'Similar photos',
-      'Libraries',
-      'Permissions',
-      'Machine learning',
-      'Backups',
-    ]);
+    ).toEqual(['Libraries', 'Permissions', 'Backups']);
   });
 
   it('marks the current section', async () => {
     mockApi();
-    shell('/photos');
+    shell('/files');
 
     const nav = screen.getByRole('navigation', { name: 'Sections' });
-    expect(within(nav).getByRole('link', { name: 'Photos' })).toHaveClass('active');
+    expect(within(nav).getByRole('link', { name: 'Files' })).toHaveClass('active');
     expect(within(nav).getByRole('link', { name: 'Home' })).not.toHaveClass('active');
   });
 

@@ -3,7 +3,7 @@
  *
  * A file in the trash is still on disk, so restoring is always safe and puts
  * it back exactly where it was. Deleting forever erases the bytes; it is the
- * one irreversible action in Cairn, so it is the only one that asks twice and
+ * one irreversible action in Orchard, so it is the only one that asks twice and
  * says so plainly.
  */
 

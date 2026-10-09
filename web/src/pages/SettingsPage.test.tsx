@@ -79,7 +79,7 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(document.documentElement.dataset.theme).toBe('dark');
     });
-    expect(localStorage.getItem('cairn.theme')).toBe('dark');
+    expect(localStorage.getItem('orchard.theme')).toBe('dark');
 
     fireEvent.click(screen.getByRole('radio', { name: 'Match system' }));
     await waitFor(() => {
@@ -92,7 +92,7 @@ describe('SettingsPage', () => {
     await screen.findByRole('heading', { name: 'Library' });
 
     // Each of these has its own page; settings is where the less-used ones land.
-    for (const label of ['Tags', 'Sharing', 'Duplicates', 'Trash']) {
+    for (const label of ['Tags', 'Sharing', 'Trash']) {
       expect(screen.getByRole('link', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
     // Sharing goes to the real route.
@@ -103,7 +103,7 @@ describe('SettingsPage', () => {
     setup();
     await screen.findByRole('heading', { name: 'Advanced' });
 
-    for (const label of ['Libraries', 'Permissions', 'Machine learning', 'Backups']) {
+    for (const label of ['Libraries', 'Permissions', 'Backups']) {
       expect(screen.getByRole('link', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
   });

@@ -15,7 +15,7 @@ const running = { ID: 'j', Kind: 'scan', Status: 'running' };
 describe('useIndexStatus', () => {
   afterEach(() => {
     vi.useRealTimers();
-    window.removeEventListener('cairn:library-changed', listener);
+    window.removeEventListener('orchard:library-changed', listener);
   });
 
   const seen: string[] = [];
@@ -25,7 +25,7 @@ describe('useIndexStatus', () => {
   it('announces changes while a new library is scanned and when the scan ends', async () => {
     vi.useFakeTimers();
     seen.length = 0;
-    window.addEventListener('cairn:library-changed', listener);
+    window.addEventListener('orchard:library-changed', listener);
     // Counts climb during the scan, then the last poll finds them unchanged
     // but the scan finished: that last step used to be swallowed.
     statuses.push(
@@ -47,7 +47,7 @@ describe('useIndexStatus', () => {
   it('stays quiet when asked not to announce', async () => {
     vi.useFakeTimers();
     seen.length = 0;
-    window.addEventListener('cairn:library-changed', listener);
+    window.addEventListener('orchard:library-changed', listener);
     statuses.push({ present: 0, active_job: running }, { present: 5 });
     renderHook(() => useIndexStatus('lib1', true, false));
     for (let i = 0; i < 2; i++) {

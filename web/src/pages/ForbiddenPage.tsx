@@ -29,7 +29,7 @@ export default function ForbiddenPage() {
         403
       </p>
       <h1 className="forbidden-title">
-        <Brand>Cairn</Brand> can’t open this
+        <Brand>Orchard</Brand> can’t open this
       </h1>
       <p className="forbidden-message">
         {state?.message ??

@@ -13,7 +13,6 @@ import { formatBytes } from '../../api/types';
 import { formatDate } from '../../lib/dates';
 import { fileExtension, mediaLabel, thumbnailUrl, mediaTypeIcon } from '../media';
 import type { Selection } from '../media/useSelection';
-import { VideoThumb } from '../media/VideoThumb';
 import { Icon } from '../ui/Icon';
 import './Files.css';
 
@@ -168,9 +167,7 @@ export function FileTable({
                   }}
                   title={file.rel_path}
                 >
-                  {file.media_type === 'video' ? (
-                    <VideoThumb libraryId={libraryId} fileId={file.id} className="file-row-thumb" />
-                  ) : file.media_type === 'photo' ? (
+                  {file.media_type === 'photo' ? (
                     <img
                       className="file-row-thumb"
                       src={thumbnailUrl(libraryId, file)}

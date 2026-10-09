@@ -1,7 +1,7 @@
 /**
  * Dropping files from the desktop onto a page to upload them.
  *
- * Only real files count — dragging a tile inside Cairn (to move it into a
+ * Only real files count — dragging a tile inside Orchard (to move it into a
  * folder) is a different gesture and must not light up the upload target.
  * Enter/leave events fire for every child crossed, so a depth counter decides
  * when the drag has really left.

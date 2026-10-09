@@ -17,7 +17,7 @@ import BackupsPage from './BackupsPage';
 const okBackup = {
   id: 'b1',
   status: 'ok',
-  destination: '/mnt/backup/cairn',
+  destination: '/mnt/backup/orchard',
   started_at: '2026-09-01T02:00:00Z',
   finished_at: '2026-09-01T02:14:00Z',
   libraries: 2,
@@ -34,7 +34,7 @@ const failedBackup = {
   ...okBackup,
   id: 'b2',
   status: 'failed',
-  destination: '/mnt/backup/cairn',
+  destination: '/mnt/backup/orchard',
   started_at: '2026-08-31T02:00:00Z',
   finished_at: '',
   // A half-finished run is neither encrypted nor off this machine.
@@ -72,7 +72,7 @@ describe('BackupsPage', () => {
     expect(within(table).getByTestId('backup-status-b1')).toHaveTextContent('Completed');
     expect(within(table).getByTestId('backup-status-b2')).toHaveTextContent('Failed');
     // The destination's properties are called out, not left to be discovered.
-    expect(within(table).getAllByText('/mnt/backup/cairn')).toHaveLength(2);
+    expect(within(table).getAllByText('/mnt/backup/orchard')).toHaveLength(2);
     expect(within(table).getByText('encrypted')).toBeInTheDocument();
     expect(within(table).getByText('same device')).toBeInTheDocument();
   });
@@ -185,7 +185,7 @@ describe('BackupsPage', () => {
     fireEvent.click(within(table).getByTestId('backup-open-b1'));
 
     const dialog = await screen.findByTestId('backup-detail-dialog');
-    expect(within(dialog).getByText('/mnt/backup/cairn')).toBeInTheDocument();
+    expect(within(dialog).getByText('/mnt/backup/orchard')).toBeInTheDocument();
     // A backup is metadata, not a download, so the page reports where it is.
     expect(within(dialog).getByText('1204 copied, 1180 already present')).toBeInTheDocument();
     expect(within(dialog).getByText('8.0 GB of media → 4.0 GB stored')).toBeInTheDocument();
@@ -226,7 +226,7 @@ describe('BackupsPage', () => {
     // Restoring writes a copy; it never overwrites the libraries in place.
     expect(within(dialog).getByText(/not modified/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Destination directory'), {
-      target: { value: '/srv/cairn-restore' },
+      target: { value: '/srv/orchard-restore' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
 
@@ -234,7 +234,7 @@ describe('BackupsPage', () => {
       expect(called(fetchMock, 'POST', '/api/v1/backups/b1/restore')).toBe(true);
     });
     expect(bodyOf(fetchMock, 'POST', '/api/v1/backups/b1/restore')).toEqual({
-      destination: '/srv/cairn-restore',
+      destination: '/srv/orchard-restore',
     });
     expect(await screen.findByTestId('backup-notice')).toHaveTextContent('Restore started.');
   });

@@ -1,16 +1,14 @@
 /**
- * The media browser behind Photos, Videos, Files, and Search.
+ * The generic file browser behind Files and Search.
  *
- * They are one component configured four ways rather than four copies:
+ * One component configured two ways rather than two copies:
  *
- * - **Photos / Videos** are a timeline: every item of that type in the whole
- *   library, newest first, grouped by day. No folders; the photos are the page.
  * - **Files** is the file manager: folders and breadcrumbs, grid or list, an
  *   in-folder search, upload into the current folder, new folders.
  * - **Search** is a results page driven entirely by the address bar.
  *
  * What a person is looking at — the folder, the query, the type, the open
- * photo — lives in the URL, so Back, reload, and sharing a link all work.
+ * file — lives in the URL, so Back, reload, and sharing a link all work.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,15 +26,12 @@ import { FileTable } from '../components/files/FileTable';
 import { FilterPanel } from '../components/files/FilterPanel';
 import { EMPTY_RANGE, hasRangeFilters, type RangeFilters } from '../components/files/filters';
 import { FolderGrid } from '../components/files/FolderGrid';
-import type { Grouping } from '../components/media/layout';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
-import { Timeline } from '../components/media/Timeline';
 import { useFavorites } from '../components/media/useFavorites';
 import { type ListingQuery, useFileListing } from '../components/media/useFileListing';
 import { useMediaActions } from '../components/media/useMediaActions';
 import { useSelection } from '../components/media/useSelection';
-import { useTimelineAutoload } from '../components/media/useTimelineAutoload';
 import {
   EmptyState,
   ErrorState,
@@ -51,7 +46,6 @@ import { useToast } from '../components/ui/Toast';
 import { useFileDrop } from '../components/upload/useFileDrop';
 import { useUploads } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
-import { readTimelineOpen, storeTimelineOpen } from '../lib/timelinePreference';
 import './MediaPage.css';
 
 export interface MediaPageConfig {
@@ -62,12 +56,8 @@ export interface MediaPageConfig {
   showFolders?: boolean;
   /** Offer a type dropdown. Defaults to on when no type is fixed. */
   showTypeFilter?: boolean;
-  /** A results page: the query, type, person, album, and tag come from the URL. */
+  /** A results page: the query, type, and tag come from the URL. */
   searchPage?: boolean;
-  /** Date headings over the grid. Only applied to date-sorted listings. */
-  grouping?: Grouping;
-  /** A ruler at the foot of the screen for jumping around by date. */
-  showTimeline?: boolean;
   subtitle?: string;
   emptyTitle: string;
   emptyBody: string;
@@ -88,7 +78,7 @@ const SORTS: Array<{ value: SortValue; label: string }> = [
   { value: 'media_type:asc', label: 'Type' },
 ];
 
-const VIEW_KEY = 'cairn.files.view';
+const VIEW_KEY = 'orchard.files.view';
 
 function readView(): 'grid' | 'list' {
   try {
@@ -171,8 +161,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const folder = folderMode ? (params.get('folder') ?? '') : '';
   const urlType = parseType(params.get('type'));
   const type = config.type ?? urlType;
-  const person = config.searchPage ? (params.get('person') ?? undefined) : undefined;
-  const album = config.searchPage ? (params.get('album') ?? undefined) : undefined;
   const tag = config.searchPage ? (params.get('tag') ?? undefined) : undefined;
 
   const [sortValue, setSortValue] = useState<SortValue>('mod_time:desc');
@@ -180,7 +168,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const [range, setRange] = useState<RangeFilters>(EMPTY_RANGE);
   const [showFilters, setShowFilters] = useState(false);
   const [view, setViewState] = useState<'grid' | 'list'>(() => (folderMode ? readView() : 'grid'));
-  const [timelineOpen, setTimelineOpenState] = useState(readTimelineOpen);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderBusy, setFolderBusy] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
@@ -196,11 +183,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     } catch {
       // Not remembered.
     }
-  };
-
-  const setTimelineOpen = (open: boolean) => {
-    setTimelineOpenState(open);
-    storeTimelineOpen(open);
   };
 
   /** Change one URL parameter in place (typing a query should not fill history). */
@@ -244,8 +226,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     sort,
     order,
     ...range,
-    person,
-    album,
     tag,
     withFolders: folderMode && !q,
   };
@@ -255,26 +235,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     refreshKey: uploads.completed,
   });
   const { files, folders, total } = listing;
-
-  // The timeline ruler on a folder is scoped to that folder and its
-  // sub-folders, which the file manager's own listing deliberately is not —
-  // so it gets its own always-recursive, always date-sorted query. Photos (and
-  // any other non-folder timeline) already has the right list in `files`.
-  const showTimeline = Boolean(config.showTimeline) && !offline;
-  const timelineQuery: ListingQuery = {
-    q: '',
-    type,
-    folder: folderMode ? folder : undefined,
-    recursive: true,
-    sort: 'mod_time',
-    order: 'desc',
-    ...EMPTY_RANGE,
-    withFolders: false,
-  };
-  const timelineListing = useFileListing(libraryId, timelineQuery, {
-    enabled: showTimeline && timelineOpen && folderMode && !q,
-  });
-  const timelineFiles = folderMode ? timelineListing.files : files;
 
   const favorites = useFavorites(libraryId);
   const selection = useSelection(files, `${libraryId}|${JSON.stringify(query)}`);
@@ -364,7 +324,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
           ),
   });
 
-  const canUpload = !offline && (folderMode || config.type === 'photo' || config.type === 'video');
+  const canUpload = !offline && folderMode;
   const uploadFiles = useCallback(
     (incoming: File[]) => {
       if (incoming.length) uploads.enqueue(libraryId, incoming, folderMode ? folder : '');
@@ -376,7 +336,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   // Dragging a tile onto a folder or a breadcrumb moves it there.
   const moveInto = async (event: React.DragEvent, destination: string) => {
     event.preventDefault();
-    const raw = event.dataTransfer.getData('application/cairn-file');
+    const raw = event.dataTransfer.getData('application/orchard-file');
     if (!raw) return;
     try {
       const dragged = JSON.parse(raw) as { id: string; rel_path: string; name: string };
@@ -445,19 +405,11 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     return () => window.removeEventListener('keydown', onShortcut);
   });
 
-  const grouping: Grouping =
-    config.grouping && sort === 'mod_time' && !listing.searching ? config.grouping : 'none';
   const filtersActive = hasRangeFilters(range);
-  const timelineVisible =
-    showTimeline && timelineOpen && (folderMode ? !q : sort === 'mod_time' && !listing.searching);
-  // The grid's own listing already has what the Photos timeline needs; the
-  // folder's recursive one is the only one that still has to catch up.
-  useTimelineAutoload(listing, timelineVisible && !folderMode);
-  useTimelineAutoload(timelineListing, timelineVisible && folderMode);
 
   let subtitle = config.subtitle;
   if (!listing.loading && !listing.error && !config.searchPage && total > 0) {
-    const noun = config.type === 'photo' ? 'photo' : config.type === 'video' ? 'video' : 'item';
+    const noun = 'item';
     subtitle = `${numberFormat.format(total)} ${total === 1 ? noun : `${noun}s`}`;
   }
 
@@ -505,13 +457,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
                   type="file"
                   multiple
                   className="visually-hidden"
-                  accept={
-                    config.type === 'photo'
-                      ? 'image/*'
-                      : config.type === 'video'
-                        ? 'video/*'
-                        : undefined
-                  }
                   onChange={(event) => {
                     uploadFiles(Array.from(event.target.files ?? []));
                     event.target.value = '';
@@ -609,19 +554,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
               <Icon name="filter" />
               Filters
             </button>
-            {showTimeline && (
-              <button
-                type="button"
-                className={timelineOpen ? 'button active' : 'button'}
-                onClick={() => setTimelineOpen(!timelineOpen)}
-                aria-pressed={timelineOpen}
-                title={timelineOpen ? 'Hide timeline' : 'Show timeline'}
-                data-testid="toggle-timeline"
-              >
-                <Icon name="ruler" />
-                Timeline
-              </button>
-            )}
             {!listing.searching && (
               <select
                 aria-label="Sort by"
@@ -684,7 +616,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
         <EmptyState
           title={config.emptyTitle}
           testId="browser-empty"
-          icon={config.emptyIcon ?? 'photo'}
+          icon={config.emptyIcon ?? 'file'}
         >
           <p>{config.emptyBody}</p>
         </EmptyState>
@@ -727,7 +659,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
               <MediaGrid
                 libraryId={libraryId}
                 files={files}
-                grouping={grouping}
                 onOpen={ops.openViewer}
                 selection={selection}
                 favorites={favorites.ids}
@@ -826,8 +757,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
         }}
         testId="new-folder-dialog"
       />
-
-      {timelineVisible && <Timeline files={timelineFiles} label={config.title} />}
     </main>
   );
 }

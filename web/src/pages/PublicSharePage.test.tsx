@@ -81,7 +81,7 @@ describe('PublicSharePage', () => {
       (url, init) => {
         if (!url.endsWith('/api/v1/shares/tok1')) return undefined;
         const headers = (init?.headers ?? {}) as Record<string, string>;
-        if (headers['X-Cairn-Share-Password'] !== 'hunter2') {
+        if (headers['X-Orchard-Share-Password'] !== 'hunter2') {
           return apiError(401, 'UNAUTHORIZED', 'This share needs a password.');
         }
         return json(shareInfo);

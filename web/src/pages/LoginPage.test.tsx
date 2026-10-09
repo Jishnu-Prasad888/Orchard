@@ -96,7 +96,7 @@ describe('LoginPage', () => {
     const fn = mockFetch();
     setup();
 
-    await screen.findByRole('heading', { name: 'Sign in to Cairn' });
+    await screen.findByRole('heading', { name: 'Sign in to Orchard' });
     signIn();
 
     expect(await screen.findByText('app home')).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('LoginPage', () => {
     mockFetch({ loginError: 401 });
     setup();
 
-    await screen.findByRole('heading', { name: 'Sign in to Cairn' });
+    await screen.findByRole('heading', { name: 'Sign in to Orchard' });
     signIn();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password.');
@@ -120,7 +120,7 @@ describe('LoginPage', () => {
     const fn = mockFetch();
     setup();
 
-    await screen.findByRole('heading', { name: 'Sign in to Cairn' });
+    await screen.findByRole('heading', { name: 'Sign in to Orchard' });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Enter your username and password.');
@@ -131,7 +131,7 @@ describe('LoginPage', () => {
     mockFetch({ bootstrapRequired: true });
     setup();
 
-    expect(await screen.findByRole('heading', { name: 'Sign in to Cairn' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Sign in to Orchard' })).toBeInTheDocument();
     expect(screen.getByText(/no accounts yet/)).toBeInTheDocument();
     expect(screen.getByText('First time on this server?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Create an account' })).toBeInTheDocument();
@@ -151,14 +151,14 @@ describe('LoginPage', () => {
     const fn = mockFetch();
     setup();
 
-    await screen.findByRole('heading', { name: 'Sign in to Cairn' });
+    await screen.findByRole('heading', { name: 'Sign in to Orchard' });
     // The button stays, so the route is discoverable: /setup explains that an
     // administrator creates accounts. Only the first-run wording changes.
     expect(screen.getByText('Need an account?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Create an account' })).toBeInTheDocument();
     expect(screen.queryByText('First time on this server?')).not.toBeInTheDocument();
     expect(
-      screen.queryByText('Your photos, files, and memories — kept quietly in your own hands.'),
+      screen.queryByText('Your library, kept quietly in your own hands.'),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('Confirm password')).not.toBeInTheDocument();
     expect(fn.mock.calls.some(([url]) => String(url).endsWith('/auth/bootstrap'))).toBe(false);

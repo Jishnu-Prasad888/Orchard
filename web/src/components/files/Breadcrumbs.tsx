@@ -47,7 +47,7 @@ export function Breadcrumbs({
                 aria-current={current ? 'page' : undefined}
                 onClick={() => onNavigate(crumb.path)}
                 onDragOver={(event) => {
-                  if (!onDropFile || !event.dataTransfer.types.includes('application/cairn-file'))
+                  if (!onDropFile || !event.dataTransfer.types.includes('application/orchard-file'))
                     return;
                   event.preventDefault();
                   setOver(crumb.path);

@@ -13,14 +13,9 @@ function Where() {
 function setup() {
   mockApi([
     (url) =>
-      url.endsWith('/libraries/lib1/albums')
-        ? json({ albums: [{ id: 'a1', name: 'Mountains trip', created_at: '', updated_at: '' }] })
-        : undefined,
-    (url) =>
       url.endsWith('/libraries/lib1/tags')
         ? json({ tags: [{ id: 't1', name: 'mountain', created_at: '' }] })
         : undefined,
-    (url) => (url.endsWith('/libraries/lib1/people') ? json({ people: [] }) : undefined),
   ]);
   renderPage(
     <>
@@ -38,23 +33,21 @@ describe('SearchBox', () => {
     vi.restoreAllMocks();
   });
 
-  it('suggests searching everything, photos, and videos for what was typed', async () => {
+  it('suggests searching everything for what was typed', async () => {
     setup();
-    const input = screen.getByRole('combobox', { name: 'Search Cairn' });
+    const input = screen.getByRole('combobox', { name: 'Search Orchard' });
     fireEvent.change(input, { target: { value: 'mountains' } });
 
     const list = await screen.findByRole('listbox');
     expect(within(list).getByText('Search everything')).toBeInTheDocument();
-    expect(within(list).getByText('in Photos')).toBeInTheDocument();
-    expect(within(list).getByText('in Videos')).toBeInTheDocument();
   });
 
-  it('suggests albums and tags whose names match, from the real library', async () => {
+  it('suggests tags whose names match, from the real library', async () => {
     setup();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'mountain' } });
 
-    expect(await screen.findByText('Mountains trip')).toBeInTheDocument();
-    expect(screen.getByText('Tag')).toBeInTheDocument();
+    expect(await screen.findByText('Tag')).toBeInTheDocument();
+    expect(screen.getAllByText('mountain').length).toBeGreaterThan(0);
   });
 
   it('takes a suggestion with the keyboard', async () => {
@@ -63,12 +56,9 @@ describe('SearchBox', () => {
     fireEvent.change(input, { target: { value: 'beach' } });
     await screen.findByRole('listbox');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.submit(screen.getByRole('search'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('where')).toHaveTextContent('/search?q=beach&type=photo'),
-    );
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/search?q=beach'));
   });
 
   it('remembers searches and offers them again, and forgets on request', async () => {

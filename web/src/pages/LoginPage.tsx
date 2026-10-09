@@ -51,7 +51,7 @@ export default function LoginPage() {
       setError(
         e instanceof ApiError
           ? e.message
-          : 'Could not reach the Cairn server. Check your connection and try again.',
+          : 'Could not reach the Orchard server. Check your connection and try again.',
       );
     } finally {
       setBusy(false);
@@ -63,15 +63,15 @@ export default function LoginPage() {
       <section className="auth-card" aria-labelledby="login-title">
         <header className="auth-header">
           <h1 className="auth-brand">
-            <Brand>Cairn</Brand>
+            <Brand>Orchard</Brand>
           </h1>
           <h2 id="login-title" className="auth-title">
-            Sign in to Cairn
+            Sign in to Orchard
           </h2>
           <p className="auth-subtitle">
             {bootstrapRequired
               ? 'This server has no accounts yet — create the first one to get started.'
-              : 'Your photos, files, and memories — kept quietly in your own hands.'}
+              : 'Your library, kept quietly in your own hands.'}
           </p>
         </header>
 

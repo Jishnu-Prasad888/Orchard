@@ -42,7 +42,7 @@ export function SharePanel({ libraryId, file }: { libraryId: string; file: FileS
     <div data-testid="viewer-share">
       <p className="muted">
         A read-only link that anyone with the URL (and the password, if you set one) can open
-        without a Cairn account. Manage links from the Sharing page.
+        without an Orchard account. Manage links from the Sharing page.
       </p>
       <p className="viewer-share-key">
         <code>{resourceKey}</code>
