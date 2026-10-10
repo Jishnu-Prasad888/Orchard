@@ -23,6 +23,9 @@ import type { Library } from './types';
 
 export const LIBRARY_STORAGE_KEY = 'orchard.library';
 
+/** How often the library list quietly re-checks itself in the background. */
+const BACKGROUND_RECHECK_MS = 30000;
+
 /** Read the remembered library id, or null when there is nothing to restore. */
 export function readStoredLibraryId(): string | null {
   if (typeof localStorage === 'undefined') return null;
@@ -96,6 +99,38 @@ export function LibrariesProvider({ children }: { children: ReactNode }) {
     { key: string; libraries: Library[] } | { key: string; message: string } | null
   >(null);
 
+  // A library can be registered, unregistered, or granted to this account
+  // from somewhere this tab has no way to hear about directly: another tab,
+  // another device, or an administrator acting on a different session. A
+  // quiet background re-check — paused while the tab is hidden, and run
+  // immediately when it regains focus — catches that without the "loading"
+  // flash `refresh()` causes: it reruns the fetch below but, unlike
+  // `reloadKey`, never changes `requestKey`, so the list already on screen
+  // stays up until the fresh one replaces it.
+  const [backgroundTick, setBackgroundTick] = useState(0);
+  useEffect(() => {
+    if (userId === null) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        if (!document.hidden) setBackgroundTick((t) => t + 1);
+        schedule();
+      }, BACKGROUND_RECHECK_MS);
+    };
+    schedule();
+    const onVisible = () => {
+      if (!document.hidden) setBackgroundTick((t) => t + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [userId]);
+
   useEffect(() => {
     if (userId === null) return;
     let cancelled = false;
@@ -114,7 +149,9 @@ export function LibrariesProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [requestKey, userId]);
+    // backgroundTick deliberately is not part of requestKey: it reruns this
+    // effect to quietly re-fetch without flipping `loading`.
+  }, [requestKey, userId, backgroundTick]);
 
   const loading =
     authLoading || (userId !== null && (settled === null || settled.key !== requestKey));
