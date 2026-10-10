@@ -42,9 +42,9 @@ RUN addgroup -S orchard && adduser -S orchard -G orchard \
 COPY --from=build /out/orchard /usr/local/bin/orchard
 USER orchard
 ENV ORCHARD_DATA_DIR=/data
-ENV ORCHARD_HTTP_ADDR=:8715
+ENV ORCHARD_HTTP_ADDR=:8090
 VOLUME /data
-EXPOSE 8715
+EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1:8715/api/v1/ready || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1:8090/api/v1/ready || exit 1
 ENTRYPOINT ["/usr/local/bin/orchard"]

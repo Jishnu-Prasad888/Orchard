@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 IMAGE="orchard:dev"
 CONTAINER="orchard-dev"
-PORT="${ORCHARD_PORT:-8715}"
+PORT="${ORCHARD_PORT:-8090}"
 DATA_DIR="$(pwd)/orchard-data"
 
 rm -rf "$DATA_DIR"
@@ -30,7 +30,7 @@ fi
 echo "==> Starting $CONTAINER on port $PORT"
 docker run -d \
   --name "$CONTAINER" \
-  -p "$PORT:8715" \
+  -p "$PORT:8090" \
   -v "$DATA_DIR:/data" \
   "$IMAGE" >/dev/null
 

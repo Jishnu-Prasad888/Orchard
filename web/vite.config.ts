@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 // In development the Vite dev server proxies API traffic to the Go backend,
 // so the frontend uses same-origin /api/v1 URLs in every environment.
-const apiTarget = process.env.ORCHARD_API_TARGET ?? 'http://127.0.0.1:8715';
+const apiTarget = process.env.ORCHARD_API_TARGET ?? 'http://127.0.0.1:8090';
 
 export default defineConfig({
   plugins: [react()],

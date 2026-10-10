@@ -121,7 +121,7 @@ The server database and state live in `$XDG_DATA_HOME/orchard`
 
 ```sh
 make build          # builds web/, embeds it, compiles bin/orchard
-./bin/orchard        # serves http://127.0.0.1:8715
+./bin/orchard        # serves http://127.0.0.1:8090
 ```
 
 On first run, visit the server and follow the setup flow to create the first
@@ -145,7 +145,7 @@ make qa              # end-to-end acceptance harness against a real binary (qa/e
 docker build -t orchard .
 docker run -d \
   --name orchard \
-  -p 8715:8715 \
+  -p 8090:8090 \
   -v orchard-data:/data \
   orchard
 ```
@@ -159,7 +159,7 @@ All settings use the `ORCHARD_` prefix.
 
 | Variable                      | Default                             | Description                                                |
 | ------------------------------ | ------------------------------------ | ------------------------------------------------------------ |
-| `ORCHARD_HTTP_ADDR`            | `127.0.0.1:8715`                    | HTTP listen address                                         |
+| `ORCHARD_HTTP_ADDR`            | `127.0.0.1:8090`                    | HTTP listen address                                         |
 | `ORCHARD_DATA_DIR`             | `$XDG_DATA_HOME/orchard`            | Server-level data directory                                 |
 | `ORCHARD_LOG_LEVEL`            | `info`                              | `debug`, `info`, `warn`, or `error`                         |
 | `ORCHARD_WEB_DIST`             | *(embedded frontend)*               | Serve an on-disk build instead (dev)                        |
@@ -220,7 +220,7 @@ expected to live, and that it must never require touching the original file.
 The frontend is a pure API client (`web/src/api/client.ts`): it never embeds
 business logic the backend doesn't already enforce. In development, Vite
 (`web/vite.config.ts`) proxies `/api/*` requests to the Go backend at
-`127.0.0.1:8715` (override with `ORCHARD_API_TARGET`), so the frontend always
+`127.0.0.1:8090` (override with `ORCHARD_API_TARGET`), so the frontend always
 calls same-origin `/api/v1/...` URLs. In production, `make build` runs the
 frontend build and copies `web/dist/` into `internal/webui/dist/`, which the
 Go binary embeds via `go:embed` and serves at `/`, with client-side routes

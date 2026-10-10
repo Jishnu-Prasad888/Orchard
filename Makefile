@@ -59,7 +59,7 @@ release-cross: ## Build release binaries without rebuilding the frontend (uses w
 dev: reset-data web-build ## Rebuild the frontend, wipe local dev data, and run the backend
 	@mkdir -p $(CURDIR)/web/dist
 	ORCHARD_DATA_DIR=$(CURDIR)/orchard-data \
-	ORCHARD_HTTP_ADDR=127.0.0.1:8715 \
+	ORCHARD_HTTP_ADDR=127.0.0.1:8090 \
 	ORCHARD_WEB_DIST=$(CURDIR)/web/dist \
 	go run ./cmd/orchard
 
@@ -69,7 +69,7 @@ web-install: ## Install frontend dependencies
 web-build: ## Build the frontend into web/dist
 	cd web && npm run build
 
-web-dev: ## Run the Vite dev server (proxies /api to :8715)
+web-dev: ## Run the Vite dev server (proxies /api to :8090)
 	cd web && npm run dev
 
 test: test-go test-web ## Run all tests
