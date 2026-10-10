@@ -50,6 +50,10 @@
   --color-warning: #caa14a;
   --color-danger: #c1685d;
 
+  /* A barely-there fiber grain over the page background, like paper rather
+     than a flat fill. Dark flecks at very low alpha; never on cards. */
+  --texture-paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
   /* ---------- derived roles ---------- */
   /* Text and icons drawn on a filled primary or danger surface. */
   --color-on-primary: var(--color-surface-elevated);
@@ -129,6 +133,9 @@
   --color-warning: #d9b069;
   --color-danger: #d08077;
 
+  /* Light flecks on the dark surface, same fiber grain inverted. */
+  --texture-paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
   --color-on-primary: var(--color-background);
   --color-fill-active: var(--color-accent-soft);
   --color-scrim: color-mix(in srgb, #20241e 70%, transparent);
@@ -184,6 +191,8 @@
     --color-success: #8bb178;
     --color-warning: #d9b069;
     --color-danger: #d08077;
+
+    --texture-paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
     --color-on-primary: var(--color-background);
     --color-fill-active: var(--color-accent-soft);

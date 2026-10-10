@@ -9,7 +9,8 @@
   padding: var(--space-5) var(--space-4);
   max-width: 60rem;
   margin: 0 auto;
-  background: var(--color-background);
+  background-color: var(--color-background);
+  background-image: var(--texture-paper);
   color: var(--color-text-primary);
 }
 
