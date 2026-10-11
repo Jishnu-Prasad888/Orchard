@@ -28,6 +28,7 @@ import { FileNote } from './FileNote';
 import { downloadUrl, thumbnailUrl, mediaTypeIcon } from './media';
 import { Icon, type IconName } from './ui/Icon';
 import { Menu, useMenuButton, withDangerLast } from './ui/Menu';
+import { BookPanel } from './viewer/BookPanel';
 import { DetailsPanel } from './viewer/DetailsPanel';
 import { SharePanel } from './viewer/SharePanel';
 import { TagsPanel } from './viewer/TagsPanel';
@@ -52,13 +53,23 @@ export interface ViewerModalProps {
   onNearEnd?: (() => void) | undefined;
 }
 
-type PanelTab = 'details' | 'tags' | 'share';
+type PanelTab = 'details' | 'book' | 'tags' | 'share';
 
-const PANEL_TABS: Array<{ id: PanelTab; label: string }> = [
+const BASE_PANEL_TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'details', label: 'Details' },
   { id: 'tags', label: 'Tags' },
   { id: 'share', label: 'Share' },
 ];
+
+const BOOK_TAB = { id: 'book' as const, label: 'Book' };
+
+/** The "Book" tab only makes sense for document-type files (EPUB/PDF/etc.),
+ * not every file — it is inserted right after Details so it reads as a
+ * continuation of the file's own facts. */
+function panelTabsFor(mediaType: string): Array<{ id: PanelTab; label: string }> {
+  if (mediaType !== 'document') return BASE_PANEL_TABS;
+  return [BASE_PANEL_TABS[0]!, BOOK_TAB, ...BASE_PANEL_TABS.slice(1)];
+}
 
 const ZOOM_STEPS = [1, 1.5, 2, 3, 4, 6, 8];
 const MIN_ZOOM = 1;
@@ -154,6 +165,11 @@ export function ViewerModal({
   const [panelOpen, setPanelOpen] = useState(readPanelPreference);
   const [chromeHidden, setChromeHidden] = useState(false);
   const [tab, setTab] = useState<PanelTab>('details');
+  const panelTabs = panelTabsFor(file.media_type);
+  // Navigating to a sibling file (← →) keeps the panel open and remembers
+  // the chosen tab, but the Book tab only exists for documents — fall back
+  // to Details for render rather than showing a tab that isn't there.
+  const activeTab = panelTabs.some((t) => t.id === tab) ? tab : 'details';
   // The original image's load state, tagged with the file it describes so
   // navigating never shows the previous photo's state.
   const [original, setOriginal] = useState<{ id: string; state: 'loaded' | 'failed' } | null>(null);
@@ -952,25 +968,25 @@ export function ViewerModal({
             </header>
 
             <div className="viewer-tabs" role="tablist" aria-label="File information">
-              {PANEL_TABS.map((t) => (
+              {panelTabs.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   role="tab"
                   id={`viewer-tab-${t.id}`}
-                  aria-selected={tab === t.id}
+                  aria-selected={activeTab === t.id}
                   aria-controls="viewer-tabpanel"
-                  tabIndex={tab === t.id ? 0 : -1}
-                  className={tab === t.id ? 'viewer-tab active' : 'viewer-tab'}
+                  tabIndex={activeTab === t.id ? 0 : -1}
+                  className={activeTab === t.id ? 'viewer-tab active' : 'viewer-tab'}
                   onClick={() => setTab(t.id)}
                   onKeyDown={(event) => {
                     // Arrow keys move between tabs (the tablist pattern), not
                     // between photos.
                     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
                     event.preventDefault();
-                    const i = PANEL_TABS.findIndex((x) => x.id === tab);
+                    const i = panelTabs.findIndex((x) => x.id === activeTab);
                     const step = event.key === 'ArrowRight' ? 1 : -1;
-                    const next = PANEL_TABS[(i + step + PANEL_TABS.length) % PANEL_TABS.length]!;
+                    const next = panelTabs[(i + step + panelTabs.length) % panelTabs.length]!;
                     setTab(next.id);
                     document.getElementById(`viewer-tab-${next.id}`)?.focus();
                   }}
@@ -985,14 +1001,15 @@ export function ViewerModal({
               className="viewer-tabpanel"
               role="tabpanel"
               id="viewer-tabpanel"
-              aria-labelledby={`viewer-tab-${tab}`}
+              aria-labelledby={`viewer-tab-${activeTab}`}
               tabIndex={0}
             >
-              {tab === 'details' && <DetailsPanel key={file.id} file={file} />}
-              {tab === 'tags' && (
+              {activeTab === 'details' && <DetailsPanel key={file.id} file={file} />}
+              {activeTab === 'book' && <BookPanel key={file.id} libraryId={libraryId} file={file} />}
+              {activeTab === 'tags' && (
                 <TagsPanel key={file.id} libraryId={libraryId} file={file} onChanged={onChanged} />
               )}
-              {tab === 'share' && <SharePanel key={file.id} libraryId={libraryId} file={file} />}
+              {activeTab === 'share' && <SharePanel key={file.id} libraryId={libraryId} file={file} />}
             </div>
           </aside>
         )}

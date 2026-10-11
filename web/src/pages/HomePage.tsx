@@ -14,7 +14,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/authContext';
 import { notifyLibraryChanged } from '../api/libraryEvents';
 import { useLibraryResource } from '../api/resources';
-import { listFiles } from '../api/queries';
+import { listFiles, listRecentlyOpened } from '../api/queries';
 import type { FileSummary, Library } from '../api/types';
 import { useFileOperations } from '../components/FileOperations';
 import { LibraryGatePage } from '../components/LibraryGatePage';
@@ -69,6 +69,7 @@ function cleanRows(total: number, columns: number, rows = HOME_ROWS): number {
 
 interface HomeData {
   recent: FileSummary[];
+  recentlyOpened: FileSummary[];
 }
 
 /** "Good evening, name" in the brand face, the same in every state. */
@@ -100,9 +101,9 @@ function Home({ library }: { library: Library }) {
   const offline = library.status === 'offline';
 
   const home = useLibraryResource<HomeData>(
-    useCallback(
-      async (id: string) => ({
-        recent: await listFiles(id, {
+    useCallback(async (id: string) => {
+      const [recent, recentlyOpened] = await Promise.all([
+        listFiles(id, {
           recursive: true,
           sort: 'mod_time',
           order: 'desc',
@@ -110,9 +111,12 @@ function Home({ library }: { library: Library }) {
         })
           .then((r) => r.files ?? [])
           .catch(() => [] as FileSummary[]),
-      }),
-      [],
-    ),
+        listRecentlyOpened(id, RECENT_LIMIT)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+      ]);
+      return { recent, recentlyOpened };
+    }, []),
   );
 
   const ops = useFileOperations(libraryId, home.reload);
@@ -145,6 +149,13 @@ function Home({ library }: { library: Library }) {
   const [recentRef, recentWidth] = useWidth();
   const photoColumns = gridMetrics(recentWidth, PHOTO_GAP).columns;
   const recent = data ? data.recent.slice(0, cleanRows(data.recent.length, photoColumns)) : [];
+
+  const [openedRef, openedWidth] = useWidth();
+  const openedColumns = gridMetrics(openedWidth, PHOTO_GAP).columns;
+  const recentlyOpened = data
+    ? data.recentlyOpened.slice(0, cleanRows(data.recentlyOpened.length, openedColumns))
+    : [];
+
   const name = user?.username;
 
   const nothingYet = data !== null && !scanning && data.recent.length === 0;
@@ -191,6 +202,25 @@ function Home({ library }: { library: Library }) {
             keep using Orchard while it works.
           </p>
         </EmptyState>
+      )}
+
+      {data && data.recentlyOpened.length > 0 && (
+        <section className="section" aria-labelledby="home-opened-title">
+          <div className="section-head">
+            <h2 id="home-opened-title" className="section-title">
+              Recently opened
+            </h2>
+          </div>
+          <div data-testid="home-recently-opened" ref={openedRef}>
+            <MediaGrid
+              libraryId={libraryId}
+              files={recentlyOpened}
+              onOpen={ops.openViewer}
+              label="Recently opened files"
+              testId="home-recently-opened-grid"
+            />
+          </div>
+        </section>
       )}
 
       {data && data.recent.length > 0 && (

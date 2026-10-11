@@ -202,6 +202,48 @@ export interface FileNote {
   updated_at?: string;
 }
 
+/** Book-style metadata for a document file, library-wide (not per-user). */
+export interface BookMetadata {
+  file_id: string;
+  title: string;
+  author: string;
+  publisher: string;
+  year: string;
+  isbn: string;
+  description: string;
+  cover_url?: string;
+  user_edited: boolean;
+  extracted_at?: string;
+}
+
+export interface BookMetadataEnvelope {
+  book: BookMetadata;
+}
+
+/** A user's progress through a book. null means no status has been set. */
+export type ReadingStatus = 'want_to_read' | 'reading' | 'completed' | 'on_hold';
+
+export const READING_STATUS_LABEL: Record<ReadingStatus, string> = {
+  want_to_read: 'Want to read',
+  reading: 'Reading',
+  completed: 'Completed',
+  on_hold: 'On hold',
+};
+
+export interface ReadingStatusResponse {
+  status: ReadingStatus | null;
+}
+
+/** One set of present files that share a content hash. */
+export interface DuplicateGroup {
+  content_hash: string;
+  files: FileSummary[];
+}
+
+export interface DuplicateGroupListResponse {
+  groups: DuplicateGroup[];
+}
+
 /* ------------------------------------------------------------------ *
  * Authorization
  * ------------------------------------------------------------------ */

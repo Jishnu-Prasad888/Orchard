@@ -19,6 +19,7 @@ import TrashPage from './pages/TrashPage';
 
 /* Pages most visits never touch load on demand, keeping the first load small. */
 const BackupsPage = lazyPage(() => import('./pages/BackupsPage'));
+const DuplicatesPage = lazyPage(() => import('./pages/DuplicatesPage'));
 const LibrariesPage = lazyPage(() => import('./pages/LibrariesPage'));
 const PermissionsPage = lazyPage(() => import('./pages/PermissionsPage'));
 const SharingPage = lazyPage(() => import('./pages/SharingPage'));
@@ -68,6 +69,7 @@ export default function App() {
                   <Route path="/favorites" element={<FavoritesPage />} />
                   <Route path="/trash" element={<TrashPage />} />
                   <Route path="/shared" element={<SharingPage />} />
+                  <Route path="/duplicates" element={<DuplicatesPage />} />
 
                   <Route path="/libraries" element={<LibrariesPage />} />
                   <Route path="/permissions" element={<PermissionsPage />} />

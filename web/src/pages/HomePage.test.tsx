@@ -6,6 +6,7 @@ import HomePage from './HomePage';
 
 interface Options {
   recent?: ReturnType<typeof fileFixture>[];
+  recentlyOpened?: ReturnType<typeof fileFixture>[];
 }
 
 function setup(options: Options = {}) {
@@ -13,7 +14,12 @@ function setup(options: Options = {}) {
     fileFixture({ id: 'f1' }),
     fileFixture({ id: 'f2', name: 'IMG_0002.png' }),
   ];
+  const recentlyOpened = options.recentlyOpened ?? [];
   const fn = mockApi([
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/files/recently-opened')
+        ? json({ files: recentlyOpened, total: recentlyOpened.length })
+        : undefined,
     (url) =>
       url.includes('/api/v1/libraries/lib1/files')
         ? json({ files: recent, total: recent.length })
@@ -47,6 +53,20 @@ describe('HomePage', () => {
     const recent = await screen.findByTestId('home-recent');
     expect(within(recent).getAllByRole('button', { name: /IMG_000/ })).toHaveLength(2);
     expect(screen.getByRole('link', { name: /All files/ })).toHaveAttribute('href', '/files');
+  });
+
+  it('shows a recently-opened section when the user has opened a book', async () => {
+    setup({ recentlyOpened: [fileFixture({ id: 'f3', name: 'novel.epub', media_type: 'document' })] });
+
+    const opened = await screen.findByTestId('home-recently-opened');
+    expect(within(opened).getByRole('button', { name: 'novel.epub' })).toBeInTheDocument();
+  });
+
+  it('omits the recently-opened section when nothing has been opened', async () => {
+    setup();
+
+    await screen.findByTestId('home-recent');
+    expect(screen.queryByTestId('home-recently-opened')).not.toBeInTheDocument();
   });
 
   it('shows an inviting empty state when nothing has been indexed yet', async () => {

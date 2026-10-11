@@ -38,10 +38,10 @@ const SETTING_ENTRIES: SettingEntry[] = [
     words: 'dark light system appearance colour color mode',
   },
   {
-    label: 'Tags, sharing and trash',
+    label: 'Tags, sharing, trash and duplicates',
     section: 'library',
     hint: 'Library',
-    words: 'library tags sharing shared trash deleted',
+    words: 'library tags sharing shared trash deleted duplicates duplicate copies',
   },
   {
     label: 'Accounts and users',
