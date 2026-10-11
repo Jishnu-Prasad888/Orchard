@@ -1,18 +1,22 @@
 import { createContext, useContext } from 'react';
 
-import type { User } from '../api/types';
+import type { PendingSignup, User } from '../api/types';
 
 export interface AuthState {
   /** True until the first /auth/status response has been handled. */
   loading: boolean;
   /** True when the server has no accounts yet and needs the first admin. */
   bootstrapRequired: boolean;
+  /** True when an administrator has turned on public account requests. */
+  signupRequestsEnabled: boolean;
   /** The signed-in principal, or null when anonymous. */
   user: User | null;
   /** Sign in with an existing account. Resolves to the user. */
   login: (username: string, password: string) => Promise<User>;
   /** Create the very first administrator account. Resolves to the user. */
   bootstrap: (username: string, password: string) => Promise<User>;
+  /** Submit a public "request an account" signup. Resolves to the request. */
+  requestSignup: (username: string, password: string) => Promise<PendingSignup>;
   /** Revoke the current session and clear the session cookie. */
   logout: () => Promise<void>;
   /** Re-read the authentication state (after external changes). */

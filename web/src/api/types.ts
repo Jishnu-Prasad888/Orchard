@@ -11,6 +11,7 @@ export interface User {
   id: string;
   username: string;
   role: UserRole;
+  enabled: boolean;
   created_at: string;
 }
 
@@ -22,10 +23,22 @@ export interface UserListResponse {
   users: User[];
 }
 
+/** A public "request an account" submission awaiting admin approval or denial. */
+export interface PendingSignup {
+  id: string;
+  username: string;
+  requested_at: string;
+}
+
+export interface PendingSignupListResponse {
+  requests: PendingSignup[];
+}
+
 /** GET /auth/status — public bootstrap + authentication state. */
 export interface AuthStatusResponse {
   bootstrap_required: boolean;
   authenticated: boolean;
+  signup_requests_enabled: boolean;
   user?: User;
 }
 

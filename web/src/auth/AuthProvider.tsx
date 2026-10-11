@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { apiGet, apiPost } from '../api/client';
-import type { AuthStatusResponse, User } from '../api/types';
+import type { AuthStatusResponse, PendingSignup, User } from '../api/types';
 import { type AuthState, AuthContext } from './authContext';
 
 /**
@@ -13,6 +13,7 @@ import { type AuthState, AuthContext } from './authContext';
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [bootstrapRequired, setBootstrapRequired] = useState(false);
+  const [signupRequestsEnabled, setSignupRequestsEnabled] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       .then((resp) => {
         if (cancelled) return;
         setBootstrapRequired(Boolean(resp.bootstrap_required));
+        setSignupRequestsEnabled(Boolean(resp.signup_requests_enabled));
         setUser(resp.authenticated ? (resp.user ?? null) : null);
       })
       .catch(() => {
@@ -28,6 +30,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         // page surfaces the real connection problem.
         if (cancelled) return;
         setBootstrapRequired(false);
+        setSignupRequestsEnabled(false);
         setUser(null);
       })
       .finally(() => {
@@ -52,6 +55,14 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return resp.user;
   }, []);
 
+  const requestSignup = useCallback(async (username: string, password: string) => {
+    const resp = await apiPost<{ request: PendingSignup }>('/auth/signup-requests', {
+      username,
+      password,
+    });
+    return resp.request;
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiPost('/auth/logout');
@@ -66,6 +77,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const resp = await apiGet<AuthStatusResponse>('/auth/status');
       setBootstrapRequired(Boolean(resp.bootstrap_required));
+      setSignupRequestsEnabled(Boolean(resp.signup_requests_enabled));
       setUser(resp.authenticated ? (resp.user ?? null) : null);
     } catch {
       setUser(null);
@@ -73,8 +85,28 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ loading, bootstrapRequired, user, login, bootstrap, logout, refresh }),
-    [loading, bootstrapRequired, user, login, bootstrap, logout, refresh],
+    () => ({
+      loading,
+      bootstrapRequired,
+      signupRequestsEnabled,
+      user,
+      login,
+      bootstrap,
+      requestSignup,
+      logout,
+      refresh,
+    }),
+    [
+      loading,
+      bootstrapRequired,
+      signupRequestsEnabled,
+      user,
+      login,
+      bootstrap,
+      requestSignup,
+      logout,
+      refresh,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

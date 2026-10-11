@@ -31,6 +31,7 @@ function setup(overrides: RouteHandler[] = [], options = {}) {
                   id: 'u3',
                   username: 'bob',
                   role: 'user',
+                  enabled: true,
                   created_at: '2026-03-03T00:00:00Z',
                 },
               },
@@ -38,7 +39,10 @@ function setup(overrides: RouteHandler[] = [], options = {}) {
             )
           : undefined,
       (url) => (url.includes('/sessions/revoke') ? noContent() : undefined),
+      (url, init) =>
+        init?.method === 'DELETE' && url.includes('/api/v1/users/') ? noContent() : undefined,
       (url) => (url.endsWith('/api/v1/users') ? json({ users: accounts }) : undefined),
+      (url) => (url.endsWith('/api/v1/signup-requests') ? json({ requests: [] }) : undefined),
     ],
     options,
   );
@@ -181,5 +185,138 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('button', { name: 'Create account' })).not.toBeInTheDocument();
     // A member must not fire a request that can only come back 403.
     expect(called(fn, 'GET', '/api/v1/users')).toBe(false);
+  });
+
+  it('changes a user role from the account row', async () => {
+    const fn = setup([
+      (url, init) =>
+        init?.method === 'PATCH' && url.endsWith('/api/v1/users/u2')
+          ? json({ user: { ...member, role: 'admin' } })
+          : undefined,
+    ]);
+
+    await screen.findByTestId('settings-user-list');
+    const aliceRow = screen.getByText('alice').closest('li') as HTMLElement;
+    fireEvent.change(within(aliceRow).getByLabelText('Role for alice'), {
+      target: { value: 'admin' },
+    });
+
+    await waitFor(() => {
+      expect(bodyOf(fn, 'PATCH', '/api/v1/users/u2')).toEqual({ role: 'admin' });
+    });
+  });
+
+  it('disables and re-enables a user account from its row', async () => {
+    const fn = setup([
+      (url, init) =>
+        init?.method === 'PATCH' && url.endsWith('/api/v1/users/u2')
+          ? json({ user: { ...member, enabled: false } })
+          : undefined,
+    ]);
+
+    await screen.findByTestId('settings-user-list');
+    const aliceRow = screen.getByText('alice').closest('li') as HTMLElement;
+    fireEvent.click(within(aliceRow).getByRole('button', { name: 'Disable' }));
+
+    await waitFor(() => {
+      expect(bodyOf(fn, 'PATCH', '/api/v1/users/u2')).toEqual({ enabled: false });
+    });
+  });
+
+  it('shows a conflict error when disabling the last administrator', async () => {
+    const fn = setup([
+      (url, init) =>
+        init?.method === 'PATCH' && url.endsWith('/api/v1/users/u1')
+          ? json(
+              {
+                error: {
+                  code: 'CONFLICT',
+                  message: 'This is the only remaining administrator.',
+                  request_id: 'r1',
+                },
+              },
+              409,
+            )
+          : undefined,
+    ]);
+
+    const list = await screen.findByTestId('settings-user-list');
+    const adminRow = within(list).getByText('jishnu').closest('li') as HTMLElement;
+    fireEvent.click(within(adminRow).getByRole('button', { name: 'Disable' }));
+
+    expect(await screen.findByText('This is the only remaining administrator.')).toBeInTheDocument();
+    expect(called(fn, 'PATCH', '/api/v1/users/u1')).toBe(true);
+  });
+
+  it('deletes a user account after confirmation', async () => {
+    const fn = setup();
+
+    await screen.findByTestId('settings-user-list');
+    const aliceRow = screen.getByText('alice').closest('li') as HTMLElement;
+    fireEvent.click(within(aliceRow).getByRole('button', { name: 'Delete' }));
+
+    const dialog = await screen.findByTestId('delete-account-dialog');
+    expect(called(fn, 'DELETE', '/api/v1/users/u2')).toBe(false);
+    fireEvent.click(within(dialog as HTMLElement).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(called(fn, 'DELETE', '/api/v1/users/u2')).toBe(true);
+    });
+  });
+
+  it('lists pending signup requests and approves one', async () => {
+    const pendingRequest = { id: 'p1', username: 'newperson', requested_at: '2026-04-01T00:00:00Z' };
+    const fn = setup([
+      (url) =>
+        url.endsWith('/api/v1/signup-requests') ? json({ requests: [pendingRequest] }) : undefined,
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/signup-requests/p1/approve')
+          ? json({ user: { id: 'u4', username: 'newperson', role: 'user', enabled: true, created_at: '2026-04-01T00:00:00Z' } }, 201)
+          : undefined,
+    ]);
+
+    const list = await screen.findByTestId('settings-pending-list');
+    expect(within(list).getByText('newperson')).toBeInTheDocument();
+
+    fireEvent.click(within(list).getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => {
+      expect(bodyOf(fn, 'POST', '/api/v1/signup-requests/p1/approve')).toEqual({ role: 'user' });
+    });
+  });
+
+  it('denies a pending signup request', async () => {
+    const pendingRequest = { id: 'p1', username: 'newperson', requested_at: '2026-04-01T00:00:00Z' };
+    const fn = setup([
+      (url) =>
+        url.endsWith('/api/v1/signup-requests') ? json({ requests: [pendingRequest] }) : undefined,
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/signup-requests/p1/deny')
+          ? noContent()
+          : undefined,
+    ]);
+
+    const list = await screen.findByTestId('settings-pending-list');
+    fireEvent.click(within(list).getByRole('button', { name: 'Deny' }));
+
+    await waitFor(() => {
+      expect(called(fn, 'POST', '/api/v1/signup-requests/p1/deny')).toBe(true);
+    });
+  });
+
+  it('toggles whether account requests are accepted', async () => {
+    const fn = setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/settings/signup-requests')
+          ? json({ enabled: true })
+          : undefined,
+    ]);
+
+    await screen.findByTestId('settings-user-list');
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    await waitFor(() => {
+      expect(bodyOf(fn, 'PUT', '/api/v1/settings/signup-requests')).toEqual({ enabled: true });
+    });
   });
 });

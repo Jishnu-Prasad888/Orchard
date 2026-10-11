@@ -28,6 +28,10 @@ interface FetchOptions {
   authenticated?: boolean;
   /** Server-side rejection of the bootstrap attempt. */
   bootstrapError?: { status: number; message: string };
+  /** An administrator has turned on public account requests. */
+  signupRequestsEnabled?: boolean;
+  /** Server-side rejection of the signup-request attempt. */
+  signupError?: { status: number; message: string };
 }
 
 function mockFetch(options: FetchOptions = {}) {
@@ -40,6 +44,7 @@ function mockFetch(options: FetchOptions = {}) {
       return json({
         bootstrap_required: bootstrapRequired,
         authenticated: options.authenticated ?? false,
+        signup_requests_enabled: options.signupRequestsEnabled ?? false,
         ...(options.authenticated ? { user: admin } : {}),
       });
     }
@@ -58,6 +63,24 @@ function mockFetch(options: FetchOptions = {}) {
         );
       }
       return json({ user: admin }, 201);
+    }
+    if (url.endsWith('/api/v1/auth/signup-requests')) {
+      if (options.signupError) {
+        return json(
+          {
+            error: {
+              code: 'CONFLICT',
+              message: options.signupError.message,
+              request_id: 'r1',
+            },
+          },
+          options.signupError.status,
+        );
+      }
+      return json(
+        { request: { id: 'p1', username: 'newperson', requested_at: '2026-01-01T00:00:00Z' } },
+        201,
+      );
     }
     void init;
     return json({ error: { code: 'NOT_FOUND', message: 'missing', request_id: '1' } }, 404);
@@ -201,5 +224,70 @@ describe('SetupPage', () => {
     await waitFor(() => {
       expect(screen.getByText('app home')).toBeInTheDocument();
     });
+  });
+
+  it('offers a request-access form when an administrator has turned requests on', async () => {
+    mockFetch({ signupRequestsEnabled: true });
+    setup();
+
+    expect(await screen.findByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'This server is already set up' })).not
+      .toBeInTheDocument();
+  });
+
+  it('submits a signup request and shows the pending confirmation', async () => {
+    const fn = mockFetch({ signupRequestsEnabled: true });
+    setup();
+
+    await screen.findByRole('heading', { name: 'Request an account' });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'newperson' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct-horse' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'correct-horse' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Request account' }));
+
+    expect(await screen.findByRole('heading', { name: 'Request sent' })).toBeInTheDocument();
+    expect(screen.getByText(/newperson/)).toBeInTheDocument();
+    const call = fn.mock.calls.find(([url]) => String(url).endsWith('/auth/signup-requests'));
+    expect(call?.[1]?.body).toBe(
+      JSON.stringify({ username: 'newperson', password: 'correct-horse' }),
+    );
+  });
+
+  it('validates the request-access form before calling the API', async () => {
+    const fn = mockFetch({ signupRequestsEnabled: true });
+    setup();
+
+    await screen.findByRole('heading', { name: 'Request an account' });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'newperson' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'short' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Request account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Use a password of at least 8 characters.',
+    );
+    expect(fn.mock.calls.some(([url]) => String(url).endsWith('/auth/signup-requests'))).toBe(
+      false,
+    );
+  });
+
+  it('shows a conflict from the server when the username is already taken or pending', async () => {
+    mockFetch({
+      signupRequestsEnabled: true,
+      signupError: { status: 409, message: 'That username is already taken.' },
+    });
+    setup();
+
+    await screen.findByRole('heading', { name: 'Request an account' });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct-horse' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'correct-horse' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Request account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That username is already taken.');
   });
 });
