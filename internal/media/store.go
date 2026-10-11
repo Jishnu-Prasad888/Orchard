@@ -396,6 +396,60 @@ func (s *FileStore) CountCollections(ctx context.Context, userID string) (Collec
 	return c, err
 }
 
+// DuplicateGroup is every present file sharing one content hash.
+type DuplicateGroup struct {
+	ContentHash string  `json:"content_hash"`
+	Files       []*File `json:"files"`
+}
+
+// ListDuplicateGroups finds present files that share a content hash with at
+// least one other present file — exact-content duplicates, typically from
+// the same book imported twice under different names. The indexer already
+// computes content_hash for every file, so this is purely a query: no new
+// hashing work.
+func (s *FileStore) ListDuplicateGroups(ctx context.Context) ([]DuplicateGroup, error) {
+	hashRows, err := s.db.QueryContext(ctx, `
+		SELECT content_hash FROM indexed_files
+		WHERE status = 'present' AND content_hash IS NOT NULL
+		GROUP BY content_hash HAVING COUNT(*) > 1`)
+	if err != nil {
+		return nil, fmt.Errorf("list duplicate hashes: %w", err)
+	}
+	var hashes []string
+	for hashRows.Next() {
+		var h string
+		if err := hashRows.Scan(&h); err != nil {
+			_ = hashRows.Close()
+			return nil, fmt.Errorf("scan duplicate hash: %w", err)
+		}
+		hashes = append(hashes, h)
+	}
+	if err := hashRows.Err(); err != nil {
+		_ = hashRows.Close()
+		return nil, err
+	}
+	if err := hashRows.Close(); err != nil {
+		return nil, err
+	}
+
+	groups := make([]DuplicateGroup, 0, len(hashes))
+	for _, hash := range hashes {
+		rows, err := s.db.QueryContext(ctx,
+			`SELECT id, rel_path, size_bytes, mod_time, content_hash, media_type, status, first_seen_at, last_seen_at
+			 FROM indexed_files WHERE status = 'present' AND content_hash = ?
+			 ORDER BY first_seen_at`, hash)
+		if err != nil {
+			return nil, fmt.Errorf("list duplicate group %s: %w", hash, err)
+		}
+		files, err := s.scanFiles(rows)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, DuplicateGroup{ContentHash: hash, Files: files})
+	}
+	return groups, nil
+}
+
 // ListFolders returns direct children of a parent folder path.
 func (s *FileStore) ListFolders(ctx context.Context, parentPath string) ([]*Folder, error) {
 	var rows *sql.Rows

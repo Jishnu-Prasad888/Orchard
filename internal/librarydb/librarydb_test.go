@@ -42,6 +42,85 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 	).Scan(&name); err != nil {
 		t.Fatalf("book_metadata table missing: %v", err)
 	}
+
+	// reading_status and file_opens tables must exist (Phase 1: reading
+	// status and recently-opened tracking).
+	for _, table := range []string{"reading_status", "file_opens"} {
+		q := `SELECT name FROM sqlite_master WHERE type='table' AND name='` + table + `'`
+		if err := pool.QueryRow(q).Scan(&name); err != nil {
+			t.Errorf("table %s missing: %v", table, err)
+		}
+	}
+}
+
+// TestOpenAddsUserEditedToExistingBookMetadata proves a library database
+// created before book_metadata.user_edited existed is brought forward on
+// open, so the book-details editing UI can rely on the column being there.
+func TestOpenAddsUserEditedToExistingBookMetadata(t *testing.T) {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	old, err := sql.Open("sqlite", filepath.Join(orchardDir, "library.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = old.Exec(`
+		CREATE TABLE indexed_files (
+			id            TEXT PRIMARY KEY,
+			rel_path      TEXT NOT NULL UNIQUE,
+			size_bytes    INTEGER NOT NULL,
+			mod_time      TEXT NOT NULL,
+			content_hash  TEXT,
+			status        TEXT NOT NULL DEFAULT 'present',
+			first_seen_at TEXT NOT NULL,
+			last_seen_at  TEXT NOT NULL,
+			indexed_at    TEXT NOT NULL
+		);
+		CREATE TABLE book_metadata (
+			file_id      TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+			title        TEXT NOT NULL DEFAULT '',
+			author       TEXT NOT NULL DEFAULT '',
+			publisher    TEXT NOT NULL DEFAULT '',
+			year         TEXT NOT NULL DEFAULT '',
+			isbn         TEXT NOT NULL DEFAULT '',
+			description  TEXT NOT NULL DEFAULT '',
+			cover_path   TEXT NOT NULL DEFAULT '',
+			text_path    TEXT NOT NULL DEFAULT '',
+			extracted_at TEXT NOT NULL
+		);
+		INSERT INTO indexed_files VALUES
+			('f1', 'book.epub', 10, '2024-01-01T00:00:00Z', NULL, 'present',
+			 '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+		INSERT INTO book_metadata (file_id, title, extracted_at)
+			VALUES ('f1', 'Old Title', '2024-01-01T00:00:00Z');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("Open on a pre-existing library db: %v", err)
+	}
+	defer func() { _ = pool.Close() }()
+
+	var userEdited int
+	var title string
+	if err := pool.QueryRow(
+		`SELECT user_edited, title FROM book_metadata WHERE file_id = 'f1'`,
+	).Scan(&userEdited, &title); err != nil {
+		t.Fatalf("book_metadata.user_edited missing after migration: %v", err)
+	}
+	if userEdited != 0 {
+		t.Errorf("user_edited = %d, want 0 for a pre-existing extraction-only row", userEdited)
+	}
+	if title != "Old Title" {
+		t.Errorf("title = %q, want %q (existing data must survive the column add)", title, "Old Title")
+	}
 }
 
 // TestOpenAddsMediaTypeToExistingLibrary proves a library database created

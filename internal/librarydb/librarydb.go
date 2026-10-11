@@ -109,7 +109,13 @@ func migrate(db *sql.DB) error {
 	if err := addIndexedFileMediaType(db); err != nil {
 		return err
 	}
-	return addFavoriteNoteUserScoping(db)
+	if err := addFavoriteNoteUserScoping(db); err != nil {
+		return err
+	}
+	if err := addBookMetadataUserEdited(db); err != nil {
+		return err
+	}
+	return addReadingAndOpensIndexes(db)
 }
 
 // addIndexedFileMediaType backfills indexed_files.media_type on a library
@@ -230,6 +236,41 @@ func addFavoriteNoteUserScoping(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS file_notes_file_idx ON file_notes (file_id)`); err != nil {
 		return err
+	}
+	return nil
+}
+
+// addBookMetadataUserEdited backfills book_metadata.user_edited on a
+// library database created before that column existed. Every existing row
+// predates the book-details editing UI, so it defaults to 0 (extraction may
+// keep updating it) exactly as ALTER TABLE's DEFAULT already gives it.
+func addBookMetadataUserEdited(db *sql.DB) error {
+	has, err := columnExists(db, "book_metadata", "user_edited")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE book_metadata ADD COLUMN user_edited INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// addReadingAndOpensIndexes creates the lookup indexes for reading_status
+// and file_opens. Both tables are new (created by the schema constant on
+// every install), so this never has a missing-table edge case to handle —
+// it is kept as its own idempotent step only to match the favorites/
+// file_notes pattern above of separating index creation from table
+// creation.
+func addReadingAndOpensIndexes(db *sql.DB) error {
+	stmts := []string{
+		`CREATE INDEX IF NOT EXISTS reading_status_file_idx ON reading_status (file_id)`,
+		`CREATE INDEX IF NOT EXISTS file_opens_user_time_idx ON file_opens (user_id, opened_at)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -409,6 +450,9 @@ CREATE TABLE IF NOT EXISTS file_notes (
 -- internal/bookmeta's MediaProcessor as documents are indexed. It is
 -- library-wide, not per-user: this is bibliographic data about the file
 -- itself (like EXIF for a photo), not a personal annotation.
+-- user_edited marks a row a person has hand-edited (title, cover, etc. from
+-- the book details panel): once set, a later re-extraction (the file was
+-- replaced on disk) must never silently overwrite what they typed.
 CREATE TABLE IF NOT EXISTS book_metadata (
 	file_id      TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
 	title        TEXT NOT NULL DEFAULT '',
@@ -419,6 +463,28 @@ CREATE TABLE IF NOT EXISTS book_metadata (
 	description  TEXT NOT NULL DEFAULT '',
 	cover_path   TEXT NOT NULL DEFAULT '',
 	text_path    TEXT NOT NULL DEFAULT '',
+	user_edited  INTEGER NOT NULL DEFAULT 0,
 	extracted_at TEXT NOT NULL
+);
+
+-- reading_status is a user's progress through a book (want to read /
+-- reading / completed / on hold). Per-user, following the favorites/
+-- file_notes pattern: no row means no status set.
+CREATE TABLE IF NOT EXISTS reading_status (
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	status     TEXT NOT NULL CHECK (status IN ('want_to_read', 'reading', 'completed', 'on_hold')),
+	updated_at TEXT NOT NULL,
+	PRIMARY KEY (user_id, file_id)
+);
+
+-- file_opens records, per user, the last time a file was opened in the
+-- viewer. One row per (user, file) — this is "last opened", not a full
+-- history log — so "recently opened" is a single indexed query.
+CREATE TABLE IF NOT EXISTS file_opens (
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	opened_at  TEXT NOT NULL,
+	PRIMARY KEY (user_id, file_id)
 );
 `

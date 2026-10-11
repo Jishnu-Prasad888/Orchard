@@ -669,3 +669,64 @@ func TestCountsByTypeAndCollections(t *testing.T) {
 		t.Fatalf("collections = %+v, %v", c, err)
 	}
 }
+
+// TestListDuplicateGroups seeds files directly (content_hash is set by the
+// indexer's scanner, not media.FileStore, so this updates it with raw SQL
+// rather than threading a new FileStore method through for one test).
+func TestListDuplicateGroups(t *testing.T) {
+	store, root := newTestStore(t)
+	ctx := context.Background()
+
+	for _, p := range []string{"a.epub", "a-copy.epub", "b.epub", "c.epub"} {
+		writeFile(t, filepath.Join(root, p), "content of "+p)
+		if err := store.UpsertFromPath(ctx, p, 1, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db, err := librarydb.Open(filepath.Join(root, ".orchard"))
+	if err != nil {
+		t.Fatalf("reopen library db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	setHash := func(relPath, hash string) {
+		if _, err := db.Exec(`UPDATE indexed_files SET content_hash = ? WHERE rel_path = ?`, hash, relPath); err != nil {
+			t.Fatalf("set hash for %s: %v", relPath, err)
+		}
+	}
+	setHash("a.epub", "hash-a")
+	setHash("a-copy.epub", "hash-a")
+	setHash("b.epub", "hash-b")
+	setHash("c.epub", "hash-c")
+
+	groups, err := store.ListDuplicateGroups(ctx)
+	if err != nil {
+		t.Fatalf("ListDuplicateGroups: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("groups = %+v, want 1 group", groups)
+	}
+	if groups[0].ContentHash != "hash-a" {
+		t.Errorf("ContentHash = %q, want %q", groups[0].ContentHash, "hash-a")
+	}
+	if len(groups[0].Files) != 2 {
+		t.Fatalf("group files = %+v, want 2", groups[0].Files)
+	}
+	names := map[string]bool{}
+	for _, f := range groups[0].Files {
+		names[f.Name] = true
+	}
+	if !names["a.epub"] || !names["a-copy.epub"] {
+		t.Errorf("group files = %+v, want a.epub and a-copy.epub", groups[0].Files)
+	}
+}
+
+func TestListDuplicateGroups_None(t *testing.T) {
+	store, _ := newTestStore(t)
+	groups, err := store.ListDuplicateGroups(context.Background())
+	if err != nil {
+		t.Fatalf("ListDuplicateGroups: %v", err)
+	}
+	if len(groups) != 0 {
+		t.Errorf("groups = %+v, want none", groups)
+	}
+}
