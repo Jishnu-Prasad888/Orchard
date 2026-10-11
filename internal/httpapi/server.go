@@ -14,6 +14,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
 	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
+	"github.com/Jishnu-Prasad888/Orchard/internal/usersettings"
 )
 
 // Server is the Orchard HTTP application. It is a small composition of the
@@ -34,6 +35,7 @@ type Server struct {
 	maxUploadBytes int64
 	metrics        *metrics.Registry
 	settings       *serversettings.Store
+	userSettings   *usersettings.Store
 	// ready gates the /ready endpoint: true once startup completes, flipped
 	// false by MarkNotReady before graceful shutdown so proxies drain.
 	ready atomic.Bool
@@ -100,6 +102,7 @@ func New(deps Dependencies) *Server {
 	}
 	if deps.DB != nil {
 		s.settings = serversettings.NewStore(deps.DB)
+		s.userSettings = usersettings.NewStore(deps.DB)
 	}
 	s.ready.Store(true)
 	return s
@@ -152,6 +155,11 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("PUT /api/v1/settings/signup-requests",
 		s.withAuth(allowAdmin, s.handleSetSignupRequestsEnabled))
+
+	// Reader preferences (font, spacing, theme) follow the user across
+	// every library and every book — server-level, not per-library.
+	mux.Handle("GET /api/v1/settings/reader", s.withAuth(allowAny, s.handleGetReaderPreferences))
+	mux.Handle("PUT /api/v1/settings/reader", s.withAuth(allowAny, s.handleSetReaderPreferences))
 
 	// Library surface. Listing is open to any session and filtered by the
 	// caller's read capability, so a member can find the libraries it was
@@ -211,6 +219,12 @@ func (s *Server) Handler() http.Handler {
 			s.withAuth(allowAny, s.handleSetReadingStatus))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/reading-status",
 			s.withAuth(allowAny, s.handleClearReadingStatus))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/progress",
+			s.withAuth(allowAny, s.handleGetReadingProgress))
+		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/progress",
+			s.withAuth(allowAny, s.handleSetReadingProgress))
+		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/progress",
+			s.withAuth(allowAny, s.handleClearReadingProgress))
 
 		// Recently opened (per-user "last opened" tracking) and duplicate
 		// detection. The literal "recently-opened"/"duplicates" segments take

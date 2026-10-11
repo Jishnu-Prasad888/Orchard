@@ -256,16 +256,17 @@ func addBookMetadataUserEdited(db *sql.DB) error {
 	return err
 }
 
-// addReadingAndOpensIndexes creates the lookup indexes for reading_status
-// and file_opens. Both tables are new (created by the schema constant on
-// every install), so this never has a missing-table edge case to handle —
-// it is kept as its own idempotent step only to match the favorites/
-// file_notes pattern above of separating index creation from table
-// creation.
+// addReadingAndOpensIndexes creates the lookup indexes for reading_status,
+// file_opens, and reading_progress. All three are new (created by the
+// schema constant on every install), so this never has a missing-table
+// edge case to handle — it is kept as its own idempotent step only to
+// match the favorites/file_notes pattern above of separating index
+// creation from table creation.
 func addReadingAndOpensIndexes(db *sql.DB) error {
 	stmts := []string{
 		`CREATE INDEX IF NOT EXISTS reading_status_file_idx ON reading_status (file_id)`,
 		`CREATE INDEX IF NOT EXISTS file_opens_user_time_idx ON file_opens (user_id, opened_at)`,
+		`CREATE INDEX IF NOT EXISTS reading_progress_file_idx ON reading_progress (file_id)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
@@ -485,6 +486,20 @@ CREATE TABLE IF NOT EXISTS file_opens (
 	user_id    TEXT NOT NULL,
 	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
 	opened_at  TEXT NOT NULL,
+	PRIMARY KEY (user_id, file_id)
+);
+
+-- reading_progress is a user's resume point in a book. location is opaque
+-- to the server — a page number for PDF, a CFI string for EPUB, a scroll
+-- fraction for Markdown/text — meaningful only to the reader that wrote it.
+-- percent is reader-agnostic (0-100) so a progress bar can be drawn without
+-- understanding location's format.
+CREATE TABLE IF NOT EXISTS reading_progress (
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	location   TEXT NOT NULL DEFAULT '',
+	percent    REAL NOT NULL DEFAULT 0,
+	updated_at TEXT NOT NULL,
 	PRIMARY KEY (user_id, file_id)
 );
 `

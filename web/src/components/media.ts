@@ -50,6 +50,17 @@ export function isPreviewable(file: FileSummary): boolean {
   return file.media_type === 'photo';
 }
 
+/** Extensions the reader (PDF.js / epub.js / the Markdown-and-text reader)
+ * actually knows how to open. A document file outside this set (.docx,
+ * .csv, …) still gets the viewer's "no preview, download to open" path. */
+const READABLE_EXTENSIONS = new Set(['pdf', 'epub', 'md', 'markdown', 'txt']);
+
+export function isReadableDocument(file: Pick<FileSummary, 'media_type' | 'name'>): boolean {
+  if (file.media_type !== 'document') return false;
+  const ext = fileExtension(file.name).toLowerCase();
+  return READABLE_EXTENSIONS.has(ext);
+}
+
 /** The icon that stands for a file's media type, for tiles without a preview. */
 export function mediaTypeIcon(mediaType: string | undefined): IconName {
   switch (mediaType) {

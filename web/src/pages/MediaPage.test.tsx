@@ -42,12 +42,16 @@ const video = fileFixture({
   content_hash: 'def',
 });
 
+// A document type the reader doesn't know how to open (unlike .epub/.pdf/
+// .md/.txt), so clicking it still opens the viewer's Book tab rather than
+// navigating to /read/... — exactly the book-metadata-editing path a
+// non-readable document (you can catalog it, just not read it in-app) uses.
 const book = fileFixture({
   id: 'f3',
-  rel_path: 'novel.epub',
-  name: 'novel.epub',
+  rel_path: 'report.docx',
+  name: 'report.docx',
   media_type: 'document',
-  mime_type: 'application/epub+zip',
+  mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   content_hash: 'ghi',
 });
 
@@ -910,10 +914,34 @@ describe('MediaPage', () => {
     expect(screen.queryByTestId('viewer-tab-book')).not.toBeInTheDocument();
   });
 
-  it('records a document as recently opened, but not a photo', async () => {
+  it('opens a readable document (EPUB/PDF/Markdown/text) in the reader, not the viewer', async () => {
+    const readableBook = fileFixture({
+      id: 'f4',
+      rel_path: 'novel.epub',
+      name: 'novel.epub',
+      media_type: 'document',
+      mime_type: 'application/epub+zip',
+      content_hash: 'jkl',
+    });
+    setup([
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/files?')
+          ? json({ files: [photo, readableBook], next_cursor: '', total: 2 })
+          : undefined,
+    ]);
+
+    await screen.findByTestId('file-grid');
+    fireEvent.click(screen.getByText('novel.epub'));
+
+    // Readable documents never open the photo/video viewer's overlay.
+    await waitFor(() => {
+      expect(screen.queryByTestId('viewer')).not.toBeInTheDocument();
+    });
+  });
+
+  it('still opens a non-readable document (.docx) in the viewer', async () => {
     const fetchMock = setup([
       (url) => (url.includes('/api/v1/libraries/lib1/files/f1/opened') ? noContent() : undefined),
-      (url) => (url.includes('/api/v1/libraries/lib1/files/f3/opened') ? noContent() : undefined),
       (url) =>
         url.includes('/api/v1/libraries/lib1/files?')
           ? json({ files: [photo, book], next_cursor: '', total: 2 })
@@ -931,10 +959,8 @@ describe('MediaPage', () => {
     await screen.findByTestId('viewer');
     expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/opened')).toBe(false);
 
-    fireEvent.click(screen.getByText('novel.epub'));
-    await waitFor(() => {
-      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f3/opened')).toBe(true);
-    });
+    fireEvent.click(screen.getByText('report.docx'));
+    expect(await screen.findByTestId('viewer')).toHaveTextContent('report.docx');
   });
 
   it('loads and saves book metadata from the book panel', async () => {
@@ -956,7 +982,7 @@ describe('MediaPage', () => {
     ]);
 
     await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('novel.epub'));
+    fireEvent.click(screen.getByText('report.docx'));
     fireEvent.click(await screen.findByTestId('viewer-tab-book'));
 
     const panel = await screen.findByTestId('viewer-book');
@@ -992,7 +1018,7 @@ describe('MediaPage', () => {
     ]);
 
     await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('novel.epub'));
+    fireEvent.click(screen.getByText('report.docx'));
     fireEvent.click(await screen.findByTestId('viewer-tab-book'));
 
     const panel = await screen.findByTestId('viewer-book');

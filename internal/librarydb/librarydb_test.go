@@ -43,9 +43,10 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 		t.Fatalf("book_metadata table missing: %v", err)
 	}
 
-	// reading_status and file_opens tables must exist (Phase 1: reading
-	// status and recently-opened tracking).
-	for _, table := range []string{"reading_status", "file_opens"} {
+	// reading_status, file_opens, and reading_progress tables must exist
+	// (Phase 1: reading status and recently-opened tracking; Phase 2:
+	// reading progress).
+	for _, table := range []string{"reading_status", "file_opens", "reading_progress"} {
 		q := `SELECT name FROM sqlite_master WHERE type='table' AND name='` + table + `'`
 		if err := pool.QueryRow(q).Scan(&name); err != nil {
 			t.Errorf("table %s missing: %v", table, err)
