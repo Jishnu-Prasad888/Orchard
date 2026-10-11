@@ -403,4 +403,22 @@ CREATE TABLE IF NOT EXISTS file_notes (
 	updated_at TEXT NOT NULL,
 	PRIMARY KEY (user_id, file_id)
 );
+
+-- book_metadata holds book-style metadata for document files (title,
+-- author, cover, extracted text), one row per file, populated by
+-- internal/bookmeta's MediaProcessor as documents are indexed. It is
+-- library-wide, not per-user: this is bibliographic data about the file
+-- itself (like EXIF for a photo), not a personal annotation.
+CREATE TABLE IF NOT EXISTS book_metadata (
+	file_id      TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+	title        TEXT NOT NULL DEFAULT '',
+	author       TEXT NOT NULL DEFAULT '',
+	publisher    TEXT NOT NULL DEFAULT '',
+	year         TEXT NOT NULL DEFAULT '',
+	isbn         TEXT NOT NULL DEFAULT '',
+	description  TEXT NOT NULL DEFAULT '',
+	cover_path   TEXT NOT NULL DEFAULT '',
+	text_path    TEXT NOT NULL DEFAULT '',
+	extracted_at TEXT NOT NULL
+);
 `
