@@ -16,6 +16,10 @@ const sessionCookieName = "orchard_session"
 // sessionCookieMaxAge seconds matches the 30-day session TTL.
 const sessionCookieMaxAge = 30 * 24 * 60 * 60
 
+// signupRequestsEnabledKey is the server_settings key gating the public
+// "request an account" endpoint. Off by default: an operator opts in.
+const signupRequestsEnabledKey = "signup.requests_enabled"
+
 // userRequest is the accepted login/bootstrap payload.
 type userRequest struct {
 	Username string `json:"username"`
@@ -29,6 +33,7 @@ type userResponse struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username"`
 	Role      string    `json:"role"`
+	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -37,8 +42,21 @@ func toUserResponse(u *auth.User) userResponse {
 		ID:        u.ID,
 		Username:  u.Username,
 		Role:      string(u.Role),
+		Enabled:   u.Enabled,
 		CreatedAt: u.CreatedAt.UTC(),
 	}
+}
+
+// pendingSignupResponse is the API representation of a signup request
+// awaiting administrator approval or denial.
+type pendingSignupResponse struct {
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	RequestedAt time.Time `json:"requested_at"`
+}
+
+func toPendingSignupResponse(p auth.PendingSignup) pendingSignupResponse {
+	return pendingSignupResponse{ID: p.ID, Username: p.Username, RequestedAt: p.RequestedAt.UTC()}
 }
 
 // metaFrom extracts non-sensitive client context for audit and session
@@ -148,9 +166,17 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	signupEnabled := false
+	if s.settings != nil {
+		if v, err := s.settings.GetBool(r.Context(), signupRequestsEnabledKey, false); err == nil {
+			signupEnabled = v
+		}
+	}
+
 	resp := map[string]any{
-		"bootstrap_required": userCount == 0,
-		"authenticated":      false,
+		"bootstrap_required":      userCount == 0,
+		"authenticated":           false,
+		"signup_requests_enabled": signupEnabled,
 	}
 	if sess, err := s.auth.Authenticate(r.Context(), sessionTokenFrom(r)); err == nil && sess.User != nil {
 		resp["authenticated"] = true
@@ -271,6 +297,162 @@ func (s *Server) handleRevokeUserSessions(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// userUpdateRequest is the accepted PATCH /users/{id} payload. Both fields
+// are optional and independent: a caller sends only what it means to change.
+type userUpdateRequest struct {
+	Role    *string `json:"role"`
+	Enabled *bool   `json:"enabled"`
+}
+
+// handleUpdateUser changes a user's role and/or enabled state. Admin only.
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request, _ *auth.User) {
+	id := r.PathValue("id")
+	var body userUpdateRequest
+	if err := readJSON(w, r, &body); err != nil {
+		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
+		return
+	}
+
+	if body.Role != nil {
+		if err := s.auth.UpdateUserRole(r.Context(), id, *body.Role, metaFrom(r)); err != nil {
+			s.writeAuthError(w, r, err)
+			return
+		}
+	}
+	if body.Enabled != nil {
+		if err := s.auth.SetUserEnabled(r.Context(), id, *body.Enabled, metaFrom(r)); err != nil {
+			s.writeAuthError(w, r, err)
+			return
+		}
+	}
+
+	user, err := s.auth.UserByID(r.Context(), id)
+	if err != nil {
+		s.writeAuthError(w, r, auth.ErrUserNotFound)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"user": toUserResponse(user)})
+}
+
+// handleDeleteUser permanently removes a user account. Admin only.
+func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request, _ *auth.User) {
+	if err := s.auth.DeleteUser(r.Context(), r.PathValue("id"), metaFrom(r)); err != nil {
+		s.writeAuthError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRequestSignup records a public "request an account" submission.
+// Public, but only when an administrator has turned the setting on — the
+// handler checks it itself rather than trusting a route gate, since the
+// setting can change at runtime.
+func (s *Server) handleRequestSignup(w http.ResponseWriter, r *http.Request) {
+	if !s.limitPublicAuth(w, r, "") {
+		return
+	}
+	if s.settings == nil {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusNotFound, CodeNotFound,
+			"Account requests are not available.")
+		return
+	}
+	enabled, err := s.settings.GetBool(r.Context(), signupRequestsEnabledKey, false)
+	if err != nil {
+		s.logger.Error("check signup setting", "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError, CodeInternal,
+			"Internal server error.")
+		return
+	}
+	if !enabled {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusNotFound, CodeNotFound,
+			"Account requests are not accepted on this server.")
+		return
+	}
+
+	var body userRequest
+	if err := readJSON(w, r, &body); err != nil {
+		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
+		return
+	}
+	p, err := s.auth.RequestSignup(r.Context(), body.Username, body.Password, metaFrom(r))
+	if err != nil {
+		s.writeAuthError(w, r, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusCreated, map[string]any{"request": toPendingSignupResponse(*p)})
+}
+
+// handleListPendingSignups lists unresolved account requests. Admin only.
+func (s *Server) handleListPendingSignups(w http.ResponseWriter, r *http.Request, _ *auth.User) {
+	pending, err := s.auth.ListPendingSignups(r.Context())
+	if err != nil {
+		s.logger.Error("list pending signups", "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError, CodeInternal,
+			"Internal server error.")
+		return
+	}
+	resp := make([]pendingSignupResponse, 0, len(pending))
+	for _, p := range pending {
+		resp = append(resp, toPendingSignupResponse(p))
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"requests": resp})
+}
+
+// handleApproveSignup creates a real account from a pending request. Admin
+// only. The role defaults to "user" when not specified.
+func (s *Server) handleApproveSignup(w http.ResponseWriter, r *http.Request, _ *auth.User) {
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := readJSON(w, r, &body); err != nil && r.ContentLength != 0 {
+		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
+		return
+	}
+	if body.Role == "" {
+		body.Role = string(auth.RoleUser)
+	}
+	user, err := s.auth.ApprovePendingSignup(r.Context(), r.PathValue("id"), body.Role, metaFrom(r))
+	if err != nil {
+		s.writeAuthError(w, r, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusCreated, map[string]any{"user": toUserResponse(user)})
+}
+
+// handleDenySignup discards a pending request without creating an account.
+// Admin only.
+func (s *Server) handleDenySignup(w http.ResponseWriter, r *http.Request, _ *auth.User) {
+	if err := s.auth.DenyPendingSignup(r.Context(), r.PathValue("id"), metaFrom(r)); err != nil {
+		s.writeAuthError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSetSignupRequestsEnabled toggles whether the public "request an
+// account" endpoint accepts submissions. Admin only.
+func (s *Server) handleSetSignupRequestsEnabled(w http.ResponseWriter, r *http.Request, _ *auth.User) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
+		return
+	}
+	if s.settings == nil {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusServiceUnavailable, CodeServiceUnavailable,
+			"Settings are not available.")
+		return
+	}
+	if err := s.settings.SetBool(r.Context(), signupRequestsEnabledKey, body.Enabled); err != nil {
+		s.logger.Error("set signup setting", "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError, CodeInternal,
+			"Internal server error.")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"enabled": body.Enabled})
+}
+
 // writeAuthError maps auth service errors onto the error envelope without
 // leaking whether a username, password, or account state caused a login
 // failure.
@@ -287,6 +469,11 @@ func (s *Server) writeAuthError(w http.ResponseWriter, r *http.Request, err erro
 			"Invalid username or password.")
 	case errors.Is(err, auth.ErrUserNotFound):
 		writeError(w, s.logger, requestID, http.StatusNotFound, CodeNotFound, "User not found.")
+	case errors.Is(err, auth.ErrSignupNotFound):
+		writeError(w, s.logger, requestID, http.StatusNotFound, CodeNotFound, "Signup request not found.")
+	case errors.Is(err, auth.ErrLastAdmin):
+		writeError(w, s.logger, requestID, http.StatusConflict, CodeConflict,
+			"This is the only remaining administrator; add or promote another account first.")
 	default:
 		s.logger.Error("auth error", "error", err)
 		writeError(w, s.logger, requestID, http.StatusInternalServerError, CodeInternal,

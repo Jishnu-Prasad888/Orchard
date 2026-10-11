@@ -41,6 +41,12 @@ var (
 	ErrConflict = errors.New("conflict")
 	// ErrUserNotFound reports a requested user id that does not exist.
 	ErrUserNotFound = errors.New("user not found")
+	// ErrLastAdmin reports an attempt to disable, demote, or delete the only
+	// remaining enabled administrator, which would leave the server with no
+	// one able to manage it.
+	ErrLastAdmin = errors.New("cannot remove the last administrator")
+	// ErrSignupNotFound reports a pending signup id that does not exist.
+	ErrSignupNotFound = errors.New("signup request not found")
 )
 
 // ValidationError describes a credential that failed validation rules.
@@ -386,6 +392,286 @@ func (s *Service) UserByID(ctx context.Context, id string) (*User, error) {
 	return &u, nil
 }
 
+// UpdateUserRole changes a user's role. It fails with ErrLastAdmin when the
+// target is the only remaining enabled administrator, which would leave the
+// server with no one able to manage it.
+func (s *Service) UpdateUserRole(ctx context.Context, userID, role string, meta Meta) error {
+	normalizedRole, err := NormalizeRole(role)
+	if err != nil {
+		return err
+	}
+	u, err := s.UserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	} else if err != nil {
+		return fmt.Errorf("lookup user for role update: %w", err)
+	}
+
+	if u.Role == RoleAdmin && normalizedRole != RoleAdmin && u.Enabled {
+		ok, err := s.otherEnabledAdminExists(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrLastAdmin
+		}
+	}
+
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`,
+		string(normalizedRole), rfc3339(time.Now().UTC()), userID); err != nil {
+		return fmt.Errorf("update user role: %w", err)
+	}
+
+	s.audit.Record(ctx, audit.Event{
+		ActorUserID:  actorIDFrom(ctx),
+		TargetUserID: userID,
+		Action:       audit.ActionUserUpdated,
+		Details:      map[string]any{"role": string(normalizedRole)},
+		IPAddress:    meta.IPAddress,
+		UserAgent:    meta.UserAgent,
+	})
+	s.logger.Info("user role updated", "user_id", userID, "role", normalizedRole)
+	return nil
+}
+
+// SetUserEnabled enables or disables a user's account. Disabling revokes
+// every existing session immediately rather than waiting for them to be
+// naturally rejected on next use. It fails with ErrLastAdmin when disabling
+// would leave the server with no remaining enabled administrator.
+func (s *Service) SetUserEnabled(ctx context.Context, userID string, enabled bool, meta Meta) error {
+	u, err := s.UserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	} else if err != nil {
+		return fmt.Errorf("lookup user for enabled update: %w", err)
+	}
+
+	if !enabled && u.Role == RoleAdmin && u.Enabled {
+		ok, err := s.otherEnabledAdminExists(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrLastAdmin
+		}
+	}
+
+	is := 0
+	if enabled {
+		is = 1
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE users SET is_enabled = ?, updated_at = ? WHERE id = ?`,
+		is, rfc3339(time.Now().UTC()), userID); err != nil {
+		return fmt.Errorf("update user enabled: %w", err)
+	}
+
+	action := audit.ActionUserEnabled
+	if !enabled {
+		action = audit.ActionUserDisabled
+		if err := s.revokeAllSessions(ctx, userID); err != nil {
+			s.logger.Warn("revoke sessions after disabling user", "user_id", userID, "error", err)
+		}
+	}
+	s.audit.Record(ctx, audit.Event{
+		ActorUserID:  actorIDFrom(ctx),
+		TargetUserID: userID,
+		Action:       action,
+		IPAddress:    meta.IPAddress,
+		UserAgent:    meta.UserAgent,
+	})
+	s.logger.Info("user enabled state changed", "user_id", userID, "enabled", enabled)
+	return nil
+}
+
+// DeleteUser permanently removes a user account and every session it owns.
+// It fails with ErrLastAdmin when the target is the only remaining enabled
+// administrator.
+func (s *Service) DeleteUser(ctx context.Context, userID string, meta Meta) error {
+	u, err := s.UserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	} else if err != nil {
+		return fmt.Errorf("lookup user for delete: %w", err)
+	}
+
+	if u.Role == RoleAdmin && u.Enabled {
+		ok, err := s.otherEnabledAdminExists(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrLastAdmin
+		}
+	}
+
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID); err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+
+	s.audit.Record(ctx, audit.Event{
+		ActorUserID:  actorIDFrom(ctx),
+		TargetUserID: userID,
+		Action:       audit.ActionUserDeleted,
+		Details:      map[string]any{"username": u.Username},
+		IPAddress:    meta.IPAddress,
+		UserAgent:    meta.UserAgent,
+	})
+	s.logger.Info("user deleted", "user_id", userID, "username", u.Username)
+	return nil
+}
+
+// RequestSignup records a public "request an account" submission. The
+// caller (the HTTP layer) is responsible for checking the
+// signup.requests_enabled server setting before calling this — the service
+// itself has no notion of settings, only of credentials.
+func (s *Service) RequestSignup(ctx context.Context, username, password string, meta Meta) (*PendingSignup, error) {
+	username = strings.TrimSpace(username)
+	if err := ValidateCredentials(username, password); err != nil {
+		return nil, err
+	}
+	if _, err := s.userByUsername(ctx, username); err == nil {
+		return nil, ErrConflict
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("check existing username: %w", err)
+	}
+
+	hash, err := HashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	p := &PendingSignup{ID: newID(), Username: username, RequestedAt: time.Now().UTC()}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO pending_signups (id, username, password_hash, requested_at, ip_address, user_agent)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Username, hash, rfc3339(p.RequestedAt),
+		truncateString(meta.IPAddress, 64), truncateString(meta.UserAgent, 256))
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrConflict
+		}
+		return nil, fmt.Errorf("insert pending signup: %w", err)
+	}
+
+	s.audit.Record(ctx, audit.Event{
+		Action:    audit.ActionSignupRequested,
+		Details:   map[string]any{"username": p.Username},
+		IPAddress: meta.IPAddress,
+		UserAgent: meta.UserAgent,
+	})
+	s.logger.Info("signup requested", "signup_id", p.ID, "username", p.Username)
+	return p, nil
+}
+
+// ListPendingSignups returns every unresolved signup request, oldest first.
+func (s *Service) ListPendingSignups(ctx context.Context) ([]PendingSignup, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, username, requested_at FROM pending_signups ORDER BY requested_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list pending signups: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []PendingSignup
+	for rows.Next() {
+		var p PendingSignup
+		var requestedStr string
+		if err := rows.Scan(&p.ID, &p.Username, &requestedStr); err != nil {
+			return nil, fmt.Errorf("scan pending signup: %w", err)
+		}
+		if err := parseTime(requestedStr, &p.RequestedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending signups: %w", err)
+	}
+	return out, nil
+}
+
+// ApprovePendingSignup creates a real user account from a pending signup,
+// reusing the password hash captured at request time, and discards the
+// pending row. It fails with ErrSignupNotFound when id does not exist.
+func (s *Service) ApprovePendingSignup(ctx context.Context, id, role string, meta Meta) (*User, error) {
+	normalizedRole, err := NormalizeRole(role)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin approve signup: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var username, hash string
+	err = tx.QueryRowContext(ctx,
+		`SELECT username, password_hash FROM pending_signups WHERE id = ?`, id).
+		Scan(&username, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrSignupNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("lookup pending signup: %w", err)
+	}
+
+	user := &User{
+		ID:           newID(),
+		Username:     username,
+		PasswordHash: hash,
+		Role:         normalizedRole,
+		Enabled:      true,
+		CreatedAt:    time.Now().UTC(),
+	}
+	if err := s.insertUserTx(ctx, tx, user); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM pending_signups WHERE id = ?`, id); err != nil {
+		return nil, fmt.Errorf("delete pending signup: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit approve signup: %w", err)
+	}
+
+	s.audit.Record(ctx, audit.Event{
+		ActorUserID:  actorIDFrom(ctx),
+		TargetUserID: user.ID,
+		Action:       audit.ActionSignupApproved,
+		Details:      map[string]any{"username": user.Username, "role": string(user.Role)},
+		IPAddress:    meta.IPAddress,
+		UserAgent:    meta.UserAgent,
+	})
+	s.logger.Info("signup approved", "signup_id", id, "user_id", user.ID, "username", user.Username)
+	return user, nil
+}
+
+// DenyPendingSignup discards a pending signup without creating an account.
+// It fails with ErrSignupNotFound when id does not exist.
+func (s *Service) DenyPendingSignup(ctx context.Context, id string, meta Meta) error {
+	var username string
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT username FROM pending_signups WHERE id = ?`, id).Scan(&username); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrSignupNotFound
+		}
+		return fmt.Errorf("lookup pending signup: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM pending_signups WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete pending signup: %w", err)
+	}
+
+	s.audit.Record(ctx, audit.Event{
+		ActorUserID: actorIDFrom(ctx),
+		Action:      audit.ActionSignupDenied,
+		Details:     map[string]any{"username": username},
+		IPAddress:   meta.IPAddress,
+		UserAgent:   meta.UserAgent,
+	})
+	s.logger.Info("signup denied", "signup_id", id, "username", username)
+	return nil
+}
+
 // --- internals ---
 
 func (s *Service) userByUsername(ctx context.Context, username string) (*User, error) {
@@ -468,6 +754,33 @@ func (s *Service) createSessionTx(ctx context.Context, tx *sql.Tx, u *User, meta
 func (s *Service) deleteSession(ctx context.Context, id string) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}
+
+// otherEnabledAdminExists reports whether an enabled administrator other
+// than excludeUserID exists — the invariant that guards against disabling,
+// demoting, or deleting the account that would leave nobody able to manage
+// the server.
+func (s *Service) otherEnabledAdminExists(ctx context.Context, excludeUserID string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_enabled = 1 AND id != ?`,
+		excludeUserID).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("count other enabled admins: %w", err)
+	}
+	return n > 0, nil
+}
+
+// revokeAllSessions marks every live session for a user revoked, without the
+// existence check or audit record RevokeUserSessions does (SetUserEnabled
+// already did the lookup and writes its own audit event).
+func (s *Service) revokeAllSessions(ctx context.Context, userID string) error {
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`,
+		rfc3339(time.Now().UTC()), userID); err != nil {
+		return fmt.Errorf("revoke sessions: %w", err)
 	}
 	return nil
 }

@@ -45,6 +45,16 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+// PendingSignup is a public "request an account" submission awaiting
+// administrator approval or denial. The password hash is deliberately not
+// exposed here; it only ever moves from the pending_signups row straight
+// into the new users row on approval.
+type PendingSignup struct {
+	ID          string
+	Username    string
+	RequestedAt time.Time
+}
+
 var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
 
 // ValidateCredentials applies the shared user-creation rules and returns a

@@ -13,6 +13,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
+	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
 )
 
 // Server is the Orchard HTTP application. It is a small composition of the
@@ -32,6 +33,7 @@ type Server struct {
 	ratelimit      *rateLimiter
 	maxUploadBytes int64
 	metrics        *metrics.Registry
+	settings       *serversettings.Store
 	// ready gates the /ready endpoint: true once startup completes, flipped
 	// false by MarkNotReady before graceful shutdown so proxies drain.
 	ready atomic.Bool
@@ -96,6 +98,9 @@ func New(deps Dependencies) *Server {
 		maxUploadBytes: deps.MaxUploadBytes,
 		metrics:        deps.Metrics,
 	}
+	if deps.DB != nil {
+		s.settings = serversettings.NewStore(deps.DB)
+	}
 	s.ready.Store(true)
 	return s
 }
@@ -130,10 +135,23 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/logout", s.requireSession(s.handleLogout))
 	mux.Handle("GET /api/v1/auth/me", s.withAuth(allowAny, s.handleMe))
 
+	// Public: submitting an account request (gated at runtime by the
+	// signup.requests_enabled server setting, checked inside the handler).
+	mux.HandleFunc("POST /api/v1/auth/signup-requests", s.handleRequestSignup)
+
 	// Admin surface.
 	mux.Handle("GET /api/v1/users", s.withAuth(allowAdmin, s.handleListUsers))
 	mux.Handle("POST /api/v1/users", s.withAuth(allowAdmin, s.handleCreateUser))
+	mux.Handle("PATCH /api/v1/users/{id}", s.withAuth(allowAdmin, s.handleUpdateUser))
+	mux.Handle("DELETE /api/v1/users/{id}", s.withAuth(allowAdmin, s.handleDeleteUser))
 	mux.Handle("POST /api/v1/users/{id}/sessions/revoke", s.withAuth(allowAdmin, s.handleRevokeUserSessions))
+
+	mux.Handle("GET /api/v1/signup-requests", s.withAuth(allowAdmin, s.handleListPendingSignups))
+	mux.Handle("POST /api/v1/signup-requests/{id}/approve", s.withAuth(allowAdmin, s.handleApproveSignup))
+	mux.Handle("POST /api/v1/signup-requests/{id}/deny", s.withAuth(allowAdmin, s.handleDenySignup))
+
+	mux.Handle("PUT /api/v1/settings/signup-requests",
+		s.withAuth(allowAdmin, s.handleSetSignupRequestsEnabled))
 
 	// Library surface. Listing is open to any session and filtered by the
 	// caller's read capability, so a member can find the libraries it was
