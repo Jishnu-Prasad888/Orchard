@@ -234,6 +234,44 @@ export interface ReadingStatusResponse {
   status: ReadingStatus | null;
 }
 
+/** A user's resume point in a book. location is opaque — a page number for
+ * PDF, a CFI for EPUB, a scroll fraction for Markdown/text — meaningful
+ * only to the reader that wrote it. percent is reader-agnostic (0-100). */
+export interface ReadingProgress {
+  file_id: string;
+  location: string;
+  percent: number;
+  updated_at?: string;
+}
+
+export interface ReadingProgressResponse {
+  progress: ReadingProgress | null;
+}
+
+export type ReaderTheme = 'light' | 'dark' | 'sepia';
+
+/** A user's reading preferences, applied across every book (no per-book
+ * override yet). */
+export interface ReaderPreferences {
+  font_size: number;
+  line_spacing: number;
+  margin: number;
+  reading_width: number;
+  theme: ReaderTheme;
+}
+
+export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
+  font_size: 18,
+  line_spacing: 1.5,
+  margin: 24,
+  reading_width: 720,
+  theme: 'light',
+};
+
+export interface ReaderPreferencesResponse {
+  preferences: ReaderPreferences;
+}
+
 /** One set of present files that share a content hash. */
 export interface DuplicateGroup {
   content_hash: string;

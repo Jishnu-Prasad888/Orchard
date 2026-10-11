@@ -33,7 +33,9 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
+    "epubjs": "^0.3.93",
     "lucide-react": "^1.51.0",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"

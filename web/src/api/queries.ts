@@ -43,6 +43,10 @@ import type {
   PendingSignupListResponse,
   PermissionGrant,
   PublicShareInfo,
+  ReaderPreferences,
+  ReaderPreferencesResponse,
+  ReadingProgress,
+  ReadingProgressResponse,
   ReadingStatus,
   ReadingStatusResponse,
   ShareCreateResponse,
@@ -257,6 +261,32 @@ export const setReadingStatus = (libraryId: string, fileId: string, status: Read
 
 export const clearReadingStatus = (libraryId: string, fileId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/reading-status`);
+
+/* -------------------------- reading progress --------------------------- */
+
+export const getReadingProgress = (libraryId: string, fileId: string) =>
+  apiGet<ReadingProgressResponse>(`/libraries/${libraryId}/files/${fileId}/progress`);
+
+export const setReadingProgress = (
+  libraryId: string,
+  fileId: string,
+  location: string,
+  percent: number,
+) => apiPut<{ progress: ReadingProgress }>(`/libraries/${libraryId}/files/${fileId}/progress`, {
+  location,
+  percent,
+});
+
+export const clearReadingProgress = (libraryId: string, fileId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/progress`);
+
+/* ------------------------- reader preferences --------------------------- */
+
+export const getReaderPreferences = () =>
+  apiGet<ReaderPreferencesResponse>('/settings/reader');
+
+export const setReaderPreferences = (preferences: ReaderPreferences) =>
+  apiPut<ReaderPreferencesResponse>('/settings/reader', preferences);
 
 /* ------------------------------ recents -------------------------------- */
 

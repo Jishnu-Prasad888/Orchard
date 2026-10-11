@@ -18,7 +18,6 @@ import {
   copyFile,
   deleteForever,
   getFile,
-  markFileOpened,
   moveFile,
   renameFile,
   softDeleteFile,
@@ -26,6 +25,7 @@ import {
 import type { FileSummary } from '../api/types';
 import { ConfirmDialog, PromptDialog } from './Dialog';
 import { FolderPicker } from './FolderPicker';
+import { isReadableDocument } from './media';
 import type { ViewerAction } from './ViewerModal';
 
 export type FileDialogKind = ViewerAction | 'permanent';
@@ -284,6 +284,13 @@ function useViewerParam(libraryId: string) {
 
   const openViewer = useCallback(
     (next: FileSummary) => {
+      // A book goes to the dedicated reader (its own full-page route, not
+      // the photo/video viewer's dark overlay) — everything else behaves
+      // as before.
+      if (isReadableDocument(next)) {
+        navigate(`/read/${libraryId}/${next.id}`);
+        return;
+      }
       setFile(next);
       const replacing = params.has('view');
       if (!replacing) pushedRef.current = true;
@@ -295,14 +302,8 @@ function useViewerParam(libraryId: string) {
         },
         { replace: replacing },
       );
-      // "Recently opened" is a reading feature: only books count, and a
-      // failed record (offline, race with a delete) must never block or
-      // error the actual open.
-      if (next.media_type === 'document') {
-        markFileOpened(libraryId, next.id).catch(() => {});
-      }
     },
-    [libraryId, params, setParams],
+    [libraryId, navigate, params, setParams],
   );
 
   const closeViewer = useCallback(() => {

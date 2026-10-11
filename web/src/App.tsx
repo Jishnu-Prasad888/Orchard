@@ -26,6 +26,9 @@ const SharingPage = lazyPage(() => import('./pages/SharingPage'));
 const TagsPage = lazyPage(() => import('./pages/TagsPage'));
 const SettingsPage = lazyPage(() => import('./pages/SettingsPage'));
 const PublicSharePage = lazyPage(() => import('./pages/PublicSharePage'));
+// The reader pulls in pdf.js and epub.js, by far the heaviest dependencies
+// in the app — never part of the main bundle.
+const ReaderPage = lazyPage(() => import('./pages/ReaderPage'));
 
 /** `/browse?q=…` became `/search?q=…`. */
 function LegacyBrowseRedirect() {
@@ -58,6 +61,9 @@ export default function App() {
 
               <Route element={<RequireAuth />}>
                 <Route path="/403" element={<ForbiddenPage />} />
+                {/* Immersive, outside the app shell: reading wants every
+                    pixel, not the sidebar. */}
+                <Route path="/read/:libraryId/:fileId" element={<ReaderPage />} />
                 <Route element={<AppShell />}>
                   <Route path="/" element={<HomePage />} />
 
