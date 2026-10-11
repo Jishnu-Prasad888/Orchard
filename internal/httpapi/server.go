@@ -198,6 +198,31 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/note", s.withAuth(allowAny, s.handleSetFileNote))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/note", s.withAuth(allowAny, s.handleClearFileNote))
 
+		// Book metadata, cover, and reading status (library management).
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/book-metadata",
+			s.withAuth(allowAny, s.handleGetBookMetadata))
+		mux.Handle("PATCH /api/v1/libraries/{id}/files/{fileID}/book-metadata",
+			s.withAuth(allowAny, s.handleUpdateBookMetadata))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/cover", s.withAuth(allowAny, s.handleGetCover))
+		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/cover", s.withAuth(allowAny, s.handleUploadCover))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/reading-status",
+			s.withAuth(allowAny, s.handleGetReadingStatus))
+		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/reading-status",
+			s.withAuth(allowAny, s.handleSetReadingStatus))
+		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/reading-status",
+			s.withAuth(allowAny, s.handleClearReadingStatus))
+
+		// Recently opened (per-user "last opened" tracking) and duplicate
+		// detection. The literal "recently-opened"/"duplicates" segments take
+		// precedence over the GET .../files/{fileID} route above regardless
+		// of registration order — ServeMux always prefers the more specific
+		// pattern (the same rule "files/counts" already relies on).
+		mux.Handle("GET /api/v1/libraries/{id}/files/recently-opened",
+			s.withAuth(allowAny, s.handleListRecentlyOpened))
+		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/opened",
+			s.withAuth(allowAny, s.handleMarkFileOpened))
+		mux.Handle("GET /api/v1/libraries/{id}/files/duplicates", s.withAuth(allowAny, s.handleListDuplicates))
+
 		// Folders and trash.
 		mux.Handle("GET /api/v1/libraries/{id}/folders", s.withAuth(allowAny, s.handleListFolders))
 		mux.Handle("POST /api/v1/libraries/{id}/folders", s.withAuth(allowAny, s.handleCreateFolder))

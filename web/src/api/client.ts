@@ -166,6 +166,31 @@ export async function apiUpload<T>(endpoint: string, file: File, path?: string):
   return (await response.json()) as T;
 }
 
+/**
+ * PUT a file's raw bytes with its own Content-Type, for endpoints (like
+ * cover upload) that take an image body directly rather than a multipart
+ * form — the server decides the stored extension from Content-Type, so
+ * sending it accurately matters.
+ */
+export async function apiPutFile<T>(endpoint: string, file: File): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json', 'Content-Type': file.type },
+    body: file,
+  });
+
+  if (!response.ok) {
+    const body = await readErrorEnvelope(response);
+    notifyAuthFailure(response.status, body);
+    throw new ApiError(body, response.status);
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
 export interface UploadProgress {
   loaded: number;
   total: number;

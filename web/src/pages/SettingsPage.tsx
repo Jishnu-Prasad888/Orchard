@@ -417,6 +417,12 @@ export default function SettingsPage() {
               title="Trash"
               description="Removed files waiting to be restored or deleted."
             />
+            <LinkRow
+              to="/duplicates"
+              icon="check"
+              title="Duplicates"
+              description="Files that share exact content with another file."
+            />
           </Section>
 
           {isAdmin ? (

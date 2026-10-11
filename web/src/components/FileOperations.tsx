@@ -18,6 +18,7 @@ import {
   copyFile,
   deleteForever,
   getFile,
+  markFileOpened,
   moveFile,
   renameFile,
   softDeleteFile,
@@ -294,8 +295,14 @@ function useViewerParam(libraryId: string) {
         },
         { replace: replacing },
       );
+      // "Recently opened" is a reading feature: only books count, and a
+      // failed record (offline, race with a delete) must never block or
+      // error the actual open.
+      if (next.media_type === 'document') {
+        markFileOpened(libraryId, next.id).catch(() => {});
+      }
     },
-    [params, setParams],
+    [libraryId, params, setParams],
   );
 
   const closeViewer = useCallback(() => {

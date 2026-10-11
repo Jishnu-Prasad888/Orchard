@@ -103,6 +103,117 @@ func TestStore_UpsertOverwritesExistingRow(t *testing.T) {
 	}
 }
 
+func TestStore_SetUserEdit_CreatesRowWhenNoneExists(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "book.epub")
+
+	got, err := store.SetUserEdit(context.Background(), "f1", UserEdit{
+		Title:  new("My Title"),
+		Author: new("My Author"),
+	})
+	if err != nil {
+		t.Fatalf("SetUserEdit: %v", err)
+	}
+	if !got.UserEdited {
+		t.Error("expected UserEdited = true")
+	}
+	if got.Title != "My Title" || got.Author != "My Author" {
+		t.Errorf("got = %+v", got)
+	}
+
+	reloaded, ok, err := store.Get(context.Background(), "f1")
+	if err != nil || !ok {
+		t.Fatalf("Get: ok=%v err=%v", ok, err)
+	}
+	if !reloaded.UserEdited || reloaded.Title != "My Title" {
+		t.Errorf("reloaded = %+v", reloaded)
+	}
+}
+
+func TestStore_SetUserEdit_PatchesOnlyGivenFields(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "book.epub")
+	if err := store.Upsert(context.Background(), Metadata{
+		FileID: "f1", Title: "Extracted Title", Author: "Extracted Author", Year: "2020",
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	got, err := store.SetUserEdit(context.Background(), "f1", UserEdit{Title: new("Corrected Title")})
+	if err != nil {
+		t.Fatalf("SetUserEdit: %v", err)
+	}
+	if got.Title != "Corrected Title" {
+		t.Errorf("Title = %q, want %q", got.Title, "Corrected Title")
+	}
+	if got.Author != "Extracted Author" {
+		t.Errorf("Author = %q, want unchanged %q", got.Author, "Extracted Author")
+	}
+	if got.Year != "2020" {
+		t.Errorf("Year = %q, want unchanged %q", got.Year, "2020")
+	}
+}
+
+func TestStore_UpsertDoesNotClobberUserEdit(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "book.epub")
+
+	if _, err := store.SetUserEdit(context.Background(), "f1", UserEdit{Title: new("My Title")}); err != nil {
+		t.Fatalf("SetUserEdit: %v", err)
+	}
+
+	// A re-scan re-extracts and calls Upsert again — this must not overwrite
+	// the title the person already corrected.
+	if err := store.Upsert(context.Background(), Metadata{FileID: "f1", Title: "Re-extracted Title"}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	got, ok, err := store.Get(context.Background(), "f1")
+	if err != nil || !ok {
+		t.Fatalf("Get: ok=%v err=%v", ok, err)
+	}
+	if got.Title != "My Title" {
+		t.Errorf("Title = %q, want %q (user edit must survive re-extraction)", got.Title, "My Title")
+	}
+	if !got.UserEdited {
+		t.Error("UserEdited should remain true")
+	}
+}
+
+func TestStore_SetCover(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "book.epub")
+	if err := store.Upsert(context.Background(), Metadata{FileID: "f1", Title: "A Book", CoverPath: "covers/f1.jpg"}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	got, err := store.SetCover(context.Background(), "f1", "covers/f1-custom.png")
+	if err != nil {
+		t.Fatalf("SetCover: %v", err)
+	}
+	if got.CoverPath != "covers/f1-custom.png" {
+		t.Errorf("CoverPath = %q, want the custom path", got.CoverPath)
+	}
+	if got.Title != "A Book" {
+		t.Errorf("Title = %q, want unchanged %q", got.Title, "A Book")
+	}
+	if !got.UserEdited {
+		t.Error("expected UserEdited = true")
+	}
+
+	// A later re-extraction must not revert the custom cover either.
+	if err := store.Upsert(context.Background(), Metadata{FileID: "f1", Title: "A Book", CoverPath: "covers/f1.jpg"}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	reloaded, _, err := store.Get(context.Background(), "f1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.CoverPath != "covers/f1-custom.png" {
+		t.Errorf("CoverPath after re-extraction = %q, want the custom path preserved", reloaded.CoverPath)
+	}
+}
+
 // TestBookMetadataCascadesWithFile proves the book_metadata row is removed
 // when its indexed_files row is permanently deleted, matching the same
 // ON DELETE CASCADE pattern used by favorites and file_notes.

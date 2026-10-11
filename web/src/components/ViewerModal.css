@@ -912,3 +912,65 @@ video.viewer-media {
 .viewer-stage[data-video='true'] video.viewer-media {
   max-height: 100%;
 }
+
+/* --- Book details panel --- */
+
+.book-panel-cover-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.book-panel-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 72px;
+  height: 108px;
+  overflow: hidden;
+  background: var(--viewer-fill);
+  border-radius: var(--radius-sm);
+}
+
+.book-panel-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.book-panel-cover-placeholder {
+  color: var(--viewer-ink-muted);
+}
+
+.book-panel-cover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.book-panel-status-field {
+  margin-bottom: var(--space-4);
+}
+
+.book-panel-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.book-panel-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.book-panel-row .field {
+  flex: 1;
+}
+
+.book-panel-save-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}

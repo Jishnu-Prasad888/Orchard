@@ -42,7 +42,31 @@ const video = fileFixture({
   content_hash: 'def',
 });
 
+const book = fileFixture({
+  id: 'f3',
+  rel_path: 'novel.epub',
+  name: 'novel.epub',
+  media_type: 'document',
+  mime_type: 'application/epub+zip',
+  content_hash: 'ghi',
+});
+
 const pageOne = { files: [photo, video], next_cursor: '', total: 2 };
+const bookPageOne = { files: [book], next_cursor: '', total: 1 };
+
+const emptyBook = {
+  book: {
+    file_id: 'f3',
+    title: '',
+    author: '',
+    publisher: '',
+    year: '',
+    isbn: '',
+    description: '',
+    user_edited: false,
+  },
+};
+const noReadingStatus = { status: null };
 
 const note = { note: { file_id: 'f1', body: '', updated_at: '' } };
 
@@ -875,6 +899,111 @@ describe('MediaPage', () => {
     expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/lib1/shares')).toMatchObject({
       key: 'file:lib1/IMG_0001.png',
       caps: ['read'],
+    });
+  });
+
+  it('shows a Book tab only for document files, not photos', async () => {
+    setup();
+    await screen.findByTestId('file-grid');
+    fireEvent.click(screen.getByText('IMG_0001.png'));
+    await screen.findByTestId('viewer');
+    expect(screen.queryByTestId('viewer-tab-book')).not.toBeInTheDocument();
+  });
+
+  it('records a document as recently opened, but not a photo', async () => {
+    const fetchMock = setup([
+      (url) => (url.includes('/api/v1/libraries/lib1/files/f1/opened') ? noContent() : undefined),
+      (url) => (url.includes('/api/v1/libraries/lib1/files/f3/opened') ? noContent() : undefined),
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/files?')
+          ? json({ files: [photo, book], next_cursor: '', total: 2 })
+          : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f3/book-metadata') ? json(emptyBook) : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f3/reading-status')
+          ? json(noReadingStatus)
+          : undefined,
+    ]);
+
+    await screen.findByTestId('file-grid');
+    fireEvent.click(screen.getByText('IMG_0001.png'));
+    await screen.findByTestId('viewer');
+    expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/opened')).toBe(false);
+
+    fireEvent.click(screen.getByText('novel.epub'));
+    await waitFor(() => {
+      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f3/opened')).toBe(true);
+    });
+  });
+
+  it('loads and saves book metadata from the book panel', async () => {
+    const fetchMock = setup([
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/files?') ? json(bookPageOne) : undefined,
+      (url, init) =>
+        init?.method === 'PATCH' && url.endsWith('/api/v1/libraries/lib1/files/f3/book-metadata')
+          ? json({
+              book: { ...emptyBook.book, title: 'Corrected Title', user_edited: true },
+            })
+          : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f3/book-metadata') ? json(emptyBook) : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f3/reading-status')
+          ? json(noReadingStatus)
+          : undefined,
+    ]);
+
+    await screen.findByTestId('file-grid');
+    fireEvent.click(screen.getByText('novel.epub'));
+    fireEvent.click(await screen.findByTestId('viewer-tab-book'));
+
+    const panel = await screen.findByTestId('viewer-book');
+    const titleInput = await within(panel).findByLabelText('Title');
+    fireEvent.change(titleInput, { target: { value: 'Corrected Title' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(
+        called(fetchMock, 'PATCH', '/api/v1/libraries/lib1/files/f3/book-metadata'),
+      ).toBe(true);
+    });
+    expect(bodyOf(fetchMock, 'PATCH', '/api/v1/libraries/lib1/files/f3/book-metadata')).toMatchObject({
+      title: 'Corrected Title',
+    });
+    expect(await within(panel).findByText('Saved.')).toBeInTheDocument();
+  });
+
+  it('sets a reading status from the book panel', async () => {
+    const fetchMock = setup([
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/files?') ? json(bookPageOne) : undefined,
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/libraries/lib1/files/f3/reading-status')
+          ? json({ status: 'reading' })
+          : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f3/book-metadata') ? json(emptyBook) : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f3/reading-status')
+          ? json(noReadingStatus)
+          : undefined,
+    ]);
+
+    await screen.findByTestId('file-grid');
+    fireEvent.click(screen.getByText('novel.epub'));
+    fireEvent.click(await screen.findByTestId('viewer-tab-book'));
+
+    const panel = await screen.findByTestId('viewer-book');
+    const select = await within(panel).findByTestId('reading-status-select');
+    fireEvent.change(select, { target: { value: 'reading' } });
+
+    await waitFor(() => {
+      expect(called(fetchMock, 'PUT', '/api/v1/libraries/lib1/files/f3/reading-status')).toBe(true);
+    });
+    expect(bodyOf(fetchMock, 'PUT', '/api/v1/libraries/lib1/files/f3/reading-status')).toEqual({
+      status: 'reading',
     });
   });
 

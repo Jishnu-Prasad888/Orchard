@@ -15,6 +15,7 @@ import {
   apiPatch,
   apiPost,
   apiPut,
+  apiPutFile,
   apiRequest,
   apiUpload,
   apiUploadWithProgress,
@@ -23,6 +24,9 @@ import {
 import type { UploadProgress } from './client';
 import type {
   BackupRecord,
+  BookMetadata,
+  BookMetadataEnvelope,
+  DuplicateGroupListResponse,
   FileCollectionResponse,
   FileListResponse,
   FileNote,
@@ -39,6 +43,8 @@ import type {
   PendingSignupListResponse,
   PermissionGrant,
   PublicShareInfo,
+  ReadingStatus,
+  ReadingStatusResponse,
   ShareCreateResponse,
   ShareListResponse,
   Tag,
@@ -219,6 +225,53 @@ export const setFileNote = (libraryId: string, fileId: string, body: string) =>
 
 export const clearFileNote = (libraryId: string, fileId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/note`);
+
+/* --------------------------- book metadata --------------------------- */
+
+export const getBookMetadata = (libraryId: string, fileId: string) =>
+  apiGet<BookMetadataEnvelope>(`/libraries/${libraryId}/files/${fileId}/book-metadata`);
+
+export const updateBookMetadata = (
+  libraryId: string,
+  fileId: string,
+  edit: Partial<
+    Pick<BookMetadata, 'title' | 'author' | 'publisher' | 'year' | 'isbn' | 'description'>
+  >,
+) => apiPatch<BookMetadataEnvelope>(`/libraries/${libraryId}/files/${fileId}/book-metadata`, edit);
+
+export const uploadCover = (libraryId: string, fileId: string, file: File) =>
+  apiPutFile<BookMetadataEnvelope>(`/libraries/${libraryId}/files/${fileId}/cover`, file);
+
+export const coverUrl = (libraryId: string, fileId: string) =>
+  `${API_BASE}/libraries/${libraryId}/files/${fileId}/cover`;
+
+/* --------------------------- reading status --------------------------- */
+
+export const getReadingStatus = (libraryId: string, fileId: string) =>
+  apiGet<ReadingStatusResponse>(`/libraries/${libraryId}/files/${fileId}/reading-status`);
+
+export const setReadingStatus = (libraryId: string, fileId: string, status: ReadingStatus) =>
+  apiPut<{ status: ReadingStatus }>(`/libraries/${libraryId}/files/${fileId}/reading-status`, {
+    status,
+  });
+
+export const clearReadingStatus = (libraryId: string, fileId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/reading-status`);
+
+/* ------------------------------ recents -------------------------------- */
+
+export const markFileOpened = (libraryId: string, fileId: string) =>
+  apiPost<void>(`/libraries/${libraryId}/files/${fileId}/opened`);
+
+export const listRecentlyOpened = (libraryId: string, limit?: number) =>
+  apiGet<FileCollectionResponse>(
+    `/libraries/${libraryId}/files/recently-opened${query({ limit })}`,
+  );
+
+/* ----------------------------- duplicates ------------------------------ */
+
+export const listDuplicates = (libraryId: string) =>
+  apiGet<DuplicateGroupListResponse>(`/libraries/${libraryId}/files/duplicates`);
 
 /* ----------------------------- search ------------------------------ */
 
