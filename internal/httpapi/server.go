@@ -258,6 +258,17 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/favorite", s.withAuth(allowAny, s.handleRemoveFavorite))
 		mux.Handle("GET /api/v1/libraries/{id}/favorites", s.withAuth(allowAny, s.handleListFavorites))
 
+		// Collections. Personal, user-owned groupings of files — unlike
+		// tags, scoped by the caller's own user ID, never shared.
+		mux.Handle("GET /api/v1/libraries/{id}/collections", s.withAuth(allowAny, s.handleListCollections))
+		mux.Handle("POST /api/v1/libraries/{id}/collections", s.withAuth(allowAny, s.handleCreateCollection))
+		mux.Handle("PATCH /api/v1/libraries/{id}/collections/{collectionID}", s.withAuth(allowAny, s.handleUpdateCollection))
+		mux.Handle("DELETE /api/v1/libraries/{id}/collections/{collectionID}", s.withAuth(allowAny, s.handleDeleteCollection))
+		mux.Handle("GET /api/v1/libraries/{id}/collections/{collectionID}/files", s.withAuth(allowAny, s.handleListCollectionFiles))
+		mux.Handle("POST /api/v1/libraries/{id}/collections/{collectionID}/files", s.withAuth(allowAny, s.handleAddCollectionFile))
+		mux.Handle("DELETE /api/v1/libraries/{id}/collections/{collectionID}/files/{fileID}", s.withAuth(allowAny, s.handleRemoveCollectionFile))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/collections", s.withAuth(allowAny, s.handleListFileCollections))
+
 		// Backups surface (admin). Backup policy is server-wide: where they
 		// are written, when they run, and restore destinations. All serverside.
 		if s.backups != nil {

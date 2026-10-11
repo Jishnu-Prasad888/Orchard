@@ -43,6 +43,8 @@ func (s *Server) openSearchStore(
 //	type    – media type filter (photo, video, audio, document, other)
 //	folder  – folder path prefix filter
 //	tag     – tag name filter (case-insensitive)
+//	author  – book author filter (substring, case-insensitive)
+//	collection – collection ID filter, scoped to the caller's own collections
 //	min_size – minimum file size in bytes
 //	max_size – maximum file size in bytes
 //	from    – RFC3339 date lower bound on mod_time
@@ -62,6 +64,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, u *auth.Us
 	defer cleanup()
 
 	q := parseSearchQuery(r)
+	if q.CollectionID != "" {
+		// A collection filter is always scoped to the caller's own
+		// collections — never lets one user probe another's by ID.
+		q.CollectionUserID = u.ID
+	}
 	folder, ok := canonicalFolder(q.FolderPath)
 	if !ok {
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest,
@@ -100,11 +107,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, u *auth.Us
 func parseSearchQuery(r *http.Request) search.SearchQuery {
 	q := r.URL.Query()
 	sq := search.SearchQuery{
-		Text:       q.Get("q"),
-		Type:       media.MediaType(q.Get("type")),
-		FolderPath: q.Get("folder"),
-		Tag:        q.Get("tag"),
-		Cursor:     q.Get("cursor"),
+		Text:         q.Get("q"),
+		Type:         media.MediaType(q.Get("type")),
+		FolderPath:   q.Get("folder"),
+		Tag:          q.Get("tag"),
+		Author:       q.Get("author"),
+		CollectionID: q.Get("collection"),
+		Cursor:       q.Get("cursor"),
 	}
 	if v := q.Get("min_size"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {

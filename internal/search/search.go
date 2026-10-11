@@ -43,6 +43,18 @@ type SearchQuery struct {
 	// insensitive). Empty means all.
 	Tag string
 
+	// Author restricts results to document files whose book_metadata.author
+	// contains this text (case-insensitive). Empty means all.
+	Author string
+
+	// CollectionID restricts results to files that are members of this
+	// collection, owned by CollectionUserID. Empty CollectionID means all;
+	// when set, CollectionUserID must also be set (a collection is scoped
+	// to its owner, so the query is both "in this collection" and "that
+	// collection belongs to this caller" in one join).
+	CollectionID     string
+	CollectionUserID string
+
 	// MinSize and MaxSize restrict results by file size in bytes. Zero values
 	// are ignored.
 	MinSize int64
@@ -222,6 +234,21 @@ func buildExtraFilters(q SearchQuery) ([]string, []any) {
 			JOIN tags tg ON tg.id = ft.tag_id
 			WHERE tg.name = ? COLLATE NOCASE)`)
 		args = append(args, q.Tag)
+	}
+	if q.Author != "" {
+		// SQLite's LIKE is ASCII case-insensitive by default, matching the
+		// tag filter's COLLATE NOCASE behavior without needing it here.
+		conditions = append(conditions, `f.id IN (
+			SELECT bm.file_id FROM book_metadata bm
+			WHERE bm.author LIKE ? `+likeutil.EscapeClause+`)`)
+		args = append(args, "%"+likeutil.Escape(q.Author)+"%")
+	}
+	if q.CollectionID != "" && q.CollectionUserID != "" {
+		conditions = append(conditions, `f.id IN (
+			SELECT ci.file_id FROM collection_items ci
+			JOIN collections c ON c.id = ci.collection_id
+			WHERE ci.collection_id = ? AND c.user_id = ?)`)
+		args = append(args, q.CollectionID, q.CollectionUserID)
 	}
 	if q.MinSize > 0 {
 		conditions = append(conditions, "f.size_bytes >= ?")
