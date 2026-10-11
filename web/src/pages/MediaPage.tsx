@@ -16,7 +16,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
 import { useLibraryGate } from '../api/libraries';
-import { copyFile, createFolder, moveFile } from '../api/queries';
+import { useLibraryResource } from '../api/resources';
+import { copyFile, createFolder, listCollections, moveFile } from '../api/queries';
 import type { FileSort, MediaFilter, SortOrder } from '../api/queries';
 import type { FileSummary, Library } from '../api/types';
 import { PromptDialog } from '../components/Dialog';
@@ -162,11 +163,18 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const urlType = parseType(params.get('type'));
   const type = config.type ?? urlType;
   const tag = config.searchPage ? (params.get('tag') ?? undefined) : undefined;
+  const author = config.searchPage ? (params.get('author') ?? undefined) : undefined;
+  const collectionId = config.searchPage ? (params.get('collection') ?? undefined) : undefined;
 
   const [sortValue, setSortValue] = useState<SortValue>('mod_time:desc');
   const [sort, order] = sortValue.split(':') as [FileSort, SortOrder];
   const [range, setRange] = useState<RangeFilters>(EMPTY_RANGE);
   const [showFilters, setShowFilters] = useState(false);
+  const collections = useLibraryResource(
+    useCallback((id: string) => listCollections(id).then((r) => r.collections ?? []), []),
+    [],
+    Boolean(config.searchPage),
+  );
   const [view, setViewState] = useState<'grid' | 'list'>(() => (folderMode ? readView() : 'grid'));
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderBusy, setFolderBusy] = useState(false);
@@ -227,6 +235,8 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     order,
     ...range,
     tag,
+    author,
+    collection: collectionId,
     withFolders: folderMode && !q,
   };
 
@@ -405,7 +415,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     return () => window.removeEventListener('keydown', onShortcut);
   });
 
-  const filtersActive = hasRangeFilters(range);
+  const filtersActive = hasRangeFilters(range) || Boolean(author) || Boolean(collectionId);
 
   let subtitle = config.subtitle;
   if (!listing.loading && !listing.error && !config.searchPage && total > 0) {
@@ -596,7 +606,17 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
         </div>
       )}
 
-      {showFilters && !offline && <FilterPanel value={range} onChange={setRange} />}
+      {showFilters && !offline && (
+        <FilterPanel
+          value={range}
+          onChange={setRange}
+          author={config.searchPage ? author : undefined}
+          onAuthorChange={config.searchPage ? (v) => setParam('author', v) : undefined}
+          collectionId={config.searchPage ? collectionId : undefined}
+          onCollectionChange={config.searchPage ? (v) => setParam('collection', v) : undefined}
+          collections={collections.data ?? []}
+        />
+      )}
 
       {listing.error && (
         <ErrorState

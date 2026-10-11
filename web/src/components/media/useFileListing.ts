@@ -38,6 +38,8 @@ export interface ListingQuery {
   from: string;
   to: string;
   tag?: string | undefined;
+  author?: string | undefined;
+  collection?: string | undefined;
   /** Load the sub-folders of `folder` alongside the files. */
   withFolders?: boolean | undefined;
 }
@@ -61,6 +63,8 @@ export function usesSearch(query: ListingQuery): boolean {
   return Boolean(
     query.q.trim() ||
     query.tag ||
+    query.author ||
+    query.collection ||
     query.minSizeMb ||
     query.maxSizeMb ||
     query.from ||
@@ -85,6 +89,8 @@ function fetchPage(
       type: query.type,
       folder: query.recursive ? undefined : query.folder || undefined,
       tag: query.tag,
+      author: query.author,
+      collection: query.collection,
       min_size: toBytes(query.minSizeMb),
       max_size: toBytes(query.maxSizeMb),
       from: query.from ? new Date(query.from).toISOString() : undefined,

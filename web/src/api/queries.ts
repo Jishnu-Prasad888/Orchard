@@ -26,6 +26,9 @@ import type {
   BackupRecord,
   BookMetadata,
   BookMetadataEnvelope,
+  Collection,
+  CollectionEnvelope,
+  CollectionListResponse,
   DuplicateGroupListResponse,
   FileCollectionResponse,
   FileListResponse,
@@ -64,7 +67,7 @@ import type {
  * the functions that return them, so they are re-exported here rather than
  * forcing every caller to import from two modules.
  */
-export type { FileSummary, Folder, Tag } from './types';
+export type { Collection, FileSummary, Folder, Tag } from './types';
 export { formatBytes } from './types';
 
 /* ---------------------------- libraries ---------------------------- */
@@ -310,6 +313,8 @@ export interface SearchParams {
   type?: MediaFilter | undefined;
   folder?: string | undefined;
   tag?: string | undefined;
+  author?: string | undefined;
+  collection?: string | undefined;
   min_size?: number | undefined;
   max_size?: number | undefined;
   from?: string | undefined;
@@ -362,6 +367,35 @@ export const addFileTag = (libraryId: string, fileId: string, tagId: string) =>
 
 export const removeFileTag = (libraryId: string, fileId: string, tagId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/tags/${tagId}`);
+
+/* --------------------------- collections --------------------------- */
+
+export const listCollections = (libraryId: string) =>
+  apiGet<CollectionListResponse>(`/libraries/${libraryId}/collections`);
+
+export const createCollection = (libraryId: string, name: string, description?: string) =>
+  apiPost<CollectionEnvelope>(`/libraries/${libraryId}/collections`, { name, description });
+
+export const updateCollection = (
+  libraryId: string,
+  collectionId: string,
+  patch: Partial<Pick<Collection, 'name' | 'description' | 'pinned'>>,
+) => apiPatch<CollectionEnvelope>(`/libraries/${libraryId}/collections/${collectionId}`, patch);
+
+export const deleteCollection = (libraryId: string, collectionId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/collections/${collectionId}`);
+
+export const listCollectionFiles = (libraryId: string, collectionId: string) =>
+  apiGet<FileCollectionResponse>(`/libraries/${libraryId}/collections/${collectionId}/files`);
+
+export const addCollectionFile = (libraryId: string, collectionId: string, fileId: string) =>
+  apiPost<void>(`/libraries/${libraryId}/collections/${collectionId}/files`, { file_id: fileId });
+
+export const removeCollectionFile = (libraryId: string, collectionId: string, fileId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/collections/${collectionId}/files/${fileId}`);
+
+export const listFileCollections = (libraryId: string, fileId: string) =>
+  apiGet<CollectionListResponse>(`/libraries/${libraryId}/files/${fileId}/collections`);
 
 /* ------------------------- permissions/shares ---------------------- */
 

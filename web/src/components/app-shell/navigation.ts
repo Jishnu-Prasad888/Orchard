@@ -21,6 +21,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/files', label: 'Files', icon: 'folder' },
   { to: '/favorites', label: 'Favorites', icon: 'star' },
   { to: '/tags', label: 'Tags', icon: 'tag' },
+  { to: '/collections', label: 'Collections', icon: 'list' },
   { to: '/shared', label: 'Shared', icon: 'share' },
   { to: '/trash', label: 'Trash', icon: 'trash' },
 ];

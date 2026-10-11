@@ -670,6 +670,33 @@ video.viewer-media {
   min-width: 0;
 }
 
+.viewer-collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.viewer-collection-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.viewer-collection-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.viewer-collection-form input {
+  flex: 1;
+  min-width: 0;
+}
+
 .viewer-person,
 .viewer-similar-item,
 .viewer-album-row {

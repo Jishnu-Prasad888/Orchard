@@ -273,6 +273,77 @@ func TestSearchTagFilter(t *testing.T) {
 	}
 }
 
+func TestSearchAuthorFilter(t *testing.T) {
+	ss, fs, db := newTestStoreWithMediaStore(t)
+	ctx := context.Background()
+
+	seedFile(t, fs, "dune.epub")
+	seedFile(t, fs, "hobbit.epub")
+
+	dune, err := fs.GetByRelPath(ctx, "dune.epub")
+	if err != nil {
+		t.Fatalf("GetByRelPath: %v", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO book_metadata (file_id, title, author, extracted_at) VALUES (?, ?, ?, ?)`,
+		dune.ID, "Dune", "Frank Herbert", now,
+	); err != nil {
+		t.Fatalf("insert book_metadata: %v", err)
+	}
+
+	page, err := ss.Search(ctx, search.SearchQuery{Author: "herbert"})
+	if err != nil {
+		t.Fatalf("Search by author: %v", err)
+	}
+	if len(page.Results) != 1 || page.Results[0].File.Name != "dune.epub" {
+		t.Errorf("author filter returned wrong results: %+v", page.Results)
+	}
+}
+
+func TestSearchCollectionFilter(t *testing.T) {
+	ss, fs, db := newTestStoreWithMediaStore(t)
+	ctx := context.Background()
+
+	seedFile(t, fs, "in-collection.epub")
+	seedFile(t, fs, "not-in-collection.epub")
+
+	inColl, err := fs.GetByRelPath(ctx, "in-collection.epub")
+	if err != nil {
+		t.Fatalf("GetByRelPath: %v", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO collections (id, user_id, name, description, pinned, created_at, updated_at)
+		 VALUES ('c1', 'u1', 'Reading list', '', 0, ?, ?)`, now, now,
+	); err != nil {
+		t.Fatalf("insert collection: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO collection_items (collection_id, file_id, added_at) VALUES ('c1', ?, ?)`,
+		inColl.ID, now,
+	); err != nil {
+		t.Fatalf("insert collection_items: %v", err)
+	}
+
+	page, err := ss.Search(ctx, search.SearchQuery{CollectionID: "c1", CollectionUserID: "u1"})
+	if err != nil {
+		t.Fatalf("Search by collection: %v", err)
+	}
+	if len(page.Results) != 1 || page.Results[0].File.Name != "in-collection.epub" {
+		t.Errorf("collection filter returned wrong results: %+v", page.Results)
+	}
+
+	// A different user's matching collection ID must not leak the file.
+	page, err = ss.Search(ctx, search.SearchQuery{CollectionID: "c1", CollectionUserID: "u2"})
+	if err != nil {
+		t.Fatalf("Search by collection (wrong owner): %v", err)
+	}
+	if len(page.Results) != 0 {
+		t.Errorf("expected 0 results for wrong collection owner, got %d", len(page.Results))
+	}
+}
+
 func TestSearchSizeFilter(t *testing.T) {
 	ss, fs, _ := newTestStoreWithMediaStore(t)
 	ctx := context.Background()

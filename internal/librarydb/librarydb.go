@@ -502,4 +502,31 @@ CREATE TABLE IF NOT EXISTS reading_progress (
 	updated_at TEXT NOT NULL,
 	PRIMARY KEY (user_id, file_id)
 );
+
+-- collections are personal, user-curated groupings of files (a book can be
+-- in many collections at once) — unlike tags, which are a shared library
+-- vocabulary, a collection belongs to the user who made it. pinned surfaces
+-- it first on the home dashboard (later phase).
+CREATE TABLE IF NOT EXISTS collections (
+	id          TEXT PRIMARY KEY,
+	user_id     TEXT NOT NULL,
+	name        TEXT NOT NULL,
+	description TEXT NOT NULL DEFAULT '',
+	pinned      INTEGER NOT NULL DEFAULT 0,
+	created_at  TEXT NOT NULL,
+	updated_at  TEXT NOT NULL,
+	UNIQUE (user_id, name COLLATE NOCASE)
+);
+
+CREATE INDEX IF NOT EXISTS collections_user_idx ON collections (user_id);
+
+-- collection_items is the many-to-many join between collections and files.
+CREATE TABLE IF NOT EXISTS collection_items (
+	collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+	file_id       TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	added_at      TEXT NOT NULL,
+	PRIMARY KEY (collection_id, file_id)
+);
+
+CREATE INDEX IF NOT EXISTS collection_items_file_idx ON collection_items (file_id);
 `
