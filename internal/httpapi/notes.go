@@ -52,7 +52,7 @@ func (s *Server) handleGetFileNote(w http.ResponseWriter, r *http.Request, u *au
 	}
 	defer cleanup()
 
-	n, err := store.Get(r.Context(), r.PathValue("fileID"))
+	n, err := store.Get(r.Context(), u.ID, r.PathValue("fileID"))
 	if err != nil {
 		s.logger.Error("get file note", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
@@ -93,7 +93,7 @@ func (s *Server) handleSetFileNote(w http.ResponseWriter, r *http.Request, u *au
 	}
 	defer cleanup()
 
-	n, err := store.Set(r.Context(), r.PathValue("fileID"), body.Body)
+	n, err := store.Set(r.Context(), u.ID, r.PathValue("fileID"), body.Body)
 	if err != nil {
 		s.logger.Error("set file note", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
@@ -120,7 +120,7 @@ func (s *Server) handleClearFileNote(w http.ResponseWriter, r *http.Request, u *
 	}
 	defer cleanup()
 
-	if err := store.Clear(r.Context(), r.PathValue("fileID")); err != nil {
+	if err := store.Clear(r.Context(), u.ID, r.PathValue("fileID")); err != nil {
 		s.logger.Error("clear file note", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Failed to clear the file note.")

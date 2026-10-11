@@ -381,14 +381,17 @@ type CollectionCounts struct {
 	Favorites int `json:"favorites"`
 }
 
-// CountCollections returns tag and favorite totals in one round trip.
-// Favorites only count files that are still present, matching the favorites list.
-func (s *FileStore) CountCollections(ctx context.Context) (CollectionCounts, error) {
+// CountCollections returns the tag total and the given user's favorite
+// total in one round trip. Favorites only count files that are still
+// present, matching the favorites list.
+func (s *FileStore) CountCollections(ctx context.Context, userID string) (CollectionCounts, error) {
 	var c CollectionCounts
 	err := s.db.QueryRowContext(ctx,
 		`SELECT (SELECT COUNT(*) FROM tags),
 		        (SELECT COUNT(*) FROM favorites fav
-		           JOIN indexed_files f ON f.id = fav.file_id WHERE f.status = 'present')`,
+		           JOIN indexed_files f ON f.id = fav.file_id
+		           WHERE f.status = 'present' AND fav.user_id = ?)`,
+		userID,
 	).Scan(&c.Tags, &c.Favorites)
 	return c, err
 }

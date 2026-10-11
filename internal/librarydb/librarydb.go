@@ -106,7 +106,10 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}
-	return addIndexedFileMediaType(db)
+	if err := addIndexedFileMediaType(db); err != nil {
+		return err
+	}
+	return addFavoriteNoteUserScoping(db)
 }
 
 // addIndexedFileMediaType backfills indexed_files.media_type on a library
@@ -170,6 +173,63 @@ func addIndexedFileMediaType(db *sql.DB) error {
 		if _, err := db.Exec(`UPDATE indexed_files SET media_type = ? WHERE id = ?`, u.mediaType, u.id); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// addFavoriteNoteUserScoping migrates favorites and file_notes from
+// library-wide to per-user records. Both tables originally had no user_id at
+// all (file_id was the whole primary key), so a favorite or note was visible
+// to every account on the library — Phase 0a of the library roadmap fixes
+// this so reading status, progress, bookmarks, and quotes can all follow the
+// same per-user pattern from the start.
+//
+// SQLite can't ALTER a primary key, so a library database created before
+// this change is migrated by recreating the table. No Orchard install has
+// gone further than the schema-only baseline at this point, so there is no
+// real per-user attribution to preserve for any existing rows; they are
+// dropped rather than guessed at.
+func addFavoriteNoteUserScoping(db *sql.DB) error {
+	migrations := []struct {
+		table    string
+		recreate string
+	}{
+		{"favorites", `CREATE TABLE favorites (
+			user_id    TEXT NOT NULL,
+			file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (user_id, file_id)
+		)`},
+		{"file_notes", `CREATE TABLE file_notes (
+			user_id    TEXT NOT NULL,
+			file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+			body       TEXT NOT NULL DEFAULT '',
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY (user_id, file_id)
+		)`},
+	}
+	for _, m := range migrations {
+		has, err := columnExists(db, m.table, "user_id")
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("DROP TABLE %s", m.table)); err != nil {
+			return err
+		}
+		if _, err := db.Exec(m.recreate); err != nil {
+			return err
+		}
+	}
+	// file_id lookups (cascade from indexed_files, collection counts) no
+	// longer hit the primary key directly once user_id leads it.
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS favorites_file_idx ON favorites (file_id)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS file_notes_file_idx ON file_notes (file_id)`); err != nil {
+		return err
 	}
 	return nil
 }
@@ -320,19 +380,27 @@ CREATE TABLE IF NOT EXISTS file_tags (
 CREATE INDEX IF NOT EXISTS file_tags_tag_idx  ON file_tags (tag_id);
 CREATE INDEX IF NOT EXISTS file_tags_file_idx ON file_tags (file_id);
 
--- favorites records files that the user has starred.
+-- favorites records files a user has starred. user_id is an auth.User.ID
+-- from the server-level database (not a foreign key: this per-library
+-- database has no access to the users table, which lives elsewhere so the
+-- library stays portable across servers).
 CREATE TABLE IF NOT EXISTS favorites (
-	file_id    TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
-	created_at TEXT NOT NULL
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (user_id, file_id)
 );
 
--- file_notes stores per-file Markdown notes (captions, descriptions, journal
--- entries) written in the web UI. They are app-level data and live in the
--- library database so they travel with a portable library. Each file has at
--- most one note; an empty/missing body means no note.
+-- file_notes stores per-file, per-user Markdown notes (captions,
+-- descriptions, journal entries) written in the web UI. They are app-level
+-- data and live in the library database so they travel with a portable
+-- library. Each user has at most one note per file; an empty/missing body
+-- means no note.
 CREATE TABLE IF NOT EXISTS file_notes (
-	file_id    TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
 	body       TEXT NOT NULL DEFAULT '',
-	updated_at TEXT NOT NULL
+	updated_at TEXT NOT NULL,
+	PRIMARY KEY (user_id, file_id)
 );
 `

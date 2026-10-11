@@ -30,12 +30,12 @@ func NewFavoriteStore(db *sql.DB, libraryID string) *FavoriteStore {
 	return &FavoriteStore{db: db, libraryID: libraryID}
 }
 
-// Add marks a file as a favorite.
-func (s *FavoriteStore) Add(ctx context.Context, fileID string) error {
+// Add marks a file as a favorite of the given user.
+func (s *FavoriteStore) Add(ctx context.Context, userID, fileID string) error {
 	now := rfc3339(time.Now().UTC())
 	res, err := s.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO favorites (file_id, created_at) VALUES (?, ?)`,
-		fileID, now)
+		`INSERT OR IGNORE INTO favorites (user_id, file_id, created_at) VALUES (?, ?, ?)`,
+		userID, fileID, now)
 	if err != nil {
 		return fmt.Errorf("add favorite: %w", err)
 	}
@@ -46,10 +46,10 @@ func (s *FavoriteStore) Add(ctx context.Context, fileID string) error {
 	return nil
 }
 
-// Remove removes a file from favorites.
-func (s *FavoriteStore) Remove(ctx context.Context, fileID string) error {
+// Remove removes a file from the given user's favorites.
+func (s *FavoriteStore) Remove(ctx context.Context, userID, fileID string) error {
 	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM favorites WHERE file_id = ?`, fileID)
+		`DELETE FROM favorites WHERE user_id = ? AND file_id = ?`, userID, fileID)
 	if err != nil {
 		return fmt.Errorf("remove favorite: %w", err)
 	}
@@ -60,26 +60,27 @@ func (s *FavoriteStore) Remove(ctx context.Context, fileID string) error {
 	return nil
 }
 
-// IsFavorite returns true if the file is favorited.
-func (s *FavoriteStore) IsFavorite(ctx context.Context, fileID string) (bool, error) {
+// IsFavorite returns true if the file is favorited by the given user.
+func (s *FavoriteStore) IsFavorite(ctx context.Context, userID, fileID string) (bool, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM favorites WHERE file_id = ?`, fileID).Scan(&n)
+		`SELECT COUNT(*) FROM favorites WHERE user_id = ? AND file_id = ?`, userID, fileID).Scan(&n)
 	if err != nil {
 		return false, fmt.Errorf("check favorite: %w", err)
 	}
 	return n > 0, nil
 }
 
-// ListFiles returns all favorited files ordered by when they were favorited (newest first).
-func (s *FavoriteStore) ListFiles(ctx context.Context) ([]*media.File, error) {
+// ListFiles returns all files the given user has favorited, ordered by when
+// they were favorited (newest first).
+func (s *FavoriteStore) ListFiles(ctx context.Context, userID string) ([]*media.File, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT f.id, f.rel_path, f.size_bytes, f.mod_time, f.content_hash,
 		        f.status, f.first_seen_at, f.last_seen_at
 		 FROM indexed_files f
 		 JOIN favorites fav ON fav.file_id = f.id
-		 WHERE f.status = 'present'
-		 ORDER BY fav.created_at DESC`)
+		 WHERE f.status = 'present' AND fav.user_id = ?
+		 ORDER BY fav.created_at DESC`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list favorites: %w", err)
 	}

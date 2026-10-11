@@ -664,7 +664,7 @@ func TestCountsByTypeAndCollections(t *testing.T) {
 	if err != nil || counts[media.MediaTypePhoto] != 2 || counts[media.MediaTypeVideo] != 1 {
 		t.Fatalf("counts = %v, %v", counts, err)
 	}
-	c, err := store.CountCollections(ctx)
+	c, err := store.CountCollections(ctx, "u1")
 	if err != nil || c != (media.CollectionCounts{}) {
 		t.Fatalf("collections = %+v, %v", c, err)
 	}

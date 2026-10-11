@@ -38,7 +38,7 @@ func TestGet_MissingNoteReturnsEmpty(t *testing.T) {
 	store := openTestStore(t)
 	seedFile(t, store, "f1")
 
-	n, err := store.Get(context.Background(), "f1")
+	n, err := store.Get(context.Background(), "u1", "f1")
 	if err != nil {
 		t.Fatalf("get missing note: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestSetAndGetRoundTrip(t *testing.T) {
 	seedFile(t, store, "f1")
 
 	body := "# Beach day\n\nSunset over the dunes."
-	saved, err := store.Set(context.Background(), "f1", body)
+	saved, err := store.Set(context.Background(), "u1", "f1", body)
 	if err != nil {
 		t.Fatalf("set note: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestSetAndGetRoundTrip(t *testing.T) {
 		t.Error("updated_at should be set")
 	}
 
-	n, err := store.Get(context.Background(), "f1")
+	n, err := store.Get(context.Background(), "u1", "f1")
 	if err != nil {
 		t.Fatalf("get note: %v", err)
 	}
@@ -85,16 +85,16 @@ func TestSet_UpsertsExistingNote(t *testing.T) {
 	store := openTestStore(t)
 	seedFile(t, store, "f1")
 
-	if _, err := store.Set(context.Background(), "f1", "first"); err != nil {
+	if _, err := store.Set(context.Background(), "u1", "f1", "first"); err != nil {
 		t.Fatalf("set first: %v", err)
 	}
-	first, err := store.Get(context.Background(), "f1")
+	first, err := store.Get(context.Background(), "u1", "f1")
 	if err != nil {
 		t.Fatalf("get first: %v", err)
 	}
 	time.Sleep(2 * time.Millisecond)
 
-	saved, err := store.Set(context.Background(), "f1", "second")
+	saved, err := store.Set(context.Background(), "u1", "f1", "second")
 	if err != nil {
 		t.Fatalf("set second: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestSet_UpsertsExistingNote(t *testing.T) {
 		t.Errorf("updated_at did not advance: %v after %v", saved.UpdatedAt, first.UpdatedAt)
 	}
 
-	n, err := store.Get(context.Background(), "f1")
+	n, err := store.Get(context.Background(), "u1", "f1")
 	if err != nil {
 		t.Fatalf("get after upsert: %v", err)
 	}
@@ -118,13 +118,13 @@ func TestClearRemovesNote(t *testing.T) {
 	store := openTestStore(t)
 	seedFile(t, store, "f1")
 
-	if _, err := store.Set(context.Background(), "f1", "hello"); err != nil {
+	if _, err := store.Set(context.Background(), "u1", "f1", "hello"); err != nil {
 		t.Fatalf("set note: %v", err)
 	}
-	if err := store.Clear(context.Background(), "f1"); err != nil {
+	if err := store.Clear(context.Background(), "u1", "f1"); err != nil {
 		t.Fatalf("clear note: %v", err)
 	}
-	n, err := store.Get(context.Background(), "f1")
+	n, err := store.Get(context.Background(), "u1", "f1")
 	if err != nil {
 		t.Fatalf("get after clear: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestClear_MissingNoteIsNotAnError(t *testing.T) {
 	store := openTestStore(t)
 	seedFile(t, store, "f1")
 
-	if err := store.Clear(context.Background(), "f1"); err != nil {
+	if err := store.Clear(context.Background(), "u1", "f1"); err != nil {
 		t.Errorf("clear missing note: %v", err)
 	}
 }
