@@ -16,6 +16,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
 	"github.com/Jishnu-Prasad888/Orchard/internal/backups"
+	"github.com/Jishnu-Prasad888/Orchard/internal/bookmeta"
 	"github.com/Jishnu-Prasad888/Orchard/internal/config"
 	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
 	"github.com/Jishnu-Prasad888/Orchard/internal/db"
@@ -101,10 +102,11 @@ func run() error {
 	// Incremental indexer: manages per-library scan jobs. Each library gets a
 	// background job worker (index scans + file processing) once it is
 	// registered; workers for already-registered libraries are started below.
-	// No MediaProcessor is registered yet (see indexer.MediaProcessor) — a
-	// future document/book metadata extractor plugs in here.
+	// bookmeta.Processor extracts book metadata/covers/text for document
+	// files via the indexer.MediaProcessor extension point.
 	idxManager := indexer.NewIndexManager(logger)
 	idxManager.SetBaseContext(ctx)
+	idxManager.SetMediaProcessor(bookmeta.NewProcessor(logger))
 
 	// Recover persisted scan and processing jobs after a restart: start one
 	// job worker per registered library. Offline libraries are skipped and

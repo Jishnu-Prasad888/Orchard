@@ -35,6 +35,13 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 	).Scan(&name); err != nil {
 		t.Fatalf("index_jobs table missing: %v", err)
 	}
+
+	// book_metadata table must exist (internal/bookmeta's extraction pipeline).
+	if err := pool.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type='table' AND name='book_metadata'`,
+	).Scan(&name); err != nil {
+		t.Fatalf("book_metadata table missing: %v", err)
+	}
 }
 
 // TestOpenAddsMediaTypeToExistingLibrary proves a library database created
