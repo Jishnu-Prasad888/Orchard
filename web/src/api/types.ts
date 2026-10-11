@@ -195,6 +195,26 @@ export interface FileCollectionResponse {
   files: FileSummary[];
 }
 
+/** A personal, user-owned grouping of files — unlike a Tag, never shared
+ * with other users of the same library. */
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  pinned: boolean;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectionListResponse {
+  collections: Collection[];
+}
+
+export interface CollectionEnvelope {
+  collection: Collection;
+}
+
 /** A per-file Markdown note (caption / description) shown under the media. */
 export interface FileNote {
   file_id: string;

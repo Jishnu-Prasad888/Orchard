@@ -29,6 +29,7 @@ import { downloadUrl, thumbnailUrl, mediaTypeIcon } from './media';
 import { Icon, type IconName } from './ui/Icon';
 import { Menu, useMenuButton, withDangerLast } from './ui/Menu';
 import { BookPanel } from './viewer/BookPanel';
+import { CollectionsPanel } from './viewer/CollectionsPanel';
 import { DetailsPanel } from './viewer/DetailsPanel';
 import { SharePanel } from './viewer/SharePanel';
 import { TagsPanel } from './viewer/TagsPanel';
@@ -53,11 +54,12 @@ export interface ViewerModalProps {
   onNearEnd?: (() => void) | undefined;
 }
 
-type PanelTab = 'details' | 'book' | 'tags' | 'share';
+type PanelTab = 'details' | 'book' | 'tags' | 'collections' | 'share';
 
 const BASE_PANEL_TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'details', label: 'Details' },
   { id: 'tags', label: 'Tags' },
+  { id: 'collections', label: 'Collections' },
   { id: 'share', label: 'Share' },
 ];
 
@@ -621,6 +623,12 @@ export function ViewerModal({
     },
     { id: 'tags', label: 'Tags', icon: 'tag', onSelect: () => openPanelAt('tags') },
     {
+      id: 'collections',
+      label: 'Collections',
+      icon: 'list',
+      onSelect: () => openPanelAt('collections'),
+    },
+    {
       id: 'slideshow',
       label: slideshow ? 'Stop slideshow' : 'Slideshow',
       icon: 'slideshow',
@@ -1008,6 +1016,9 @@ export function ViewerModal({
               {activeTab === 'book' && <BookPanel key={file.id} libraryId={libraryId} file={file} />}
               {activeTab === 'tags' && (
                 <TagsPanel key={file.id} libraryId={libraryId} file={file} onChanged={onChanged} />
+              )}
+              {activeTab === 'collections' && (
+                <CollectionsPanel key={file.id} libraryId={libraryId} file={file} onChanged={onChanged} />
               )}
               {activeTab === 'share' && <SharePanel key={file.id} libraryId={libraryId} file={file} />}
             </div>

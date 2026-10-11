@@ -37,7 +37,15 @@ describe('AppShell', () => {
     const labels = within(sections)
       .getAllByRole('link')
       .map((link) => link.textContent);
-    expect(labels).toEqual(['Home', 'Files', 'Favorites', 'Tags', 'Shared', 'Trash']);
+    expect(labels).toEqual([
+      'Home',
+      'Files',
+      'Favorites',
+      'Tags',
+      'Collections',
+      'Shared',
+      'Trash',
+    ]);
     // Settings sits apart, at the foot.
     expect(
       within(screen.getByRole('navigation', { name: 'Settings' })).getByRole('link', {

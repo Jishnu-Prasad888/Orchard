@@ -872,6 +872,51 @@ describe('MediaPage', () => {
     });
   });
 
+  it('creates a collection and adds a file to it from the collections panel', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/collections')
+          ? json({ collection: { id: 'c9', name: 'Beach reads', item_count: 0 } }, 201)
+          : undefined,
+      (url, init) =>
+        init?.method === 'POST' &&
+        url.endsWith('/api/v1/libraries/lib1/collections/c9/files')
+          ? noContent(201)
+          : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/collections') ? json({ collections: [] }) : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f1/collections')
+          ? json({ collections: [] })
+          : undefined,
+    ]);
+
+    await screen.findByTestId('file-grid');
+    fireEvent.click(screen.getByText('IMG_0001.png'));
+    fireEvent.click(await screen.findByTestId('viewer-tab-collections'));
+
+    const panel = await screen.findByTestId('viewer-collections');
+    expect(within(panel).getByText('No collections yet.')).toBeInTheDocument();
+
+    fireEvent.change(within(panel).getByLabelText('New collection'), {
+      target: { value: 'Beach reads' },
+    });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/collections')).toBe(true);
+    });
+    expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/lib1/collections')).toMatchObject({
+      name: 'Beach reads',
+    });
+    await waitFor(() => {
+      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/collections/c9/files')).toBe(true);
+    });
+    expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/lib1/collections/c9/files')).toEqual({
+      file_id: 'f1',
+    });
+  });
+
   it('creates a read-only share link for a file', async () => {
     const fetchMock = setup([
       (url, init) =>
