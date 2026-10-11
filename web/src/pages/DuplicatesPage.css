@@ -9,7 +9,7 @@
 
 .duplicate-group-head {
   margin: 0 0 var(--space-2);
-  color: var(--color-ink-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
 
