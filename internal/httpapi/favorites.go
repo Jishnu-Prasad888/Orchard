@@ -47,7 +47,7 @@ func (s *Server) handleAddFavorite(w http.ResponseWriter, r *http.Request, u *au
 	}
 	defer cleanup()
 
-	if err := store.Add(r.Context(), r.PathValue("fileID")); err != nil {
+	if err := store.Add(r.Context(), u.ID, r.PathValue("fileID")); err != nil {
 		s.writeFavoriteError(w, r, err)
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) handleRemoveFavorite(w http.ResponseWriter, r *http.Request, u 
 	}
 	defer cleanup()
 
-	if err := store.Remove(r.Context(), r.PathValue("fileID")); err != nil {
+	if err := store.Remove(r.Context(), u.ID, r.PathValue("fileID")); err != nil {
 		s.writeFavoriteError(w, r, err)
 		return
 	}
@@ -93,7 +93,7 @@ func (s *Server) handleListFavorites(w http.ResponseWriter, r *http.Request, u *
 	}
 	defer cleanup()
 
-	files, err := store.ListFiles(r.Context())
+	files, err := store.ListFiles(r.Context(), u.ID)
 	if err != nil {
 		s.logger.Error("list favorites", "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,

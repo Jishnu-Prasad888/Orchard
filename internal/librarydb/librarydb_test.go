@@ -123,6 +123,113 @@ func TestOpenAddsMediaTypeToExistingLibrary(t *testing.T) {
 	}
 }
 
+// TestOpenAddsUserScopingToExistingFavoritesAndNotes proves a library
+// database created before favorites/file_notes had a user_id column is
+// brought forward on open: the old library-wide tables are replaced with
+// per-user ones, and the new shape actually enforces per-user scoping.
+func TestOpenAddsUserScopingToExistingFavoritesAndNotes(t *testing.T) {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Build a database in the old shape: file_id-only primary keys, no user_id.
+	old, err := sql.Open("sqlite", filepath.Join(orchardDir, "library.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = old.Exec(`
+		CREATE TABLE indexed_files (
+			id            TEXT PRIMARY KEY,
+			rel_path      TEXT NOT NULL UNIQUE,
+			size_bytes    INTEGER NOT NULL,
+			mod_time      TEXT NOT NULL,
+			content_hash  TEXT,
+			status        TEXT NOT NULL DEFAULT 'present',
+			first_seen_at TEXT NOT NULL,
+			last_seen_at  TEXT NOT NULL,
+			indexed_at    TEXT NOT NULL
+		);
+		CREATE TABLE favorites (
+			file_id    TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL
+		);
+		CREATE TABLE file_notes (
+			file_id    TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+			body       TEXT NOT NULL DEFAULT '',
+			updated_at TEXT NOT NULL
+		);
+		INSERT INTO indexed_files VALUES
+			('f1', 'book.pdf', 10, '2024-01-01T00:00:00Z', NULL, 'present',
+			 '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+		INSERT INTO favorites (file_id, created_at) VALUES ('f1', '2024-01-01T00:00:00Z');
+		INSERT INTO file_notes (file_id, body, updated_at) VALUES ('f1', 'old note', '2024-01-01T00:00:00Z');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("Open on a pre-existing library db: %v", err)
+	}
+	defer func() { _ = pool.Close() }()
+
+	for _, table := range []string{"favorites", "file_notes"} {
+		var n int
+		if err := pool.QueryRow(
+			`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = 'user_id'`, table,
+		).Scan(&n); err != nil {
+			t.Fatalf("check user_id column on %s: %v", table, err)
+		}
+		if n != 1 {
+			t.Errorf("%s.user_id missing after migration", table)
+		}
+	}
+
+	// The pre-migration row had no owner to attribute it to, so it is
+	// dropped rather than guessed at — a fresh per-user row can be added
+	// after migration and must round-trip correctly.
+	var favCount, noteCount int
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM favorites`).Scan(&favCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM file_notes`).Scan(&noteCount); err != nil {
+		t.Fatal(err)
+	}
+	if favCount != 0 || noteCount != 0 {
+		t.Errorf("expected legacy unscoped rows to be dropped, got favorites=%d file_notes=%d", favCount, noteCount)
+	}
+
+	if _, err := pool.Exec(
+		`INSERT INTO favorites (user_id, file_id, created_at) VALUES ('u1', 'f1', '2024-02-01T00:00:00Z')`,
+	); err != nil {
+		t.Fatalf("insert favorite under new schema: %v", err)
+	}
+	if _, err := pool.Exec(
+		`INSERT INTO file_notes (user_id, file_id, body, updated_at) VALUES ('u1', 'f1', 'new note', '2024-02-01T00:00:00Z')`,
+	); err != nil {
+		t.Fatalf("insert note under new schema: %v", err)
+	}
+
+	// Re-opening (every request opens the library db) must be a no-op, not
+	// a repeat drop of the row just inserted.
+	pool2, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("re-open of a migrated library db: %v", err)
+	}
+	defer func() { _ = pool2.Close() }()
+
+	if err := pool2.QueryRow(`SELECT COUNT(*) FROM favorites WHERE user_id = 'u1'`).Scan(&favCount); err != nil {
+		t.Fatal(err)
+	}
+	if favCount != 1 {
+		t.Errorf("favorite inserted post-migration was lost on re-open, count = %d", favCount)
+	}
+}
+
 func TestOpenDBWrapper(t *testing.T) {
 	orchardDir := filepath.Join(t.TempDir(), ".orchard")
 	if err := os.MkdirAll(orchardDir, 0o755); err != nil {

@@ -100,7 +100,7 @@ func (s *Server) handleFileCounts(w http.ResponseWriter, r *http.Request, u *aut
 			CodeInternal, "Failed to count files.")
 		return
 	}
-	coll, err := svc.Store().CountCollections(r.Context())
+	coll, err := svc.Store().CountCollections(r.Context(), u.ID)
 	if err != nil {
 		s.logger.Error("count collections", "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,

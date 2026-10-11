@@ -49,11 +49,11 @@ func TestAddFavorite(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "photo.jpg")
-	if err := store.Add(ctx, fileID); err != nil {
+	if err := store.Add(ctx, "u1", fileID); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
-	ok, err := store.IsFavorite(ctx, fileID)
+	ok, err := store.IsFavorite(ctx, "u1", fileID)
 	if err != nil {
 		t.Fatalf("IsFavorite: %v", err)
 	}
@@ -67,11 +67,11 @@ func TestAddFavoriteAlreadyFavorited(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "photo.jpg")
-	if err := store.Add(ctx, fileID); err != nil {
+	if err := store.Add(ctx, "u1", fileID); err != nil {
 		t.Fatalf("first Add: %v", err)
 	}
 
-	err := store.Add(ctx, fileID)
+	err := store.Add(ctx, "u1", fileID)
 	if !errors.Is(err, favorites.ErrAlreadyFavorited) {
 		t.Errorf("expected ErrAlreadyFavorited, got %v", err)
 	}
@@ -84,15 +84,15 @@ func TestRemoveFavorite(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "photo.jpg")
-	if err := store.Add(ctx, fileID); err != nil {
+	if err := store.Add(ctx, "u1", fileID); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
-	if err := store.Remove(ctx, fileID); err != nil {
+	if err := store.Remove(ctx, "u1", fileID); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 
-	ok, _ := store.IsFavorite(ctx, fileID)
+	ok, _ := store.IsFavorite(ctx, "u1", fileID)
 	if ok {
 		t.Error("expected file to not be favorited after remove")
 	}
@@ -103,7 +103,7 @@ func TestRemoveFavoriteNotFavorited(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "photo.jpg")
-	err := store.Remove(ctx, fileID)
+	err := store.Remove(ctx, "u1", fileID)
 	if !errors.Is(err, favorites.ErrNotFavorited) {
 		t.Errorf("expected ErrNotFavorited, got %v", err)
 	}
@@ -116,7 +116,7 @@ func TestIsFavoriteNotFavorited(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "photo.jpg")
-	ok, err := store.IsFavorite(ctx, fileID)
+	ok, err := store.IsFavorite(ctx, "u1", fileID)
 	if err != nil {
 		t.Fatalf("IsFavorite: %v", err)
 	}
@@ -135,14 +135,14 @@ func TestListFiles(t *testing.T) {
 	f2 := seedFile(t, fs, "photo2.jpg")
 	seedFile(t, fs, "photo3.jpg") // not favorited
 
-	if err := store.Add(ctx, f1); err != nil {
+	if err := store.Add(ctx, "u1", f1); err != nil {
 		t.Fatalf("Add f1: %v", err)
 	}
-	if err := store.Add(ctx, f2); err != nil {
+	if err := store.Add(ctx, "u1", f2); err != nil {
 		t.Fatalf("Add f2: %v", err)
 	}
 
-	files, err := store.ListFiles(ctx)
+	files, err := store.ListFiles(ctx, "u1")
 	if err != nil {
 		t.Fatalf("ListFiles: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestListFiles(t *testing.T) {
 
 func TestListFilesEmpty(t *testing.T) {
 	store, _ := newTestStore(t)
-	files, err := store.ListFiles(context.Background())
+	files, err := store.ListFiles(context.Background(), "u1")
 	if err != nil {
 		t.Fatalf("ListFiles: %v", err)
 	}
@@ -167,11 +167,11 @@ func TestListFilesHasMetadata(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "cat.jpg")
-	if err := store.Add(ctx, fileID); err != nil {
+	if err := store.Add(ctx, "u1", fileID); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
-	files, err := store.ListFiles(ctx)
+	files, err := store.ListFiles(ctx, "u1")
 	if err != nil {
 		t.Fatalf("ListFiles: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestFavoriteRemovedWhenFileDeleted(t *testing.T) {
 	ctx := context.Background()
 
 	fileID := seedFile(t, fs, "photo.jpg")
-	if err := store.Add(ctx, fileID); err != nil {
+	if err := store.Add(ctx, "u1", fileID); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
@@ -206,7 +206,7 @@ func TestFavoriteRemovedWhenFileDeleted(t *testing.T) {
 		t.Fatalf("DeleteRow: %v", err)
 	}
 
-	files, err := store.ListFiles(ctx)
+	files, err := store.ListFiles(ctx, "u1")
 	if err != nil {
 		t.Fatalf("ListFiles: %v", err)
 	}
