@@ -21,6 +21,7 @@ export const admin: User = {
   id: 'u1',
   username: 'jishnu',
   role: 'admin',
+  enabled: true,
   created_at: '2026-01-01T00:00:00Z',
 };
 
@@ -28,6 +29,7 @@ export const member: User = {
   id: 'u2',
   username: 'alice',
   role: 'user',
+  enabled: true,
   created_at: '2026-02-02T00:00:00Z',
 };
 

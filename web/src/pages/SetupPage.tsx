@@ -21,8 +21,178 @@ const MAX_PASSWORD_LENGTH = 1024;
  * accounts instead — so the "Create an account" button on the sign-in page
  * always leads somewhere useful and never bypasses that rule.
  */
+/**
+ * Shown on /setup when accounts already exist but the administrator has
+ * turned on public account requests. Unlike bootstrap, this never signs
+ * anyone in — the request sits with the administrator until they approve or
+ * deny it, so the form ends in a confirmation rather than a redirect.
+ */
+function RequestAccessCard() {
+  const { requestSignup } = useAuth();
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const validate = (): string | null => {
+    const name = username.trim();
+    if (name === '') return 'Choose a username.';
+    if (!USERNAME_PATTERN.test(name)) {
+      return 'Use 1–64 letters, digits, ".", "_" or "-", starting with a letter or digit.';
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return `Use a password of at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      return 'That password is too long.';
+    }
+    if (password !== confirm) return 'The passwords do not match.';
+    return null;
+  };
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const problem = validate();
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await requestSignup(username.trim(), password);
+      setSent(true);
+    } catch (e: unknown) {
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not reach the Orchard server. Check your connection and try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <main className="auth-page" data-testid="setup-page">
+        <section className="auth-card" aria-labelledby="setup-title">
+          <header className="auth-header">
+            <h1 className="auth-brand">
+              <Brand>Orchard</Brand>
+            </h1>
+            <h2 id="setup-title" className="auth-title">
+              Request sent
+            </h2>
+            <p className="auth-subtitle">
+              An administrator needs to approve <strong>{username.trim()}</strong> before you can
+              sign in. Check back once they have.
+            </p>
+          </header>
+          <Link className="auth-secondary" to="/login">
+            Back to sign in
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="auth-page" data-testid="setup-page">
+      <section className="auth-card" aria-labelledby="setup-title">
+        <header className="auth-header">
+          <h1 className="auth-brand">
+            <Brand>Orchard</Brand>
+          </h1>
+          <h2 id="setup-title" className="auth-title">
+            Request an account
+          </h2>
+          <p className="auth-subtitle">
+            An administrator reviews every request before you can sign in.
+          </p>
+        </header>
+
+        <form className="auth-form" onSubmit={(e) => void onSubmit(e)}>
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="request-username">
+              Username
+            </label>
+            <input
+              className="auth-input"
+              id="request-username"
+              type="text"
+              name="username"
+              autoComplete="username"
+              autoFocus
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="request-password">
+              Password
+            </label>
+            <input
+              className="auth-input"
+              id="request-password"
+              type="password"
+              name="password"
+              autoComplete="new-password"
+              aria-describedby="request-password-hint"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+            />
+            <span className="auth-hint" id="request-password-hint">
+              At least {MIN_PASSWORD_LENGTH} characters.
+            </span>
+          </div>
+
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="request-confirm">
+              Confirm password
+            </label>
+            <input
+              className="auth-input"
+              id="request-confirm"
+              type="password"
+              name="confirm-password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+
+          {error && (
+            <p className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" className="auth-submit" disabled={busy}>
+            {busy ? 'Sending…' : 'Request account'}
+          </button>
+
+          <div className="auth-switch">
+            <Link className="auth-secondary" to="/login">
+              Back to sign in
+            </Link>
+          </div>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 export default function SetupPage() {
-  const { loading, bootstrapRequired, user, bootstrap, refresh } = useAuth();
+  const { loading, bootstrapRequired, signupRequestsEnabled, user, bootstrap, refresh } =
+    useAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState('');
@@ -35,8 +205,12 @@ export default function SetupPage() {
   // Someone is already signed in — nothing to set up.
   if (user) return <Navigate to="/" replace />;
   // An account already exists: bootstrap is closed and only an administrator
-  // can add accounts, so say that rather than showing a form that would fail.
+  // can add accounts. When the administrator has turned on public account
+  // requests, offer that form instead of a dead end.
   if (!bootstrapRequired) {
+    if (signupRequestsEnabled) {
+      return <RequestAccessCard />;
+    }
     return (
       <main className="auth-page" data-testid="setup-page">
         <section className="auth-card" aria-labelledby="setup-title">

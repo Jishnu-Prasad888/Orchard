@@ -12,6 +12,7 @@ import {
   ApiError,
   apiDelete,
   apiGet,
+  apiPatch,
   apiPost,
   apiPut,
   apiRequest,
@@ -34,6 +35,8 @@ import type {
   LibraryCreateResponse,
   LibraryListResponse,
   LibraryProbeResponse,
+  PendingSignup,
+  PendingSignupListResponse,
   PermissionGrant,
   PublicShareInfo,
   ShareCreateResponse,
@@ -321,8 +324,28 @@ export const listUsers = () => apiGet<UserListResponse>('/users');
 export const createUser = (input: { username: string; password: string; role?: string }) =>
   apiPost<{ user: User }>('/users', input);
 
+export const updateUser = (userId: string, input: { role?: string; enabled?: boolean }) =>
+  apiPatch<{ user: User }>(`/users/${userId}`, input);
+
+export const deleteUser = (userId: string) => apiDelete<void>(`/users/${userId}`);
+
 export const revokeUserSessions = (userId: string) =>
   apiPost<void>(`/users/${userId}/sessions/revoke`);
+
+/* --------------------------- signup requests ------------------------ */
+
+export const requestSignup = (input: { username: string; password: string }) =>
+  apiPost<{ request: PendingSignup }>('/auth/signup-requests', input);
+
+export const listPendingSignups = () => apiGet<PendingSignupListResponse>('/signup-requests');
+
+export const approveSignup = (id: string, role?: string) =>
+  apiPost<{ user: User }>(`/signup-requests/${id}/approve`, role ? { role } : {});
+
+export const denySignup = (id: string) => apiPost<void>(`/signup-requests/${id}/deny`);
+
+export const setSignupRequestsEnabled = (enabled: boolean) =>
+  apiPut<{ enabled: boolean }>('/settings/signup-requests', { enabled });
 
 /* ------------------------------ shares ----------------------------- */
 

@@ -14,8 +14,18 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/authContext';
 import { apiGet } from '../api/client';
 import { useResource } from '../api/resources';
-import { createUser, listUsers, revokeUserSessions } from '../api/queries';
-import type { HealthResponse, User, UserRole, VersionResponse } from '../api/types';
+import {
+  approveSignup,
+  createUser,
+  deleteUser,
+  denySignup,
+  listPendingSignups,
+  listUsers,
+  revokeUserSessions,
+  setSignupRequestsEnabled,
+  updateUser,
+} from '../api/queries';
+import type { HealthResponse, PendingSignup, User, UserRole, VersionResponse } from '../api/types';
 import Brand from '../components/Brand';
 import { ConfirmDialog } from '../components/Dialog';
 import { PageHeader } from '../components/States';
@@ -100,8 +110,63 @@ function LinkRow({
   );
 }
 
+/** One pending "request an account" row, with its own role choice for approval. */
+function PendingSignupRow({
+  request,
+  onApprove,
+  onDeny,
+  busy,
+}: {
+  request: PendingSignup;
+  onApprove: (id: string, role: UserRole) => void;
+  onDeny: (id: string) => void;
+  busy: boolean;
+}) {
+  const [role, setRole] = useState<UserRole>('user');
+  return (
+    <li className="settings-row">
+      <span className="settings-avatar settings-avatar-sm" aria-hidden="true">
+        {request.username.slice(0, 1).toUpperCase()}
+      </span>
+      <div className="settings-row-text">
+        <span className="settings-row-title">{request.username}</span>
+        <span className="settings-row-description">
+          Requested {formatDate(request.requested_at)}
+        </span>
+      </div>
+      <div className="settings-row-control settings-signup-controls">
+        <select
+          aria-label={`Role for ${request.username}`}
+          value={role}
+          onChange={(e) => setRole(e.target.value as UserRole)}
+          disabled={busy}
+        >
+          <option value="user">Member</option>
+          <option value="admin">Administrator</option>
+        </select>
+        <button
+          type="button"
+          className="button primary-button"
+          onClick={() => onApprove(request.id, role)}
+          disabled={busy}
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          className="button ghost-button"
+          onClick={() => onDeny(request.id)}
+          disabled={busy}
+        >
+          Deny
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, signupRequestsEnabled, refresh: refreshAuth } = useAuth();
   const isAdmin = user?.role === 'admin';
   const { hash } = useLocation();
 
@@ -178,6 +243,82 @@ export default function SettingsPage() {
       })
       .catch((e: unknown) => setCreateError(message(e)))
       .finally(() => setCreateBusy(false));
+  };
+
+  const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const changeRole = (target: User, role: UserRole) => {
+    setRoleBusyId(target.id);
+    setRoleError(null);
+    updateUser(target.id, { role })
+      .then(() => users.reload())
+      .catch((e: unknown) => setRoleError(message(e)))
+      .finally(() => setRoleBusyId(null));
+  };
+
+  const [enabledBusyId, setEnabledBusyId] = useState<string | null>(null);
+  const [enabledError, setEnabledError] = useState<string | null>(null);
+  const toggleEnabled = (target: User) => {
+    setEnabledBusyId(target.id);
+    setEnabledError(null);
+    updateUser(target.id, { enabled: !target.enabled })
+      .then(() => users.reload())
+      .catch((e: unknown) => setEnabledError(message(e)))
+      .finally(() => setEnabledBusyId(null));
+  };
+
+  const [deleting, setDeleting] = useState<User | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const confirmDelete = () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    deleteUser(deleting.id)
+      .then(() => {
+        setDeleting(null);
+        users.reload();
+      })
+      .catch((e: unknown) => setDeleteError(message(e)))
+      .finally(() => setDeleteBusy(false));
+  };
+
+  const pending = useResource<PendingSignup[]>(
+    useCallback(async () => (await listPendingSignups()).requests ?? [], []),
+    [],
+    isAdmin,
+  );
+  const [signupActionId, setSignupActionId] = useState<string | null>(null);
+  const [signupActionError, setSignupActionError] = useState<string | null>(null);
+  const approveRequest = (id: string, role: UserRole) => {
+    setSignupActionId(id);
+    setSignupActionError(null);
+    approveSignup(id, role)
+      .then(() => {
+        pending.reload();
+        users.reload();
+      })
+      .catch((e: unknown) => setSignupActionError(message(e)))
+      .finally(() => setSignupActionId(null));
+  };
+  const denyRequest = (id: string) => {
+    setSignupActionId(id);
+    setSignupActionError(null);
+    denySignup(id)
+      .then(() => pending.reload())
+      .catch((e: unknown) => setSignupActionError(message(e)))
+      .finally(() => setSignupActionId(null));
+  };
+
+  const [signupToggleBusy, setSignupToggleBusy] = useState(false);
+  const [signupToggleError, setSignupToggleError] = useState<string | null>(null);
+  const toggleSignupRequests = (enabled: boolean) => {
+    setSignupToggleBusy(true);
+    setSignupToggleError(null);
+    setSignupRequestsEnabled(enabled)
+      .then(() => refreshAuth())
+      .catch((e: unknown) => setSignupToggleError(message(e)))
+      .finally(() => setSignupToggleBusy(false));
   };
 
   const sections: Array<{ id: string; label: string }> = [
@@ -287,6 +428,11 @@ export default function SettingsPage() {
                   </p>
                 )}
                 {users.loading && !users.error && <p className="muted">Loading accounts…</p>}
+                {(roleError || enabledError || deleteError) && (
+                  <p className="error-text" role="alert">
+                    {roleError ?? enabledError ?? deleteError}
+                  </p>
+                )}
                 {users.data !== null && users.data.length > 0 && (
                   <ul className="settings-user-list" data-testid="settings-user-list">
                     {users.data.map((row) => (
@@ -304,9 +450,32 @@ export default function SettingsPage() {
                               {row.role === 'admin' ? 'Administrator' : 'Member'}
                             </span>{' '}
                             · Joined {formatDate(row.created_at)}
+                            {!row.enabled && (
+                              <>
+                                {' · '}
+                                <span className="status-badge status-badge-offline">Disabled</span>
+                              </>
+                            )}
                           </span>
                         </div>
-                        <div className="settings-row-control">
+                        <div className="settings-row-control settings-account-controls">
+                          <select
+                            aria-label={`Role for ${row.username}`}
+                            value={row.role}
+                            onChange={(e) => changeRole(row, e.target.value as UserRole)}
+                            disabled={roleBusyId === row.id}
+                          >
+                            <option value="user">Member</option>
+                            <option value="admin">Administrator</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="button ghost-button"
+                            onClick={() => toggleEnabled(row)}
+                            disabled={enabledBusyId === row.id}
+                          >
+                            {row.enabled ? 'Disable' : 'Enable'}
+                          </button>
                           <button
                             type="button"
                             className="button ghost-button"
@@ -317,10 +486,62 @@ export default function SettingsPage() {
                           >
                             Revoke sessions
                           </button>
+                          <button
+                            type="button"
+                            className="button danger-button"
+                            onClick={() => {
+                              setDeleteError(null);
+                              setDeleting(row);
+                            }}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {(pending.data?.length ?? 0) > 0 && (
+                  <div className="settings-pending">
+                    <h3>Pending requests</h3>
+                    {signupActionError && (
+                      <p className="error-text" role="alert">
+                        {signupActionError}
+                      </p>
+                    )}
+                    <ul className="settings-user-list" data-testid="settings-pending-list">
+                      {pending.data?.map((req) => (
+                        <PendingSignupRow
+                          key={req.id}
+                          request={req}
+                          onApprove={approveRequest}
+                          onDeny={denyRequest}
+                          busy={signupActionId === req.id}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <Row
+                  title="Allow account requests"
+                  description="Let visitors without an account ask for one from the sign-in page. You approve or deny each request."
+                >
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={signupRequestsEnabled}
+                      onChange={(e) => toggleSignupRequests(e.target.checked)}
+                      disabled={signupToggleBusy}
+                    />
+                    <span>{signupRequestsEnabled ? 'On' : 'Off'}</span>
+                  </label>
+                </Row>
+                {signupToggleError && (
+                  <p className="error-text" role="alert">
+                    {signupToggleError}
+                  </p>
                 )}
 
                 <form className="settings-create" onSubmit={(e) => void create(e)}>
@@ -481,6 +702,24 @@ export default function SettingsPage() {
         onCancel={() => setRevoking(null)}
         onConfirm={confirmRevoke}
         testId="revoke-sessions-dialog"
+      />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title="Delete this account?"
+        destructive
+        confirmLabel="Delete"
+        busy={deleteBusy}
+        error={deleteError}
+        message={
+          <p>
+            <strong>{deleting?.username}</strong> and everything tied only to their account will be
+            removed. This cannot be undone.
+          </p>
+        }
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        testId="delete-account-dialog"
       />
     </main>
   );
