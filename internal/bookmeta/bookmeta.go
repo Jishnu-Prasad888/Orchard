@@ -18,7 +18,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/Jishnu-Prasad888/Orchard/internal/search"
 )
 
 // Metadata is a document's book-style metadata, one row per indexed file.
@@ -120,7 +123,23 @@ func (s *Store) Upsert(ctx context.Context, m Metadata) error {
 	if err != nil {
 		return fmt.Errorf("upsert book metadata: %w", err)
 	}
-	return nil
+	// The UPDATE above is conditional (WHERE user_edited = 0), so m may not
+	// reflect what actually ended up stored (a user-edited row ignores
+	// extraction) — re-read before syncing, rather than trust the input.
+	stored, _, err := s.Get(ctx, m.FileID)
+	if err != nil {
+		return err
+	}
+	return syncMetadataFTS(ctx, s.db, stored)
+}
+
+// syncMetadataFTS keeps fts_content's 'metadata' row for a file current.
+// Not a DB trigger: book_metadata is only ever written via UPSERT, and an
+// UPSERT's INSERT-vs-UPDATE trigger-firing semantics aren't worth depending
+// on when a single extra statement here does the job unambiguously.
+func syncMetadataFTS(ctx context.Context, db *sql.DB, m Metadata) error {
+	text := strings.TrimSpace(m.Title + " " + m.Author + " " + m.Description)
+	return search.SyncContent(ctx, db, search.ContentMetadata, m.FileID, m.FileID, "", text)
 }
 
 // SetUserEdit merges a person's edits from the book details panel into a
@@ -170,6 +189,9 @@ func (s *Store) SetUserEdit(ctx context.Context, fileID string, edit UserEdit) (
 		return Metadata{}, fmt.Errorf("set user edit: %w", err)
 	}
 	m.UserEdited = true
+	if err := syncMetadataFTS(ctx, s.db, m); err != nil {
+		return Metadata{}, err
+	}
 	return m, nil
 }
 

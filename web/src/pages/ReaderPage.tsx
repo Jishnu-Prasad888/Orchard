@@ -30,10 +30,11 @@ import {
   listFileBookmarks,
   listFileHighlights,
   markFileOpened,
+  searchFileContent,
   setReaderPreferences as saveReaderPreferences,
   setReadingProgress,
 } from '../api/queries';
-import type { BookMetadata, Bookmark, FileSummary, Highlight, ReaderPreferences } from '../api/types';
+import type { BookMetadata, Bookmark, ContentHit, FileSummary, Highlight, ReaderPreferences } from '../api/types';
 import { DEFAULT_READER_PREFERENCES, HIGHLIGHT_COLORS } from '../api/types';
 import { downloadUrl, fileExtension } from '../components/media';
 import { EpubReader } from '../components/reader/EpubReader';
@@ -83,6 +84,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
   const [panel, setPanel] = useState<PanelTab | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchMatch[] | null>(null);
+  const [contentHits, setContentHits] = useState<ContentHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [readerError, setReaderError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -266,9 +268,17 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       setSearchQuery(query);
       if (!query.trim()) {
         setSearchResults(null);
+        setContentHits(null);
         return;
       }
       setSearching(true);
+      // The reader's own client-side search (open-book text only) and the
+      // server-side content search (this book's extracted text plus your
+      // quotes/highlights/notes about it) run side by side — one has no
+      // bearing on the other's availability.
+      searchFileContent(libraryId, fileId, query)
+        .then((resp) => setContentHits(resp.hits ?? []))
+        .catch(() => setContentHits([]));
       try {
         const results = (await readerRef.current?.search(query)) ?? [];
         setSearchResults(results);
@@ -276,7 +286,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
         setSearching(false);
       }
     },
-    [],
+    [libraryId, fileId],
   );
 
   const togglePanel = (tab: PanelTab) => {
@@ -604,6 +614,31 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {contentHits !== null && contentHits.length > 0 && (
+                  <>
+                    <h3 className="reader-search-section-heading">Your notes &amp; quotes about this book</h3>
+                    <ul className="reader-search-results" data-testid="reader-content-hits">
+                      {contentHits.map((h, i) =>
+                        h.location ? (
+                          <li key={`${h.source_type}-${h.source_id}-${i}`}>
+                            <button
+                              type="button"
+                              className="reader-search-result"
+                              onClick={() => readerRef.current?.goTo(h.location!)}
+                            >
+                              {h.excerpt}
+                            </button>
+                          </li>
+                        ) : (
+                          <li key={`${h.source_type}-${h.source_id}-${i}`} className="reader-search-result-static">
+                            {h.excerpt}
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                  </>
                 )}
               </div>
             )}

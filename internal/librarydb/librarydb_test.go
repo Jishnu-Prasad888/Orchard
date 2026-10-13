@@ -49,6 +49,8 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 	// collections).
 	for _, table := range []string{
 		"reading_status", "file_opens", "reading_progress", "collections", "collection_items",
+		"bookmarks", "highlights", "quotes", "notes", "note_tags", "note_links",
+		"fts_content", "fts_content_state", "recent_searches",
 	} {
 		q := `SELECT name FROM sqlite_master WHERE type='table' AND name='` + table + `'`
 		if err := pool.QueryRow(q).Scan(&name); err != nil {
@@ -351,5 +353,208 @@ func TestOpenIdempotent(t *testing.T) {
 			t.Fatalf("Open #%d: %v", i+1, err)
 		}
 		_ = pool.Close()
+	}
+}
+
+// TestFTSContentTriggersSyncQuotesHighlightsNotes proves the AFTER INSERT/
+// UPDATE/DELETE triggers on quotes/highlights/notes keep fts_content current
+// without any Go-side sync call (unlike book_metadata/book_text, which are
+// synced explicitly by internal/bookmeta — see the schema comment on
+// fts_content).
+func TestFTSContentTriggersSyncQuotesHighlightsNotes(t *testing.T) {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = pool.Close() }()
+
+	now := "2024-01-01T00:00:00Z"
+	if _, err := pool.Exec(`INSERT INTO indexed_files
+		(id, rel_path, size_bytes, mod_time, status, first_seen_at, last_seen_at, indexed_at)
+		VALUES ('f1', 'book.epub', 10, ?, 'present', ?, ?, ?)`, now, now, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(`INSERT INTO quotes
+		(id, user_id, file_id, text, commentary, created_at, updated_at)
+		VALUES ('q1', 'u1', 'f1', 'fear is the mindkiller', 'a favorite', ?, ?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(`INSERT INTO highlights
+		(id, user_id, file_id, location, text, note, created_at, updated_at)
+		VALUES ('h1', 'u1', 'f1', 'page:1', 'the spice must flow', '', ?, ?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(`INSERT INTO notes
+		(id, user_id, title, body, created_at, updated_at)
+		VALUES ('n1', 'u1', 'thoughts', 'a standalone note about dunes', ?, ?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	assertMatch := func(needle, wantSourceType, wantSourceID string) {
+		t.Helper()
+		var sourceType, sourceID string
+		err := pool.QueryRow(
+			`SELECT source_type, source_id FROM fts_content WHERE fts_content MATCH ?`, needle,
+		).Scan(&sourceType, &sourceID)
+		if err != nil {
+			t.Fatalf("MATCH %q: %v", needle, err)
+		}
+		if sourceType != wantSourceType || sourceID != wantSourceID {
+			t.Errorf("MATCH %q = (%s, %s), want (%s, %s)", needle, sourceType, sourceID, wantSourceType, wantSourceID)
+		}
+	}
+	assertMatch("mindkiller", "quote", "q1")
+	assertMatch("spice", "highlight", "h1")
+	assertMatch("dunes", "note", "n1")
+
+	// Update: the old text must no longer match, the new text must.
+	if _, err := pool.Exec(`UPDATE quotes SET text = 'updated quote text' WHERE id = 'q1'`); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'mindkiller'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("old quote text still indexed after update, count = %d", count)
+	}
+	assertMatch("updated", "quote", "q1")
+
+	// Delete: the row must be gone from fts_content too.
+	if _, err := pool.Exec(`DELETE FROM highlights WHERE id = 'h1'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'spice'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("deleted highlight still indexed, count = %d", count)
+	}
+
+	// Cascade delete (the file itself, not the quote): quotes.file_id
+	// REFERENCES indexed_files ON DELETE CASCADE still fires the quotes
+	// DELETE trigger, since SQLite's FK cascade is a real DELETE.
+	if _, err := pool.Exec(`DELETE FROM indexed_files WHERE id = 'f1'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'quote'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("quote survived its file's cascade delete in fts_content, count = %d", count)
+	}
+}
+
+// TestOpenBackfillsFTSContent proves a library database created before
+// fts_content existed is brought forward on open: pre-existing quotes,
+// highlights, notes, book_metadata, and extracted book text (read back from
+// disk) all get indexed once, and a second Open() does not duplicate rows.
+func TestOpenBackfillsFTSContent(t *testing.T) {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	textDir := filepath.Join(orchardDir, "text")
+	if err := os.MkdirAll(textDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(textDir, "f1.txt"), []byte("the desert planet arrakis"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	old, err := sql.Open("sqlite", filepath.Join(orchardDir, "library.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = old.Exec(`
+		CREATE TABLE indexed_files (
+			id TEXT PRIMARY KEY, rel_path TEXT NOT NULL UNIQUE, size_bytes INTEGER NOT NULL,
+			mod_time TEXT NOT NULL, content_hash TEXT, status TEXT NOT NULL DEFAULT 'present',
+			first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, indexed_at TEXT NOT NULL
+		);
+		CREATE TABLE book_metadata (
+			file_id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '',
+			publisher TEXT NOT NULL DEFAULT '', year TEXT NOT NULL DEFAULT '', isbn TEXT NOT NULL DEFAULT '',
+			description TEXT NOT NULL DEFAULT '', cover_path TEXT NOT NULL DEFAULT '',
+			text_path TEXT NOT NULL DEFAULT '', user_edited INTEGER NOT NULL DEFAULT 0, extracted_at TEXT NOT NULL
+		);
+		CREATE TABLE quotes (
+			id TEXT PRIMARY KEY, user_id TEXT NOT NULL, file_id TEXT NOT NULL, text TEXT NOT NULL,
+			location TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '', chapter TEXT NOT NULL DEFAULT '',
+			page TEXT NOT NULL DEFAULT '', commentary TEXT NOT NULL DEFAULT '', favorite INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+		);
+		CREATE TABLE highlights (
+			id TEXT PRIMARY KEY, user_id TEXT NOT NULL, file_id TEXT NOT NULL, location TEXT NOT NULL,
+			text TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT 'yellow', note TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+		);
+		CREATE TABLE notes (
+			id TEXT PRIMARY KEY, user_id TEXT NOT NULL, file_id TEXT, quote_id TEXT, highlight_id TEXT,
+			title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+		);
+		INSERT INTO indexed_files VALUES
+			('f1', 'book.epub', 10, '2024-01-01T00:00:00Z', NULL, 'present',
+			 '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+		INSERT INTO book_metadata (file_id, title, author, description, extracted_at)
+			VALUES ('f1', 'Dune', 'Frank Herbert', 'a desert planet saga', '2024-01-01T00:00:00Z');
+		INSERT INTO quotes (id, user_id, file_id, text, commentary, created_at, updated_at)
+			VALUES ('q1', 'u1', 'f1', 'fear is the mindkiller', '', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+		INSERT INTO highlights (id, user_id, file_id, location, text, created_at, updated_at)
+			VALUES ('h1', 'u1', 'f1', 'page:1', 'the spice must flow', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+		INSERT INTO notes (id, user_id, title, body, created_at, updated_at)
+			VALUES ('n1', 'u1', 'thoughts', 'a standalone note about dunes', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+		UPDATE book_metadata SET text_path = 'text/f1.txt' WHERE file_id = 'f1';`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("Open on a pre-existing library db: %v", err)
+	}
+	defer func() { _ = pool.Close() }()
+
+	assertMatch := func(needle, wantSourceType string) {
+		t.Helper()
+		var sourceType string
+		err := pool.QueryRow(
+			`SELECT source_type FROM fts_content WHERE fts_content MATCH ?`, needle,
+		).Scan(&sourceType)
+		if err != nil {
+			t.Fatalf("MATCH %q: %v", needle, err)
+		}
+		if sourceType != wantSourceType {
+			t.Errorf("MATCH %q source_type = %q, want %q", needle, sourceType, wantSourceType)
+		}
+	}
+	assertMatch("mindkiller", "quote")
+	assertMatch("spice", "highlight")
+	assertMatch("dunes", "note")
+	assertMatch("Herbert", "metadata")
+	assertMatch("arrakis", "book_text")
+
+	// Re-opening must not duplicate the backfilled rows.
+	pool2, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("re-open: %v", err)
+	}
+	defer func() { _ = pool2.Close() }()
+
+	var count int
+	if err := pool2.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'mindkiller'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("backfill duplicated on re-open, count = %d, want 1", count)
 	}
 }

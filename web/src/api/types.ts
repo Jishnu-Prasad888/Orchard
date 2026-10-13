@@ -507,6 +507,43 @@ export interface BackupRecord {
   created_at: string;
 }
 
+/* ------------------------------------------------------------------ *
+ * Content search (Phase 6)
+ * ------------------------------------------------------------------ */
+
+/** What kind of row a ContentHit came from. */
+export type ContentSourceType = 'book_text' | 'metadata' | 'quote' | 'highlight' | 'note';
+
+/** A match against extracted book text, book metadata, a quote, a
+ * highlight, or a note — as opposed to a file search hit, which only ever
+ * matches a filename/path. */
+export interface ContentHit {
+  source_type: ContentSourceType;
+  source_id: string;
+  file_id?: string | undefined;
+  excerpt: string;
+  /** The opaque reader location to jump to, when known (quote/highlight
+   * hits only — fts_content itself carries no location, so this comes
+   * from a best-effort server-side lookup). */
+  location?: string | undefined;
+}
+
+export interface ContentHitListResponse {
+  hits: ContentHit[];
+}
+
+/** A search query a user has run recently, remembered per-user so it
+ * follows them across devices (not the per-browser localStorage list this
+ * replaced). */
+export interface RecentSearch {
+  query: string;
+  searched_at: string;
+}
+
+export interface RecentSearchListResponse {
+  searches: RecentSearch[];
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];

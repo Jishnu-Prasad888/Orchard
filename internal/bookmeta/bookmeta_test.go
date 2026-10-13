@@ -236,3 +236,92 @@ func TestBookMetadataCascadesWithFile(t *testing.T) {
 		t.Error("expected book_metadata row to be gone after its file was deleted")
 	}
 }
+
+// TestUpsertSyncsFTSContent proves Upsert keeps fts_content's 'metadata' row
+// current — book_metadata is written via UPSERT, so this is done explicitly
+// (syncMetadataFTS) rather than left to a trigger.
+func TestUpsertSyncsFTSContent(t *testing.T) {
+	store, db, seed := newTestStore(t)
+	seed("f1", "book.epub")
+	ctx := context.Background()
+
+	if err := store.Upsert(ctx, Metadata{FileID: "f1", Title: "Dune", Author: "Frank Herbert"}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	var sourceType string
+	if err := db.QueryRow(`SELECT source_type FROM fts_content WHERE fts_content MATCH 'Herbert'`).Scan(&sourceType); err != nil {
+		t.Fatalf("expected Upsert to index metadata into fts_content: %v", err)
+	}
+	if sourceType != "metadata" {
+		t.Errorf("source_type = %q, want metadata", sourceType)
+	}
+
+	// Re-extraction with different author must replace, not duplicate.
+	if err := store.Upsert(ctx, Metadata{FileID: "f1", Title: "Dune", Author: "F. Herbert"}); err != nil {
+		t.Fatalf("re-upsert: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'Herbert'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("fts_content has %d rows matching Herbert after re-upsert, want 1", count)
+	}
+}
+
+// TestUpsertAfterUserEditDoesNotStompFTSContent proves that once a user has
+// edited a file's metadata, a later re-extraction's Upsert (which the SQL
+// WHERE clause already turns into a no-op against book_metadata itself)
+// does not overwrite fts_content with the stale extracted values either —
+// syncMetadataFTS re-reads the stored row rather than trusting its input.
+func TestUpsertAfterUserEditDoesNotStompFTSContent(t *testing.T) {
+	store, db, seed := newTestStore(t)
+	seed("f1", "book.epub")
+	ctx := context.Background()
+
+	userTitle := "My Own Title"
+	if _, err := store.SetUserEdit(ctx, "f1", UserEdit{Title: &userTitle}); err != nil {
+		t.Fatalf("SetUserEdit: %v", err)
+	}
+
+	// A re-scan tries to overwrite with extracted values; book_metadata's
+	// own UPDATE is skipped (user_edited = 1), and fts_content must reflect
+	// what is actually stored (the user's title), not the extractor's.
+	if err := store.Upsert(ctx, Metadata{FileID: "f1", Title: "Extracted Title"}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'Extracted'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("fts_content was overwritten with the extractor's title despite a user edit, count = %d", count)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'Own'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("fts_content does not reflect the user-edited title, count = %d", count)
+	}
+}
+
+// TestSetUserEditSyncsFTSContent proves editing book metadata from the
+// details panel updates fts_content too, not only book_metadata.
+func TestSetUserEditSyncsFTSContent(t *testing.T) {
+	store, db, seed := newTestStore(t)
+	seed("f1", "book.epub")
+	ctx := context.Background()
+
+	title := "Edited Title"
+	if _, err := store.SetUserEdit(ctx, "f1", UserEdit{Title: &title}); err != nil {
+		t.Fatalf("SetUserEdit: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'Edited'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("fts_content not updated by SetUserEdit, count = %d", count)
+	}
+}

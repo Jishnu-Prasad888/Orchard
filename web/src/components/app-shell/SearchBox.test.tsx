@@ -2,7 +2,8 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { json, mockApi, originalFetch, renderPage } from '../../test/harness';
+import { called, json, mockApi, noContent, originalFetch, renderPage } from '../../test/harness';
+import type { RouteHandler } from '../../test/harness';
 import { SearchBox } from './SearchBox';
 
 function Where() {
@@ -10,12 +11,17 @@ function Where() {
   return <p data-testid="where">{pathname + search}</p>;
 }
 
-function setup() {
-  mockApi([
+function setup(overrides: RouteHandler[] = []) {
+  const fetchMock = mockApi([
+    ...overrides,
     (url) =>
       url.endsWith('/libraries/lib1/tags')
         ? json({ tags: [{ id: 't1', name: 'mountain', created_at: '' }] })
         : undefined,
+    (url, init) => {
+      if (!url.includes('/libraries/lib1/search/recent')) return undefined;
+      return (init?.method ?? 'GET') === 'GET' ? json({ searches: [] }) : noContent();
+    },
   ]);
   renderPage(
     <>
@@ -25,6 +31,7 @@ function setup() {
       </Routes>
     </>,
   );
+  return fetchMock;
 }
 
 describe('SearchBox', () => {
@@ -62,8 +69,15 @@ describe('SearchBox', () => {
   });
 
   it('remembers searches and offers them again, and forgets on request', async () => {
-    setup();
+    const fetchMock = setup();
     const input = screen.getByRole('combobox');
+
+    // The library list (and so libraryId, which remembering a search needs)
+    // resolves from a background fetch on mount; wait for it, the way a
+    // real person always takes longer to type than that fetch takes.
+    fireEvent.focus(input);
+    await waitFor(() => expect(called(fetchMock, 'GET', '/libraries/lib1/tags')).toBe(true));
+
     fireEvent.change(input, { target: { value: 'sunset' } });
     fireEvent.submit(screen.getByRole('search'));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('q=sunset'));

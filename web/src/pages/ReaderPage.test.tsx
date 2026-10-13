@@ -63,6 +63,8 @@ function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
       url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks') ? json({ bookmarks: [] }) : undefined,
     (url) =>
       url.endsWith('/api/v1/libraries/lib1/files/f1/highlights') ? json({ highlights: [] }) : undefined,
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/files/f1/search/content') ? json({ hits: [] }) : undefined,
     (url) => (url.endsWith('/api/v1/settings/reader') ? json({ preferences: DEFAULT_PREFS }) : undefined),
     (url, init) =>
       init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/opened')
@@ -146,6 +148,45 @@ describe('ReaderPage', () => {
     fireEvent.submit(within(panel).getByLabelText('Search this book').closest('form')!);
 
     expect(await within(panel).findByText(/Closing thoughts/)).toBeInTheDocument();
+  });
+
+  it('also shows content-search hits about this book, jumping to a located one', async () => {
+    setup([
+      (url, init) =>
+        (init?.method ?? 'GET') === 'GET' && url.includes('/api/v1/libraries/lib1/files/f1/search/content')
+          ? json({
+              hits: [
+                {
+                  source_type: 'quote',
+                  source_id: 'q1',
+                  file_id: 'f1',
+                  excerpt: 'Closing thoughts on everything.',
+                  location: 'block-3',
+                },
+                { source_type: 'book_text', source_id: 'f1', file_id: 'f1', excerpt: 'no location for this one' },
+              ],
+            })
+          : undefined,
+    ]);
+    await screen.findByRole('heading', { name: 'Introduction' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search this book' }));
+    const panel = await screen.findByTestId('reader-search');
+    fireEvent.change(within(panel).getByLabelText('Search this book'), {
+      target: { value: 'Closing' },
+    });
+    fireEvent.submit(within(panel).getByLabelText('Search this book').closest('form')!);
+
+    const hits = await within(panel).findByTestId('reader-content-hits');
+    expect(within(hits).getByText('Closing thoughts on everything.')).toBeInTheDocument();
+    expect(within(hits).getByText('no location for this one')).toBeInTheDocument();
+
+    // block-3 is the "Closing thoughts." paragraph (see MARKDOWN_BODY);
+    // goTo flashes it — scrollIntoView itself is a jsdom no-op, so the
+    // flash class is what proves the jump actually targeted it.
+    fireEvent.click(within(hits).getByText('Closing thoughts on everything.'));
+    const target = screen.getByText('Closing thoughts.');
+    expect(target).toHaveClass('reader-text-highlight');
   });
 
   it('saves a reader preference change', async () => {

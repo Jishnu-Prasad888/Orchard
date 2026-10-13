@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
 import { useFileLabels } from '../api/fileLabels';
@@ -19,6 +19,7 @@ import {
   createNote,
   createTag,
   deleteNote,
+  getNote,
   listNoteLinks,
   listNoteTags,
   listNotes,
@@ -373,6 +374,7 @@ function NoteDetail({
 export default function NotesPage() {
   const gate = useLibraryGate();
   const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
   const libraryId = gate.kind === 'ready' ? gate.libraryId : '';
 
   // The active note is held directly rather than looked up by id in
@@ -385,6 +387,8 @@ export default function NotesPage() {
   const [standaloneOnly, setStandaloneOnly] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const openID = params.get('open');
 
   const notes = useLibraryResource(
     useCallback(
@@ -400,6 +404,39 @@ export default function NotesPage() {
 
   const fileIds = (notes.data ?? []).map((n) => n.file_id).filter((id): id is string => !!id);
   const labels = useFileLabels(libraryId, fileIds);
+
+  // A deep link from elsewhere (e.g. a content-search hit) opens a specific
+  // note. If it's already in the loaded list this is derived directly
+  // (no effect needed); only the fallback — fetching a note the current
+  // list doesn't have, e.g. filtered out by the active tag — is async.
+  const deepLinkNote = openID ? (notes.data ?? []).find((n) => n.id === openID) ?? null : null;
+  const displayedNote = active ?? deepLinkNote;
+
+  useEffect(() => {
+    if (!openID || !libraryId || displayedNote) return;
+    let cancelled = false;
+    getNote(libraryId, openID)
+      .then((resp) => {
+        if (!cancelled) setActive(resp.note);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setOpenError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openID, libraryId, displayedNote]);
+
+  const clearOpenParam = useCallback(() => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('open');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setParams]);
 
   const newNote = () => {
     setCreating(true);
@@ -458,22 +495,26 @@ export default function NotesPage() {
 
   const library = gate.library;
 
-  if (active) {
+  if (displayedNote) {
     return (
       <main className="page notes-page">
         <NoteDetail
-          key={active.id}
+          key={displayedNote.id}
           libraryId={libraryId}
-          note={active}
+          note={displayedNote}
           allNotes={notes.data ?? []}
-          fileTitle={active.file_id ? labels[active.file_id]?.title : undefined}
-          onBack={() => setActive(null)}
+          fileTitle={displayedNote.file_id ? labels[displayedNote.file_id]?.title : undefined}
+          onBack={() => {
+            setActive(null);
+            clearOpenParam();
+          }}
           onSaved={(updated) => {
             setActive(updated);
             notes.reload();
           }}
           onDeleted={() => {
             setActive(null);
+            clearOpenParam();
             notes.reload();
           }}
         />
@@ -485,6 +526,11 @@ export default function NotesPage() {
     <main className="page notes-page">
       {header}
       {library.status === 'offline' && <LibraryOfflineNotice library={library} />}
+      {openError && (
+        <p className="error-text" role="alert">
+          Couldn't open that note: {openError}
+        </p>
+      )}
       {createError && (
         <p className="error-text" role="alert">
           {createError}
