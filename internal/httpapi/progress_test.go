@@ -46,6 +46,66 @@ func TestReadingProgress_RoundTripAndClear(t *testing.T) {
 	}
 }
 
+func TestListInProgress_ExcludesUnstartedAndFinished(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "unstarted.epub", 10); err != nil {
+		t.Fatalf("seed f1: %v", err)
+	}
+	if err := seedLibraryFile(t, libRoot, "f2", "reading.epub", 10); err != nil {
+		t.Fatalf("seed f2: %v", err)
+	}
+	if err := seedLibraryFile(t, libRoot, "f3", "finished.epub", 10); err != nil {
+		t.Fatalf("seed f3: %v", err)
+	}
+	client.do(t, http.MethodPut, "/api/v1/libraries/"+libID+"/files/f2/progress",
+		map[string]any{"location": "page:5", "percent": 40})
+	client.do(t, http.MethodPut, "/api/v1/libraries/"+libID+"/files/f3/progress",
+		map[string]any{"location": "page:10", "percent": 100})
+
+	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/reading/in-progress", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Files []struct {
+			ID      string  `json:"id"`
+			Percent float64 `json:"percent"`
+		} `json:"files"`
+	}
+	jsonUnmarshalRec(t, rec, &body)
+	if len(body.Files) != 1 || body.Files[0].ID != "f2" {
+		t.Fatalf("files = %+v, want only f2", body.Files)
+	}
+	if body.Files[0].Percent != 40 {
+		t.Errorf("percent = %v, want 40", body.Files[0].Percent)
+	}
+}
+
+func TestListInProgress_RespectsLimitQueryParam(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "a.epub", 10); err != nil {
+		t.Fatalf("seed f1: %v", err)
+	}
+	if err := seedLibraryFile(t, libRoot, "f2", "b.epub", 10); err != nil {
+		t.Fatalf("seed f2: %v", err)
+	}
+	client.do(t, http.MethodPut, "/api/v1/libraries/"+libID+"/files/f1/progress",
+		map[string]any{"location": "page:1", "percent": 10})
+	client.do(t, http.MethodPut, "/api/v1/libraries/"+libID+"/files/f2/progress",
+		map[string]any{"location": "page:1", "percent": 20})
+
+	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/reading/in-progress?limit=1", nil)
+	var body struct {
+		Files []struct {
+			ID string `json:"id"`
+		} `json:"files"`
+	}
+	jsonUnmarshalRec(t, rec, &body)
+	if len(body.Files) != 1 {
+		t.Fatalf("files = %+v, want exactly 1", body.Files)
+	}
+}
+
 func TestReadingProgress_RejectsOutOfRangePercent(t *testing.T) {
 	_, client, libID, libRoot := newSearchTestServer(t)
 	if err := seedLibraryFile(t, libRoot, "f1", "book.epub", 10); err != nil {

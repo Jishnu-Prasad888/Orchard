@@ -137,6 +137,26 @@ func TestListFilterByFile(t *testing.T) {
 	}
 }
 
+func TestListRespectsLimit(t *testing.T) {
+	store, _ := newTestStore(t)
+	ctx := context.Background()
+
+	if _, err := store.Create(ctx, "u1", notebook.Fields{Body: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(ctx, "u1", notebook.Fields{Body: "b"}); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := store.List(ctx, "u1", notebook.ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("len = %d, want 1", len(list))
+	}
+}
+
 func TestListStandaloneOnly(t *testing.T) {
 	store, fs := newTestStore(t)
 	ctx := context.Background()

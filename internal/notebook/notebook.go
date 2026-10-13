@@ -87,6 +87,9 @@ type ListOptions struct {
 	// Standalone restricts the listing to notes with no file, quote, or
 	// highlight link.
 	Standalone bool
+	// Limit caps the number of rows returned (most recently updated first).
+	// Zero means no limit.
+	Limit int
 }
 
 // List returns userID's notes across the library, newest first, optionally
@@ -115,7 +118,12 @@ func (s *Store) List(ctx context.Context, userID string, opts ListOptions) ([]*N
 	case opts.Standalone:
 		where += ` AND n.file_id IS NULL AND n.quote_id IS NULL AND n.highlight_id IS NULL`
 	}
-	rows, err := s.db.QueryContext(ctx, query+" "+where+" ORDER BY n.updated_at DESC", args...)
+	query += " " + where + " ORDER BY n.updated_at DESC"
+	if opts.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, opts.Limit)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list notes: %w", err)
 	}

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
@@ -10,6 +11,12 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/progress"
 )
+
+// defaultInProgressLimit matches Home's "a taste, not the library" sizing.
+const defaultInProgressLimit = 12
+
+// maxInProgressLimit bounds a caller-supplied ?limit=.
+const maxInProgressLimit = 100
 
 // openProgressStore opens the per-library DB and returns a progress.Store.
 func (s *Server) openProgressStore(
@@ -143,4 +150,59 @@ func (s *Server) handleClearReadingProgress(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// inProgressFileResponse is a file plus the acting user's resume point in it.
+type inProgressFileResponse struct {
+	fileResponse
+	Percent   float64 `json:"percent"`
+	Location  string  `json:"location"`
+	UpdatedAt string  `json:"updated_at,omitempty"`
+}
+
+// handleListInProgress — GET /api/v1/libraries/{id}/reading/in-progress?limit=N
+// Returns the acting user's most recently updated unfinished books, for a
+// "continue reading" surface.
+func (s *Server) handleListInProgress(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	lib, err := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeLibraryError(w, r, err)
+		return
+	}
+	if !s.requireCap(w, r, u, authz.LibraryKey(lib.ID), authz.CapRead) {
+		return
+	}
+	limit := defaultInProgressLimit
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = min(n, maxInProgressLimit)
+		}
+	}
+
+	store, cleanup, ok := s.openProgressStore(w, r, lib)
+	if !ok {
+		return
+	}
+	defer cleanup()
+
+	entries, err := store.ListInProgress(r.Context(), u.ID, lib.ID, limit)
+	if err != nil {
+		s.logger.Error("list in-progress files", "library_id", lib.ID, "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+			CodeInternal, "Failed to list in-progress files.")
+		return
+	}
+	out := make([]inProgressFileResponse, 0, len(entries))
+	for _, e := range entries {
+		resp := inProgressFileResponse{
+			fileResponse: toFileResponse(e.File),
+			Percent:      e.Percent,
+			Location:     e.Location,
+		}
+		if !e.UpdatedAt.IsZero() {
+			resp.UpdatedAt = e.UpdatedAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, resp)
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": out})
 }

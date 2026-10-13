@@ -146,6 +146,27 @@ func TestListFilterByFile(t *testing.T) {
 	}
 }
 
+func TestListRespectsLimit(t *testing.T) {
+	store, fs := newTestStore(t)
+	ctx := context.Background()
+	fileID := seedFile(t, fs, "book.epub")
+
+	if _, err := store.Create(ctx, "u1", fileID, quotes.Fields{Text: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(ctx, "u1", fileID, quotes.Fields{Text: "b"}); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := store.List(ctx, "u1", quotes.ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("len = %d, want 1", len(list))
+	}
+}
+
 func TestListFavoriteOnly(t *testing.T) {
 	store, fs := newTestStore(t)
 	ctx := context.Background()

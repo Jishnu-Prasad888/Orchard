@@ -42,6 +42,9 @@ import type {
   Highlight,
   HighlightEnvelope,
   HighlightListResponse,
+  HomeLayoutResponse,
+  HomeLayoutSection,
+  InProgressListResponse,
   IndexStatus,
   IndexTriggerResponse,
   Library,
@@ -296,6 +299,20 @@ export const setReadingProgress = (
 export const clearReadingProgress = (libraryId: string, fileId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/progress`);
 
+/** The acting user's most recently updated unfinished books, for Home's
+ * "continue reading" section. */
+export const listInProgress = (libraryId: string, limit?: number) =>
+  apiGet<InProgressListResponse>(`/libraries/${libraryId}/reading/in-progress${query({ limit })}`);
+
+/* ----------------------------- home layout ----------------------------- */
+
+/** Home's section order/visibility — a server-level preference, like reader
+ * preferences, not scoped to any one library. */
+export const getHomeLayout = () => apiGet<HomeLayoutResponse>('/settings/home-layout');
+
+export const setHomeLayout = (sections: HomeLayoutSection[]) =>
+  apiPut<HomeLayoutResponse>('/settings/home-layout', { sections });
+
 /* ------------------------- reader preferences --------------------------- */
 
 export const getReaderPreferences = () =>
@@ -487,9 +504,17 @@ export const deleteHighlight = (libraryId: string, highlightId: string) =>
 
 /* ----------------------------- quotes -------------------------------- */
 
-export const listLibraryQuotes = (libraryId: string, favoriteOnly?: boolean) =>
+export interface ListQuotesParams {
+  favoriteOnly?: boolean | undefined;
+  limit?: number | undefined;
+}
+
+export const listLibraryQuotes = (libraryId: string, params: ListQuotesParams = {}) =>
   apiGet<QuoteListResponse>(
-    `/libraries/${libraryId}/quotes${favoriteOnly ? '?favorite=1' : ''}`,
+    `/libraries/${libraryId}/quotes${query({
+      favorite: params.favoriteOnly ? '1' : undefined,
+      limit: params.limit,
+    })}`,
   );
 
 export const listFileQuotes = (libraryId: string, fileId: string) =>
@@ -519,6 +544,7 @@ export interface ListNotesParams {
   fileId?: string | undefined;
   tagId?: string | undefined;
   standalone?: boolean | undefined;
+  limit?: number | undefined;
 }
 
 export const listNotes = (libraryId: string, params: ListNotesParams = {}) =>
@@ -527,6 +553,7 @@ export const listNotes = (libraryId: string, params: ListNotesParams = {}) =>
       file_id: params.fileId,
       tag_id: params.tagId,
       standalone: params.standalone ? '1' : undefined,
+      limit: params.limit,
     })}`,
   );
 

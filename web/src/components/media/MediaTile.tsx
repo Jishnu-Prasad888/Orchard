@@ -27,6 +27,9 @@ export interface MediaTileProps {
   /** A selection is in progress: the check is always shown. */
   selecting: boolean;
   favorite: boolean;
+  /** 0-100: a reading-progress bar along the tile's bottom edge. Omit (or 0)
+   * to show none. */
+  progress?: number | undefined;
   /** Roving tab stop: only one tile in the grid is in the Tab order. */
   tabbable: boolean;
   onActivate: (file: FileSummary, index: number, event: ReactMouseEvent) => void;
@@ -44,6 +47,7 @@ function MediaTileImpl({
   selectable,
   selecting,
   favorite,
+  progress,
   tabbable,
   onActivate,
   onToggleSelect,
@@ -165,6 +169,18 @@ function MediaTileImpl({
       {favorite && (
         <span className="media-tile-badge media-tile-favorite" aria-label="Favorite" role="img">
           <Icon name="star" size={14} filled />
+        </span>
+      )}
+      {!!progress && progress > 0 && (
+        <span
+          className="media-tile-progress"
+          role="progressbar"
+          aria-label="Reading progress"
+          aria-valuenow={Math.round(progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <span className="media-tile-progress-fill" style={{ width: `${Math.min(progress, 100)}%` }} />
         </span>
       )}
 
