@@ -239,6 +239,9 @@ func (s *Server) writeTagError(w http.ResponseWriter, r *http.Request, err error
 	case errors.Is(err, tags.ErrFileNotTagged):
 		writeError(w, s.logger, reqID, http.StatusNotFound, CodeNotFound,
 			"Tag is not attached to this file.")
+	case errors.Is(err, tags.ErrNoteNotTagged):
+		writeError(w, s.logger, reqID, http.StatusNotFound, CodeNotFound,
+			"Tag is not attached to this note.")
 	default:
 		s.logger.Error("tag operation", "error", err)
 		writeError(w, s.logger, reqID, http.StatusInternalServerError,

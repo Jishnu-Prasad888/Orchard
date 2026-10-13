@@ -47,6 +47,9 @@ import type {
   LibraryCreateResponse,
   LibraryListResponse,
   LibraryProbeResponse,
+  Note,
+  NoteEnvelope,
+  NoteListResponse,
   PendingSignup,
   PendingSignupListResponse,
   PermissionGrant,
@@ -489,6 +492,61 @@ export const updateQuote = (
 
 export const deleteQuote = (libraryId: string, quoteId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/quotes/${quoteId}`);
+
+/* ------------------------------ notes --------------------------------- */
+
+export interface ListNotesParams {
+  fileId?: string | undefined;
+  tagId?: string | undefined;
+  standalone?: boolean | undefined;
+}
+
+export const listNotes = (libraryId: string, params: ListNotesParams = {}) =>
+  apiGet<NoteListResponse>(
+    `/libraries/${libraryId}/notes${query({
+      file_id: params.fileId,
+      tag_id: params.tagId,
+      standalone: params.standalone ? '1' : undefined,
+    })}`,
+  );
+
+export const listFileNotes = (libraryId: string, fileId: string) =>
+  apiGet<NoteListResponse>(`/libraries/${libraryId}/files/${fileId}/notes`);
+
+export const createNote = (
+  libraryId: string,
+  fields: Partial<Pick<Note, 'title' | 'body' | 'file_id' | 'quote_id' | 'highlight_id'>>,
+) => apiPost<NoteEnvelope>(`/libraries/${libraryId}/notes`, fields);
+
+export const getNote = (libraryId: string, noteId: string) =>
+  apiGet<NoteEnvelope>(`/libraries/${libraryId}/notes/${noteId}`);
+
+export const updateNote = (
+  libraryId: string,
+  noteId: string,
+  patch: Partial<Pick<Note, 'title' | 'body'>>,
+) => apiPatch<NoteEnvelope>(`/libraries/${libraryId}/notes/${noteId}`, patch);
+
+export const deleteNote = (libraryId: string, noteId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/notes/${noteId}`);
+
+export const listNoteTags = (libraryId: string, noteId: string) =>
+  apiGet<TagListResponse>(`/libraries/${libraryId}/notes/${noteId}/tags`);
+
+export const addNoteTag = (libraryId: string, noteId: string, tagId: string) =>
+  apiPost<void>(`/libraries/${libraryId}/notes/${noteId}/tags`, { tag_id: tagId });
+
+export const removeNoteTag = (libraryId: string, noteId: string, tagId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/notes/${noteId}/tags/${tagId}`);
+
+export const listNoteLinks = (libraryId: string, noteId: string) =>
+  apiGet<NoteListResponse>(`/libraries/${libraryId}/notes/${noteId}/links`);
+
+export const addNoteLink = (libraryId: string, noteId: string, linkedNoteId: string) =>
+  apiPost<void>(`/libraries/${libraryId}/notes/${noteId}/links`, { linked_note_id: linkedNoteId });
+
+export const removeNoteLink = (libraryId: string, noteId: string, linkedNoteId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/notes/${noteId}/links/${linkedNoteId}`);
 
 /* ------------------------- permissions/shares ---------------------- */
 

@@ -359,6 +359,28 @@ export interface QuoteEnvelope {
   quote: Quote;
 }
 
+/** Long-form, per-user Markdown writing: many notes per file, or a
+ * standalone note with no file/quote/highlight link at all. Distinct from
+ * FileNote, the single-caption-per-file editor shown in the viewer. */
+export interface Note {
+  id: string;
+  file_id?: string | undefined;
+  quote_id?: string | undefined;
+  highlight_id?: string | undefined;
+  title?: string | undefined;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteListResponse {
+  notes: Note[];
+}
+
+export interface NoteEnvelope {
+  note: Note;
+}
+
 /** One set of present files that share a content hash. */
 export interface DuplicateGroup {
   content_hash: string;

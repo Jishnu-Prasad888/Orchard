@@ -22,6 +22,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/favorites', label: 'Favorites', icon: 'star' },
   { to: '/bookmarks', label: 'Bookmarks', icon: 'bookmark' },
   { to: '/quotes', label: 'Quotes', icon: 'quote' },
+  { to: '/notes', label: 'Notes', icon: 'notebook' },
   { to: '/tags', label: 'Tags', icon: 'tag' },
   { to: '/collections', label: 'Collections', icon: 'list' },
   { to: '/shared', label: 'Shared', icon: 'share' },

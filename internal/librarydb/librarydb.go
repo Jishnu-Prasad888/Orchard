@@ -31,7 +31,7 @@ const (
 
 	// SchemaVersion is the current version of the library-level database
 	// schema. Bump this when adding new tables or changing existing ones.
-	SchemaVersion = 2
+	SchemaVersion = 3
 )
 
 // DB wraps a per-library SQLite connection pool. Use OpenDB to construct one.
@@ -592,4 +592,57 @@ CREATE TABLE IF NOT EXISTS quotes (
 CREATE INDEX IF NOT EXISTS quotes_user_file_idx ON quotes (user_id, file_id);
 CREATE INDEX IF NOT EXISTS quotes_file_idx ON quotes (file_id);
 CREATE INDEX IF NOT EXISTS quotes_user_favorite_idx ON quotes (user_id, favorite);
+
+-- notes are long-form, per-user Markdown writing: many notes per file,
+-- or a standalone note with no file at all (file_id/quote_id/highlight_id
+-- are all optional and mutually independent — a note can be about a file,
+-- about a saved quote, about a highlight, or about nothing in particular).
+-- This is the full "Notes" feature; it is separate from file_notes, which
+-- remains the lightweight single-caption-per-file editor in the viewer.
+-- Deleting the file a note is about deletes the note (same as every other
+-- per-file annotation); deleting a linked quote/highlight only clears that
+-- link, since the note's own writing should survive it.
+CREATE TABLE IF NOT EXISTS notes (
+	id           TEXT PRIMARY KEY,
+	user_id      TEXT NOT NULL,
+	file_id      TEXT REFERENCES indexed_files(id) ON DELETE CASCADE,
+	quote_id     TEXT REFERENCES quotes(id) ON DELETE SET NULL,
+	highlight_id TEXT REFERENCES highlights(id) ON DELETE SET NULL,
+	title        TEXT NOT NULL DEFAULT '',
+	body         TEXT NOT NULL DEFAULT '',
+	created_at   TEXT NOT NULL,
+	updated_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS notes_user_idx ON notes (user_id);
+CREATE INDEX IF NOT EXISTS notes_user_file_idx ON notes (user_id, file_id);
+CREATE INDEX IF NOT EXISTS notes_quote_idx ON notes (quote_id);
+CREATE INDEX IF NOT EXISTS notes_highlight_idx ON notes (highlight_id);
+
+-- note_tags is the many-to-many join between notes and the shared tags
+-- vocabulary, mirroring file_tags exactly (tags.go's file-tag methods are
+-- hardcoded to file_tags, so notes get their own parallel methods rather
+-- than a generalized join table).
+CREATE TABLE IF NOT EXISTS note_tags (
+	note_id    TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+	tag_id     TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (note_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS note_tags_tag_idx  ON note_tags (tag_id);
+CREATE INDEX IF NOT EXISTS note_tags_note_idx ON note_tags (note_id);
+
+-- note_links is a many-to-many, directed edge between two of the same
+-- user's notes ("note-to-note linking"). Stored directionally but queried
+-- both ways (a link is shown from either end), the way wiki-style
+-- backlinks work.
+CREATE TABLE IF NOT EXISTS note_links (
+	note_id        TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+	linked_note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+	created_at     TEXT NOT NULL,
+	PRIMARY KEY (note_id, linked_note_id)
+);
+
+CREATE INDEX IF NOT EXISTS note_links_linked_idx ON note_links (linked_note_id);
 `
