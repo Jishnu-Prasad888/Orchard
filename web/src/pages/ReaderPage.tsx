@@ -18,22 +18,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
+  createBookmark,
+  createHighlight,
+  createQuote,
+  deleteBookmark,
+  deleteHighlight,
   getBookMetadata,
   getFile,
   getReaderPreferences,
   getReadingProgress,
+  listFileBookmarks,
+  listFileHighlights,
   markFileOpened,
   setReaderPreferences as saveReaderPreferences,
   setReadingProgress,
 } from '../api/queries';
-import type { BookMetadata, FileSummary, ReaderPreferences } from '../api/types';
-import { DEFAULT_READER_PREFERENCES } from '../api/types';
+import type { BookMetadata, Bookmark, FileSummary, Highlight, ReaderPreferences } from '../api/types';
+import { DEFAULT_READER_PREFERENCES, HIGHLIGHT_COLORS } from '../api/types';
 import { downloadUrl, fileExtension } from '../components/media';
 import { EpubReader } from '../components/reader/EpubReader';
 import { PdfReader } from '../components/reader/PdfReader';
 import { ReaderSettingsPanel } from '../components/reader/ReaderSettingsPanel';
 import { TextReader } from '../components/reader/TextReader';
-import type { ReaderHandle, SearchMatch, TocEntry } from '../components/reader/types';
+import type { ReaderHandle, ReaderSelection, SearchMatch, TocEntry } from '../components/reader/types';
 import { BookPanel } from '../components/viewer/BookPanel';
 import { ErrorState, LoadingState } from '../components/States';
 import { Icon } from '../components/ui/Icon';
@@ -41,7 +48,7 @@ import './ReaderPage.css';
 
 const PROGRESS_SAVE_DEBOUNCE_MS = 2500;
 
-type PanelTab = 'toc' | 'search' | 'book' | 'settings';
+type PanelTab = 'toc' | 'search' | 'book' | 'settings' | 'annotations';
 
 function readerKind(fileName: string): 'pdf' | 'epub' | 'text' {
   switch (fileExtension(fileName).toLowerCase()) {
@@ -79,6 +86,16 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
   const [searching, setSearching] = useState(false);
   const [readerError, setReaderError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const [selectionAction, setSelectionAction] = useState<'highlight' | 'quote' | null>(null);
+  const [highlightColor, setHighlightColor] = useState<string>(HIGHLIGHT_COLORS[0]);
+  const [highlightNote, setHighlightNote] = useState('');
+  const [quoteCommentary, setQuoteCommentary] = useState('');
+  const [savingAnnotation, setSavingAnnotation] = useState(false);
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
 
   const readerRef = useRef<ReaderHandle | null>(null);
   const pageRootRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +155,103 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
 
   // Save whatever is pending when leaving the page.
   useEffect(() => () => flushProgress(), [flushProgress]);
+
+  // This file's bookmarks and highlights, independent of the main load —
+  // a slow fetch here shouldn't block opening the book.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listFileBookmarks(libraryId, fileId), listFileHighlights(libraryId, fileId)])
+      .then(([b, h]) => {
+        if (cancelled) return;
+        setBookmarks(b.bookmarks);
+        setHighlights(h.highlights);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryId, fileId]);
+
+  const addBookmarkHere = useCallback(async () => {
+    const location = latestProgress.current?.location || initialLocation || '';
+    if (!location) return;
+    try {
+      const { bookmark } = await createBookmark(libraryId, fileId, location);
+      setBookmarks((prev) => [bookmark, ...prev]);
+      setPanel('annotations');
+    } catch (e) {
+      setAnnotationError(e instanceof Error ? e.message : String(e));
+    }
+  }, [libraryId, fileId, initialLocation]);
+
+  const removeBookmark = useCallback(
+    async (id: string) => {
+      setBookmarks((prev) => prev.filter((b) => b.id !== id));
+      try {
+        await deleteBookmark(libraryId, id);
+      } catch (e) {
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [libraryId],
+  );
+
+  const removeHighlight = useCallback(
+    async (id: string) => {
+      setHighlights((prev) => prev.filter((h) => h.id !== id));
+      try {
+        await deleteHighlight(libraryId, id);
+      } catch (e) {
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [libraryId],
+  );
+
+  const cancelSelectionAction = useCallback(() => {
+    setSelectionAction(null);
+    setSelection(null);
+    setHighlightNote('');
+    setQuoteCommentary('');
+  }, []);
+
+  const saveHighlightFromSelection = useCallback(async () => {
+    if (!selection) return;
+    setSavingAnnotation(true);
+    try {
+      const { highlight } = await createHighlight(
+        libraryId,
+        fileId,
+        selection.location,
+        selection.text,
+        highlightColor,
+        highlightNote,
+      );
+      setHighlights((prev) => [highlight, ...prev]);
+      cancelSelectionAction();
+    } catch (e) {
+      setAnnotationError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingAnnotation(false);
+    }
+  }, [libraryId, fileId, selection, highlightColor, highlightNote, cancelSelectionAction]);
+
+  const saveQuoteFromSelection = useCallback(async () => {
+    if (!selection) return;
+    setSavingAnnotation(true);
+    try {
+      await createQuote(libraryId, fileId, {
+        text: selection.text,
+        location: selection.location,
+        commentary: quoteCommentary,
+      });
+      cancelSelectionAction();
+    } catch (e) {
+      setAnnotationError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingAnnotation(false);
+    }
+  }, [libraryId, fileId, selection, quoteCommentary, cancelSelectionAction]);
 
   const onSavePreferences = useCallback(
     (next: ReaderPreferences) => {
@@ -252,6 +366,14 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           </button>
           <button
             type="button"
+            className={panel === 'annotations' ? 'icon-button active' : 'icon-button'}
+            onClick={() => togglePanel('annotations')}
+            aria-label="Bookmarks and highlights"
+          >
+            <Icon name="bookmark" />
+          </button>
+          <button
+            type="button"
             className={panel === 'settings' ? 'icon-button active' : 'icon-button'}
             onClick={() => togglePanel('settings')}
             aria-label="Reading settings"
@@ -284,6 +406,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
               onProgress={onProgress}
               onToc={setToc}
               onError={setReaderError}
+              onSelectionChange={setSelection}
             />
           )}
           {!readerError && kind === 'epub' && (
@@ -298,6 +421,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
               onProgress={onProgress}
               onToc={setToc}
               onError={setReaderError}
+              onSelectionChange={setSelection}
             />
           )}
           {!readerError && kind === 'text' && (
@@ -312,7 +436,114 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
               onProgress={onProgress}
               onToc={setToc}
               onError={setReaderError}
+              onSelectionChange={setSelection}
             />
+          )}
+
+          {selection && (
+            <div className="reader-selection-bar">
+              {!selectionAction && (
+                <>
+                  <span className="reader-selection-preview">
+                    “
+                    {selection.text.length > 80
+                      ? `${selection.text.slice(0, 80)}…`
+                      : selection.text}
+                    ”
+                  </span>
+                  <button
+                    type="button"
+                    className="button ghost-button"
+                    onClick={() => setSelectionAction('highlight')}
+                  >
+                    <Icon name="highlighter" /> Highlight
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost-button"
+                    onClick={() => setSelectionAction('quote')}
+                  >
+                    <Icon name="quote" /> Save quote
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Dismiss selection"
+                    onClick={() => setSelection(null)}
+                  >
+                    <Icon name="close" />
+                  </button>
+                </>
+              )}
+              {selectionAction === 'highlight' && (
+                <form
+                  className="reader-selection-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void saveHighlightFromSelection();
+                  }}
+                >
+                  <div className="reader-highlight-colors">
+                    {HIGHLIGHT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Color ${c}`}
+                        className={
+                          highlightColor === c
+                            ? 'reader-color-swatch active'
+                            : 'reader-color-swatch'
+                        }
+                        style={{ background: c }}
+                        onClick={() => setHighlightColor(c)}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    className="reader-selection-input"
+                    placeholder="Add a note (optional)"
+                    value={highlightNote}
+                    onChange={(e) => setHighlightNote(e.target.value)}
+                  />
+                  <button type="submit" className="button" disabled={savingAnnotation}>
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost-button"
+                    onClick={cancelSelectionAction}
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
+              {selectionAction === 'quote' && (
+                <form
+                  className="reader-selection-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void saveQuoteFromSelection();
+                  }}
+                >
+                  <input
+                    className="reader-selection-input"
+                    placeholder="Add a thought (optional)"
+                    value={quoteCommentary}
+                    onChange={(e) => setQuoteCommentary(e.target.value)}
+                  />
+                  <button type="submit" className="button" disabled={savingAnnotation}>
+                    Save quote
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost-button"
+                    onClick={cancelSelectionAction}
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
+            </div>
           )}
         </div>
 
@@ -374,6 +605,71 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                     ))}
                   </ul>
                 )}
+              </div>
+            )}
+
+            {panel === 'annotations' && (
+              <div data-testid="reader-annotations">
+                {annotationError && <p className="error-text">{annotationError}</p>}
+                <section>
+                  <div className="reader-panel-section-header">
+                    <h3>Bookmarks</h3>
+                    <button type="button" className="button ghost-button" onClick={addBookmarkHere}>
+                      <Icon name="plus" /> Add here
+                    </button>
+                  </div>
+                  {bookmarks.length === 0 && <p className="muted">No bookmarks yet.</p>}
+                  <ul className="reader-annotation-list">
+                    {bookmarks.map((b) => (
+                      <li key={b.id} className="reader-annotation-item">
+                        <button
+                          type="button"
+                          className="reader-annotation-jump"
+                          onClick={() => readerRef.current?.goTo(b.location)}
+                        >
+                          {b.label || 'Bookmark'}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label="Remove bookmark"
+                          onClick={() => void removeBookmark(b.id)}
+                        >
+                          <Icon name="close" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <h3>Highlights</h3>
+                  {highlights.length === 0 && (
+                    <p className="muted">No highlights yet. Select text to add one.</p>
+                  )}
+                  <ul className="reader-annotation-list">
+                    {highlights.map((h) => (
+                      <li key={h.id} className="reader-annotation-item">
+                        <button
+                          type="button"
+                          className="reader-annotation-jump"
+                          style={{ borderLeftColor: h.color }}
+                          onClick={() => readerRef.current?.goTo(h.location)}
+                        >
+                          “{h.text}”
+                          {h.note && <span className="muted"> — {h.note}</span>}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label="Remove highlight"
+                          onClick={() => void removeHighlight(h.id)}
+                        >
+                          <Icon name="close" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               </div>
             )}
 

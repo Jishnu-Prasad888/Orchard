@@ -31,6 +31,14 @@ export interface ReaderHandle {
   search: (query: string) => Promise<SearchMatch[]>;
 }
 
+/** The text a reader has selected, plus an opaque location anchor for it
+ * (same convention as everywhere else: a page number, a CFI, a block id).
+ * Powers "add highlight" / "save as quote" from a selection. */
+export interface ReaderSelection {
+  text: string;
+  location: string;
+}
+
 export interface ReaderProps {
   libraryId: string;
   fileId: string;
@@ -46,4 +54,7 @@ export interface ReaderProps {
   onToc: (toc: TocEntry[]) => void;
   /** Called if the document fails to load. */
   onError: (message: string) => void;
+  /** Called whenever the user's text selection inside the reader changes;
+   * null when the selection is cleared. */
+  onSelectionChange: (selection: ReaderSelection | null) => void;
 }

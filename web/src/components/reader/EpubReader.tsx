@@ -12,7 +12,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import ePub from 'epubjs';
-import type { Book, NavItem, Rendition } from 'epubjs';
+import type { Book, Contents, NavItem, Rendition } from 'epubjs';
 
 import type { ReaderHandle, ReaderProps, SearchMatch, TocEntry } from './types';
 
@@ -46,7 +46,7 @@ function flattenToc(items: NavItem[], depth: number): TocEntry[] {
 }
 
 export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubReader(
-  { contentUrl, initialLocation, preferences, onProgress, onToc, onError },
+  { contentUrl, initialLocation, preferences, onProgress, onToc, onError, onSelectionChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -80,6 +80,16 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
       const cfi = location.start.cfi;
       const percent = locationsReady.current ? book.locations.percentageFromCfi(cfi) * 100 : 0;
       onProgress(cfi, percent);
+      onSelectionChange(null);
+    });
+
+    // epub.js renders each chapter in its own iframe, so the main
+    // document's selectionchange never fires for it — epub.js emits its
+    // own 'selected' event with the cfiRange and the iframe's Contents
+    // instead, which is where the native Selection actually lives.
+    rendition.on('selected', (cfiRange: string, contents: Contents) => {
+      const text = contents.window.getSelection?.()?.toString().trim();
+      onSelectionChange(text ? { text, location: cfiRange } : null);
     });
 
     let cancelled = false;

@@ -292,6 +292,73 @@ export interface ReaderPreferencesResponse {
   preferences: ReaderPreferences;
 }
 
+/** A place in a file a user wants to return to. location is opaque — a page
+ * number for PDF, a CFI for EPUB, a scroll anchor for Markdown/text —
+ * meaningful only to the reader that wrote it, following the same
+ * convention as ReadingProgress.location. */
+export interface Bookmark {
+  id: string;
+  file_id: string;
+  location: string;
+  label?: string;
+  created_at: string;
+}
+
+export interface BookmarkListResponse {
+  bookmarks: Bookmark[];
+}
+
+export interface BookmarkEnvelope {
+  bookmark: Bookmark;
+}
+
+/** A user-selected passage of text, with an optional note and color. */
+export interface Highlight {
+  id: string;
+  file_id: string;
+  location: string;
+  text: string;
+  color: string;
+  note?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const HIGHLIGHT_COLORS = ['yellow', 'green', 'blue', 'pink', 'orange'] as const;
+export type HighlightColor = (typeof HIGHLIGHT_COLORS)[number];
+
+export interface HighlightListResponse {
+  highlights: Highlight[];
+}
+
+export interface HighlightEnvelope {
+  highlight: Highlight;
+}
+
+/** A saved passage of text with citation details and commentary,
+ * independent of any highlight — it can be typed in by hand. */
+export interface Quote {
+  id: string;
+  file_id: string;
+  text: string;
+  location?: string | undefined;
+  author?: string | undefined;
+  chapter?: string | undefined;
+  page?: string | undefined;
+  commentary?: string | undefined;
+  favorite: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteListResponse {
+  quotes: Quote[];
+}
+
+export interface QuoteEnvelope {
+  quote: Quote;
+}
+
 /** One set of present files that share a content hash. */
 export interface DuplicateGroup {
   content_hash: string;

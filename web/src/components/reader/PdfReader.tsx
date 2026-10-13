@@ -83,7 +83,7 @@ async function flattenOutline(
 }
 
 export const PdfReader = forwardRef<ReaderHandle, ReaderProps>(function PdfReader(
-  { contentUrl, initialLocation, onProgress, onToc, onError },
+  { contentUrl, initialLocation, onProgress, onToc, onError, onSelectionChange },
   ref,
 ) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
@@ -165,9 +165,28 @@ export const PdfReader = forwardRef<ReaderHandle, ReaderProps>(function PdfReade
 
   useEffect(() => {
     setPageInput(String(pageNum));
+    onSelectionChange(null);
     if (!doc) return;
     onProgress(`page:${pageNum}`, (pageNum / doc.numPages) * 100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNum, doc, onProgress]);
+
+  // The text layer is DOM, so native selection works; report it whenever it
+  // changes so ReaderPage can offer "highlight"/"save as quote".
+  useEffect(() => {
+    const onSelectionEvent = () => {
+      const sel = window.getSelection();
+      const text = sel?.toString().trim();
+      const anchor = sel?.anchorNode;
+      if (!text || !anchor || !textLayerRef.current?.contains(anchor)) {
+        onSelectionChange(null);
+        return;
+      }
+      onSelectionChange({ text, location: `page:${pageNum}` });
+    };
+    document.addEventListener('selectionchange', onSelectionEvent);
+    return () => document.removeEventListener('selectionchange', onSelectionEvent);
+  }, [pageNum, onSelectionChange]);
 
   useImperativeHandle(ref, () => ({
     goTo: (location: string) => {

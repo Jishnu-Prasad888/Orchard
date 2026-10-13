@@ -290,6 +290,19 @@ const ICONS = {
       <path d="M12 7.5V12l3 2" />
     </>
   ),
+  bookmark: <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-4-6.5 4V5.5a1 1 0 0 1 1-1z" />,
+  highlighter: (
+    <>
+      <path d="m14.5 4.5 5 5-9 9-5.5 1 1-5.5z" />
+      <path d="m12 7 5 5" />
+    </>
+  ),
+  quote: (
+    <>
+      <path d="M5.5 9.5a3 3 0 0 1 3-3H9v3a3 3 0 0 1-3 3h-.5a3 3 0 0 1-3-3z" />
+      <path d="M13.5 9.5a3 3 0 0 1 3-3H17v3a3 3 0 0 1-3 3h-.5a3 3 0 0 1-3-3z" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof ICONS;

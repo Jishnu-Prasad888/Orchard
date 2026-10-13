@@ -26,6 +26,8 @@ import type {
   BackupRecord,
   BookMetadata,
   BookMetadataEnvelope,
+  BookmarkEnvelope,
+  BookmarkListResponse,
   Collection,
   CollectionEnvelope,
   CollectionListResponse,
@@ -36,6 +38,9 @@ import type {
   FileSummary,
   FolderListResponse,
   GrantListResponse,
+  Highlight,
+  HighlightEnvelope,
+  HighlightListResponse,
   IndexStatus,
   IndexTriggerResponse,
   Library,
@@ -46,6 +51,9 @@ import type {
   PendingSignupListResponse,
   PermissionGrant,
   PublicShareInfo,
+  Quote,
+  QuoteEnvelope,
+  QuoteListResponse,
   ReaderPreferences,
   ReaderPreferencesResponse,
   ReadingProgress,
@@ -396,6 +404,91 @@ export const removeCollectionFile = (libraryId: string, collectionId: string, fi
 
 export const listFileCollections = (libraryId: string, fileId: string) =>
   apiGet<CollectionListResponse>(`/libraries/${libraryId}/files/${fileId}/collections`);
+
+/* --------------------------- bookmarks ------------------------------ */
+
+export const listLibraryBookmarks = (libraryId: string) =>
+  apiGet<BookmarkListResponse>(`/libraries/${libraryId}/bookmarks`);
+
+export const listFileBookmarks = (libraryId: string, fileId: string) =>
+  apiGet<BookmarkListResponse>(`/libraries/${libraryId}/files/${fileId}/bookmarks`);
+
+export const createBookmark = (
+  libraryId: string,
+  fileId: string,
+  location: string,
+  label?: string,
+) =>
+  apiPost<BookmarkEnvelope>(`/libraries/${libraryId}/files/${fileId}/bookmarks`, {
+    location,
+    label,
+  });
+
+export const updateBookmark = (libraryId: string, bookmarkId: string, label: string) =>
+  apiPatch<BookmarkEnvelope>(`/libraries/${libraryId}/bookmarks/${bookmarkId}`, { label });
+
+export const deleteBookmark = (libraryId: string, bookmarkId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/bookmarks/${bookmarkId}`);
+
+/* --------------------------- highlights ------------------------------ */
+
+export const listLibraryHighlights = (libraryId: string) =>
+  apiGet<HighlightListResponse>(`/libraries/${libraryId}/highlights`);
+
+export const listFileHighlights = (libraryId: string, fileId: string) =>
+  apiGet<HighlightListResponse>(`/libraries/${libraryId}/files/${fileId}/highlights`);
+
+export const createHighlight = (
+  libraryId: string,
+  fileId: string,
+  location: string,
+  text: string,
+  color?: string,
+  note?: string,
+) =>
+  apiPost<HighlightEnvelope>(`/libraries/${libraryId}/files/${fileId}/highlights`, {
+    location,
+    text,
+    color,
+    note,
+  });
+
+export const updateHighlight = (
+  libraryId: string,
+  highlightId: string,
+  patch: Partial<Pick<Highlight, 'color' | 'note'>>,
+) => apiPatch<HighlightEnvelope>(`/libraries/${libraryId}/highlights/${highlightId}`, patch);
+
+export const deleteHighlight = (libraryId: string, highlightId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/highlights/${highlightId}`);
+
+/* ----------------------------- quotes -------------------------------- */
+
+export const listLibraryQuotes = (libraryId: string, favoriteOnly?: boolean) =>
+  apiGet<QuoteListResponse>(
+    `/libraries/${libraryId}/quotes${favoriteOnly ? '?favorite=1' : ''}`,
+  );
+
+export const listFileQuotes = (libraryId: string, fileId: string) =>
+  apiGet<QuoteListResponse>(`/libraries/${libraryId}/files/${fileId}/quotes`);
+
+export const createQuote = (
+  libraryId: string,
+  fileId: string,
+  fields: Pick<Quote, 'text'> &
+    Partial<Pick<Quote, 'location' | 'author' | 'chapter' | 'page' | 'commentary'>>,
+) => apiPost<QuoteEnvelope>(`/libraries/${libraryId}/files/${fileId}/quotes`, fields);
+
+export const updateQuote = (
+  libraryId: string,
+  quoteId: string,
+  patch: Partial<
+    Pick<Quote, 'text' | 'author' | 'chapter' | 'page' | 'commentary' | 'favorite'>
+  >,
+) => apiPatch<QuoteEnvelope>(`/libraries/${libraryId}/quotes/${quoteId}`, patch);
+
+export const deleteQuote = (libraryId: string, quoteId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/quotes/${quoteId}`);
 
 /* ------------------------- permissions/shares ---------------------- */
 
