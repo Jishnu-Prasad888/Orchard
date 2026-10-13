@@ -303,6 +303,12 @@ const ICONS = {
       <path d="M13.5 9.5a3 3 0 0 1 3-3H17v3a3 3 0 0 1-3 3h-.5a3 3 0 0 1-3-3z" />
     </>
   ),
+  notebook: (
+    <>
+      <path d="M6.5 3.5h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z" />
+      <path d="M9 3.5v17M9 8h2M9 12h2" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof ICONS;

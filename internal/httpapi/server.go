@@ -291,6 +291,22 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("PATCH /api/v1/libraries/{id}/quotes/{quoteID}", s.withAuth(allowAny, s.handleUpdateQuote))
 		mux.Handle("DELETE /api/v1/libraries/{id}/quotes/{quoteID}", s.withAuth(allowAny, s.handleDeleteQuote))
 
+		// Notes. Long-form per-user Markdown writing: many notes per file,
+		// or a standalone note with no file/quote/highlight link at all.
+		// Distinct from the single-caption GET/PUT/DELETE .../note above.
+		mux.Handle("GET /api/v1/libraries/{id}/notes", s.withAuth(allowAny, s.handleListNotes))
+		mux.Handle("POST /api/v1/libraries/{id}/notes", s.withAuth(allowAny, s.handleCreateNote))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/notes", s.withAuth(allowAny, s.handleListFileNotes))
+		mux.Handle("GET /api/v1/libraries/{id}/notes/{noteID}", s.withAuth(allowAny, s.handleGetNote))
+		mux.Handle("PATCH /api/v1/libraries/{id}/notes/{noteID}", s.withAuth(allowAny, s.handleUpdateNote))
+		mux.Handle("DELETE /api/v1/libraries/{id}/notes/{noteID}", s.withAuth(allowAny, s.handleDeleteNote))
+		mux.Handle("GET /api/v1/libraries/{id}/notes/{noteID}/tags", s.withAuth(allowAny, s.handleListNoteTags))
+		mux.Handle("POST /api/v1/libraries/{id}/notes/{noteID}/tags", s.withAuth(allowAny, s.handleAddNoteTag))
+		mux.Handle("DELETE /api/v1/libraries/{id}/notes/{noteID}/tags/{tagID}", s.withAuth(allowAny, s.handleRemoveNoteTag))
+		mux.Handle("GET /api/v1/libraries/{id}/notes/{noteID}/links", s.withAuth(allowAny, s.handleListNoteLinks))
+		mux.Handle("POST /api/v1/libraries/{id}/notes/{noteID}/links", s.withAuth(allowAny, s.handleAddNoteLink))
+		mux.Handle("DELETE /api/v1/libraries/{id}/notes/{noteID}/links/{linkedNoteID}", s.withAuth(allowAny, s.handleRemoveNoteLink))
+
 		// Backups surface (admin). Backup policy is server-wide: where they
 		// are written, when they run, and restore destinations. All serverside.
 		if s.backups != nil {
