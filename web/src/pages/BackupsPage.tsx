@@ -16,7 +16,14 @@ import { useCallback, useState } from 'react';
 
 import { useAuth } from '../auth/authContext';
 import { useResource } from '../api/resources';
-import { getBackup, listBackups, restoreBackup, runBackup, verifyBackup } from '../api/queries';
+import {
+  exportBookMetadataUrl,
+  getBackup,
+  listBackups,
+  restoreBackup,
+  runBackup,
+  verifyBackup,
+} from '../api/queries';
 import type { BackupRecord } from '../api/types';
 import { formatBytes } from '../api/types';
 import { ConfirmDialog, Dialog, PromptDialog } from '../components/Dialog';
@@ -276,18 +283,28 @@ export default function BackupsPage() {
         title="Backups"
         subtitle="Copies of every library, written to a destination the server owns. Nothing leaves this machine unless you configure it to."
         controls={
-          <button
-            type="button"
-            className="button primary-button"
-            onClick={() => {
-              setRunning(true);
-              setConfirmRun(true);
-            }}
-            disabled={running}
-            data-testid="run-backup"
-          >
-            Back up now
-          </button>
+          <>
+            <a
+              className="button ghost-button"
+              href={exportBookMetadataUrl()}
+              download
+              data-testid="export-book-metadata"
+            >
+              Export book metadata
+            </a>
+            <button
+              type="button"
+              className="button primary-button"
+              onClick={() => {
+                setRunning(true);
+                setConfirmRun(true);
+              }}
+              disabled={running}
+              data-testid="run-backup"
+            >
+              Back up now
+            </button>
+          </>
         }
       />
 

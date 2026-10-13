@@ -217,3 +217,79 @@ func (s *Store) SetCover(ctx context.Context, fileID, coverRelPath string) (Meta
 	m.UserEdited = true
 	return m, nil
 }
+
+// MetadataWithPath is a file's book metadata plus its library-relative
+// path, for a catalog export where the path is the human-readable
+// identifier (a file_id alone means nothing outside the database).
+type MetadataWithPath struct {
+	Metadata
+	RelPath string
+}
+
+// ListAllWithPaths returns every present file's book metadata in this
+// library, ordered by path — the full per-library catalog, for exporting.
+func (s *Store) ListAllWithPaths(ctx context.Context) ([]MetadataWithPath, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT bm.file_id, bm.title, bm.author, bm.publisher, bm.year, bm.isbn, bm.description,
+		       bm.cover_path, bm.text_path, bm.user_edited, bm.extracted_at, f.rel_path
+		FROM book_metadata bm
+		JOIN indexed_files f ON f.id = bm.file_id
+		WHERE f.status = 'present'
+		ORDER BY f.rel_path`)
+	if err != nil {
+		return nil, fmt.Errorf("list book metadata: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []MetadataWithPath
+	for rows.Next() {
+		var (
+			m          MetadataWithPath
+			userEdited int
+			extracted  string
+		)
+		err := rows.Scan(&m.FileID, &m.Title, &m.Author, &m.Publisher, &m.Year, &m.ISBN, &m.Description,
+			&m.CoverPath, &m.TextPath, &userEdited, &extracted, &m.RelPath)
+		if err != nil {
+			return nil, fmt.Errorf("scan book metadata: %w", err)
+		}
+		m.UserEdited = userEdited != 0
+		if t, perr := time.Parse(time.RFC3339Nano, extracted); perr == nil {
+			m.ExtractedAt = t
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// HasCovers reports which of fileIDs have a non-empty cover_path, in one
+// batch query — for a file-listing grid deciding which tiles get a cover
+// thumbnail, which would otherwise be an N+1 Get per file. A file missing
+// from the result (or absent from the returned map entirely) has no cover.
+func (s *Store) HasCovers(ctx context.Context, fileIDs []string) (map[string]bool, error) {
+	out := make(map[string]bool, len(fileIDs))
+	if len(fileIDs) == 0 {
+		return out, nil
+	}
+	placeholders := strings.Repeat("?,", len(fileIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(fileIDs))
+	for i, id := range fileIDs {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT file_id FROM book_metadata WHERE cover_path != '' AND file_id IN (`+placeholders+`)`,
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("check covers: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan cover file id: %w", err)
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}

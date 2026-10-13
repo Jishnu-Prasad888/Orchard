@@ -67,6 +67,20 @@ type FileChange struct {
 	OldPath string // populated for ChangeMoved
 }
 
+// maxScanDetailEntries bounds how many individual error/missing-path
+// entries a Result keeps for reporting. The aggregate counts (Errors,
+// Missing) are always exact; a library with a systemic problem (a whole
+// subtree gone unreadable) must not make the detail lists — which outlive
+// the scan, serialized onto the job record — grow unboundedly.
+const maxScanDetailEntries = 50
+
+// ScanError is one path that could not be processed during a scan, with a
+// short human-readable reason.
+type ScanError struct {
+	Path   string
+	Reason string
+}
+
 // Result summarises a completed scan.
 type Result struct {
 	LibraryID  string
@@ -80,6 +94,59 @@ type Result struct {
 	Unchanged  int
 	Errors     int
 	Changes    []FileChange
+	// ErrorDetails holds up to maxScanDetailEntries of the files that
+	// failed this scan, newest first is not guaranteed — insertion order.
+	// Errors is always the exact count even when this list is capped.
+	ErrorDetails []ScanError
+	// MissingPaths holds up to maxScanDetailEntries of the paths newly
+	// marked missing this scan (present before, not seen now). Missing is
+	// always the exact count even when this list is capped.
+	MissingPaths []string
+}
+
+// addError records one failed path, incrementing the exact count and
+// appending to the capped detail list.
+func (r *Result) addError(path string, err error) {
+	r.Errors++
+	if len(r.ErrorDetails) < maxScanDetailEntries {
+		r.ErrorDetails = append(r.ErrorDetails, ScanError{Path: path, Reason: err.Error()})
+	}
+}
+
+// ScanSummary is the JSON-serializable gist of a Result: the aggregate
+// counts plus the capped error/missing detail lists, with no *IndexedFile
+// pointers — this is what gets persisted onto the completed index job's
+// Result field (the full Result, with a Changes entry per ordinary file,
+// is sized for one process's memory, not for storage or an HTTP response).
+type ScanSummary struct {
+	TotalFiles   int         `json:"total_files"`
+	NewFiles     int         `json:"new_files"`
+	Modified     int         `json:"modified"`
+	Moved        int         `json:"moved"`
+	Missing      int         `json:"missing"`
+	Unchanged    int         `json:"unchanged"`
+	Errors       int         `json:"errors"`
+	ErrorDetails []ScanError `json:"error_details,omitempty"`
+	MissingPaths []string    `json:"missing_paths,omitempty"`
+	StartedAt    time.Time   `json:"started_at"`
+	FinishedAt   time.Time   `json:"finished_at"`
+}
+
+// Summary extracts the persistable gist of a completed Result.
+func (r *Result) Summary() ScanSummary {
+	return ScanSummary{
+		TotalFiles:   r.TotalFiles,
+		NewFiles:     r.NewFiles,
+		Modified:     r.Modified,
+		Moved:        r.Moved,
+		Missing:      r.Missing,
+		Unchanged:    r.Unchanged,
+		Errors:       r.Errors,
+		ErrorDetails: r.ErrorDetails,
+		MissingPaths: r.MissingPaths,
+		StartedAt:    r.StartedAt,
+		FinishedAt:   r.FinishedAt,
+	}
 }
 
 // newID returns a new random identifier as 16 hex-encoded random bytes.

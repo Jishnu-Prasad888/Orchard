@@ -79,6 +79,20 @@ function downloadText(fileName: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
+/** All notes currently shown (respecting the active tag/standalone filter)
+ * as one Markdown document, each note under its own heading — the bulk
+ * counterpart to the single-note export in NoteDetail's header. */
+function notesToMarkdown(notes: Note[], titleFor: (fileId: string) => string): string {
+  return notes
+    .map((n) => {
+      const heading = n.title || extractExcerpt(n.body, 60) || 'Untitled note';
+      const about = n.file_id ? titleFor(n.file_id) : undefined;
+      const lines = [`## ${heading}`, ...(about ? [`*About: ${about}*`, ''] : []), n.body];
+      return lines.join('\n');
+    })
+    .join('\n\n---\n\n');
+}
+
 function NoteDetail({
   libraryId,
   note,
@@ -450,20 +464,36 @@ export default function NotesPage() {
       .finally(() => setCreating(false));
   };
 
+  const exportNotes = () => {
+    const list = notes.data ?? [];
+    downloadText('notes.md', notesToMarkdown(list, (id) => labels[id]?.title ?? ''));
+  };
+
   const header = (
     <PageHeader
       title="Notes"
       subtitle="Long-form writing — about a book, a saved quote, or nothing in particular."
       controls={
-        <button
-          type="button"
-          className="button primary-button"
-          onClick={newNote}
-          disabled={gate.kind !== 'ready' || creating}
-          data-testid="new-note-button"
-        >
-          {creating ? 'Creating…' : 'New note'}
-        </button>
+        <>
+          <button
+            type="button"
+            className="button"
+            onClick={exportNotes}
+            disabled={!notes.data || notes.data.length === 0}
+            data-testid="export-notes-button"
+          >
+            Export
+          </button>
+          <button
+            type="button"
+            className="button primary-button"
+            onClick={newNote}
+            disabled={gate.kind !== 'ready' || creating}
+            data-testid="new-note-button"
+          >
+            {creating ? 'Creating…' : 'New note'}
+          </button>
+        </>
       }
     />
   );

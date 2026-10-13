@@ -270,6 +270,44 @@ describe('LibrariesPage', () => {
     });
   });
 
+  it('shows a scan report with errors and newly-missing files', async () => {
+    const statusWithIssues = {
+      status: {
+        present: 1204,
+        missing: 1,
+        active_job: null,
+        last_scan: {
+          total_files: 1205,
+          new_files: 0,
+          modified: 0,
+          moved: 0,
+          missing: 1,
+          unchanged: 1203,
+          errors: 1,
+          error_details: [{ Path: 'locked.pdf', Reason: 'permission denied' }],
+          missing_paths: ['gone.epub'],
+          started_at: '2026-10-13T00:00:00Z',
+          finished_at: '2026-10-13T00:01:00Z',
+        },
+      },
+    };
+    setup([(url) => (url.includes('/index/status') ? json(statusWithIssues) : undefined)]);
+
+    const report = await screen.findByTestId('library-scan-report');
+    expect(within(report).getByText(/1 errors/)).toBeInTheDocument();
+    expect(within(report).getByText(/1 newly missing/)).toBeInTheDocument();
+    fireEvent.click(within(report).getByText(/Last scan/));
+    expect(within(report).getByText('locked.pdf')).toBeInTheDocument();
+    expect(within(report).getByText(/permission denied/)).toBeInTheDocument();
+    expect(within(report).getByText('gone.epub')).toBeInTheDocument();
+  });
+
+  it('omits the scan report when the last scan had no errors or newly-missing files', async () => {
+    setup();
+    await screen.findByTestId('library-row');
+    expect(screen.queryByTestId('library-scan-report')).not.toBeInTheDocument();
+  });
+
   it('unregisters after confirming, and keeps the library on cancel', async () => {
     const fetchMock = setup([
       (url, init) =>

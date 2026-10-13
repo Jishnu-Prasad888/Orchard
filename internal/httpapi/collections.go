@@ -216,6 +216,7 @@ func (s *Server) handleListCollectionFiles(w http.ResponseWriter, r *http.Reques
 	for _, f := range files {
 		results = append(results, toFileResponse(f))
 	}
+	attachCoverURLs(results, s.coverURLsFor(r.Context(), lib, files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": results})
 }
 

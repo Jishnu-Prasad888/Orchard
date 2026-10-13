@@ -64,6 +64,15 @@ describe('BackupsPage', () => {
     globalThis.fetch = originalFetch;
   });
 
+  it('offers a book metadata CSV export link, for any administrator', async () => {
+    setup();
+    await screen.findByRole('heading', { name: 'Backups' });
+
+    const link = screen.getByTestId('export-book-metadata');
+    expect(link).toHaveAttribute('href', '/api/v1/backups/export/book-metadata.csv');
+    expect(link).toHaveAttribute('download');
+  });
+
   it('lists the backups with their status and destination', async () => {
     setup();
 

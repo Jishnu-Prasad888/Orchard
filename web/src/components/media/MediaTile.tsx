@@ -12,7 +12,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent } from 
 
 import type { FileSummary } from '../../api/types';
 import { Icon } from '../ui/Icon';
-import { thumbnailUrl, mediaTypeIcon } from '../media';
+import { hasThumbnail, thumbnailUrl, mediaTypeIcon } from '../media';
 
 const LONG_PRESS_MS = 450;
 const LONG_PRESS_SLOP = 10;
@@ -59,7 +59,7 @@ function MediaTileImpl({
   const longPressed = useRef(false);
 
   const isVideo = file.media_type === 'video';
-  const hasThumb = file.media_type === 'photo' && !failed;
+  const hasThumb = hasThumbnail(file) && !failed;
 
   const cancelPress = () => {
     if (press.current) clearTimeout(press.current.timer);

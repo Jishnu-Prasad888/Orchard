@@ -334,6 +334,12 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("POST /api/v1/backups/{id}/restore", s.withAuth(allowAdmin, s.handleRestoreBackup))
 		}
 
+		// Book metadata export is independent of the backup manager being
+		// configured (destination, encryption key, …) — it only reads each
+		// library's own database — so it is registered unconditionally.
+		mux.Handle("GET /api/v1/backups/export/book-metadata.csv",
+			s.withAuth(allowAdmin, s.handleExportBookMetadata))
+
 		// Public shares read content without a session. The token/password
 		// authenticate the share; capability evaluation still governs access.
 		mux.HandleFunc("GET /api/v1/shares/{token}", s.handlePublicShareInfo)

@@ -95,10 +95,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, u *auth.Us
 		return
 	}
 
+	files := make([]*media.File, 0, len(page.Results))
 	results := make([]fileResponse, 0, len(page.Results))
 	for _, res := range page.Results {
+		files = append(files, res.File)
 		results = append(results, toFileResponse(res.File))
 	}
+	attachCoverURLs(results, s.coverURLsFor(r.Context(), lib, files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
 		"files":       results,
 		"next_cursor": page.NextCursor,

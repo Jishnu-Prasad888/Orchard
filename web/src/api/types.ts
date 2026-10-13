@@ -119,6 +119,32 @@ export interface IndexStatus {
   active_job?: IndexJob;
   /** Id of the most recent scan, when any. */
   last_job_id?: string;
+  /** The most recently finished scan's summary — independent of whether
+   * another scan is active or queued right now. */
+  last_scan?: ScanSummary;
+}
+
+/** One path that failed during a scan, with a short reason. */
+export interface ScanError {
+  Path: string;
+  Reason: string;
+}
+
+/** The gist of a finished scan: aggregate counts plus capped detail lists
+ * (see the server's maxScanDetailEntries) — enough to show "what happened"
+ * without the full per-file change list. */
+export interface ScanSummary {
+  total_files: number;
+  new_files: number;
+  modified: number;
+  moved: number;
+  missing: number;
+  unchanged: number;
+  errors: number;
+  error_details?: ScanError[];
+  missing_paths?: string[];
+  started_at: string;
+  finished_at: string;
 }
 
 /**
@@ -151,6 +177,9 @@ export interface FileSummary {
   mime_type: string;
   status: string;
   content_hash?: string;
+  /** Set only for a document file with an extracted or uploaded cover —
+   * absent otherwise, including for non-document media types. */
+  cover_url?: string;
 }
 
 export interface FileEnvelope {

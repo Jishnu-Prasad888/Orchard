@@ -152,12 +152,12 @@ func TestStateStoreMarkMissing(t *testing.T) {
 
 	// "seen" only id-a and id-b; id-c should become missing.
 	seenIDs := map[string]struct{}{"id-a": {}, "id-b": {}}
-	n, err := store.MarkMissing(ctx, seenIDs, now)
+	newlyMissing, err := store.MarkMissing(ctx, seenIDs, now)
 	if err != nil {
 		t.Fatalf("MarkMissing: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("MarkMissing count = %d, want 1", n)
+	if len(newlyMissing) != 1 || newlyMissing[0].RelPath != "id-c.jpg" {
+		t.Errorf("MarkMissing = %+v, want only id-c.jpg", newlyMissing)
 	}
 
 	f, _ := store.GetByPath(ctx, "id-c.jpg")
@@ -247,6 +247,12 @@ func TestIndexManagerWorkerExecutesScanJob(t *testing.T) {
 	}
 	if status == nil {
 		t.Fatal("index scan job was never executed by the library worker")
+	}
+	if status.LastScan == nil {
+		t.Fatal("LastScan is nil, want the finished scan's summary")
+	}
+	if status.LastScan.TotalFiles != 2 || status.LastScan.NewFiles != 2 {
+		t.Errorf("LastScan = %+v, want total=2 new=2", status.LastScan)
 	}
 }
 
@@ -417,6 +423,9 @@ func TestScannerMissingFile(t *testing.T) {
 	if r2.Missing != 1 {
 		t.Errorf("missing = %d, want 1", r2.Missing)
 	}
+	if len(r2.MissingPaths) != 1 || r2.MissingPaths[0] != "photo.jpg" {
+		t.Errorf("MissingPaths = %v, want [photo.jpg]", r2.MissingPaths)
+	}
 
 	// Metadata must still be in the index as 'missing'.
 	f, err := store.GetByPath(context.Background(), "photo.jpg")
@@ -425,6 +434,38 @@ func TestScannerMissingFile(t *testing.T) {
 	}
 	if f == nil || f.Status != indexer.StatusMissing {
 		t.Errorf("status = %v, want missing", f)
+	}
+}
+
+func TestScannerRecordsUnreadableFileAsError(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "locked.jpg")
+	writeFile(t, path, "some content")
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) }) // so TempDir cleanup can remove it
+
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: file permissions do not block reads")
+	}
+
+	db := newTestDB(t)
+	store := indexer.NewStateStore(db.DB())
+	scanner := indexer.NewScanner(store, discardLogger())
+
+	result, err := scanner.Scan(context.Background(), "lib1", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Errors != 1 {
+		t.Errorf("Errors = %d, want 1", result.Errors)
+	}
+	if len(result.ErrorDetails) != 1 || result.ErrorDetails[0].Path != "locked.jpg" {
+		t.Errorf("ErrorDetails = %+v, want one entry for locked.jpg", result.ErrorDetails)
+	}
+	if result.ErrorDetails[0].Reason == "" {
+		t.Error("ErrorDetails[0].Reason is empty, want a reason")
 	}
 }
 

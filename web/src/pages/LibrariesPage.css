@@ -50,6 +50,28 @@
   font-size: var(--font-size-sm);
 }
 
+.library-scan-report {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.library-scan-report summary {
+  cursor: pointer;
+  color: var(--color-danger-ink);
+}
+
+.library-scan-report ul {
+  max-height: 200px;
+  margin: var(--space-1) 0;
+  padding-left: var(--space-5);
+  overflow-y: auto;
+}
+
+.library-scan-report code {
+  overflow-wrap: anywhere;
+}
+
 .library-row-actions {
   display: flex;
   flex-wrap: wrap;

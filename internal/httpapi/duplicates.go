@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // duplicateGroupResponse is one set of files sharing a content hash.
@@ -36,11 +37,19 @@ func (s *Server) handleListDuplicates(w http.ResponseWriter, r *http.Request, u 
 			CodeInternal, "Failed to list duplicate files.")
 		return
 	}
+	var allFiles []*media.File
+	for _, g := range groups {
+		allFiles = append(allFiles, g.Files...)
+	}
+	covers := s.coverURLsFor(r.Context(), lib, allFiles)
+
 	resp := make([]duplicateGroupResponse, 0, len(groups))
 	for _, g := range groups {
+		files := toFileResponses(g.Files)
+		attachCoverURLs(files, covers)
 		resp = append(resp, duplicateGroupResponse{
 			ContentHash: g.ContentHash,
-			Files:       toFileResponses(g.Files),
+			Files:       files,
 		})
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"groups": resp})

@@ -96,5 +96,7 @@ func (s *Server) handleListRecentlyOpened(w http.ResponseWriter, r *http.Request
 			CodeInternal, "Failed to list recently opened files.")
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": toFileResponses(files)})
+	out := toFileResponses(files)
+	attachCoverURLs(out, s.coverURLsFor(r.Context(), lib, files))
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": out})
 }

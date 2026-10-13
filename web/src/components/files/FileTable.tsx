@@ -11,7 +11,7 @@ import type { FileSort, SortOrder } from '../../api/queries';
 import type { FileSummary, Folder } from '../../api/types';
 import { formatBytes } from '../../api/types';
 import { formatDate } from '../../lib/dates';
-import { fileExtension, mediaLabel, thumbnailUrl, mediaTypeIcon } from '../media';
+import { fileExtension, hasThumbnail, mediaLabel, thumbnailUrl, mediaTypeIcon } from '../media';
 import type { Selection } from '../media/useSelection';
 import { Icon } from '../ui/Icon';
 import './Files.css';
@@ -167,7 +167,7 @@ export function FileTable({
                   }}
                   title={file.rel_path}
                 >
-                  {file.media_type === 'photo' ? (
+                  {hasThumbnail(file) ? (
                     <img
                       className="file-row-thumb"
                       src={thumbnailUrl(libraryId, file)}
