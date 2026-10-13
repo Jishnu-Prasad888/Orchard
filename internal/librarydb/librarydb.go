@@ -18,6 +18,7 @@ package librarydb
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
@@ -31,7 +32,7 @@ const (
 
 	// SchemaVersion is the current version of the library-level database
 	// schema. Bump this when adding new tables or changing existing ones.
-	SchemaVersion = 3
+	SchemaVersion = 4
 )
 
 // DB wraps a per-library SQLite connection pool. Use OpenDB to construct one.
@@ -76,7 +77,7 @@ func Open(orchardDir string) (*sql.DB, error) {
 		_ = pool.Close()
 		return nil, fmt.Errorf("enable WAL: %w", err)
 	}
-	if err := migrate(pool); err != nil {
+	if err := migrate(pool, orchardDir); err != nil {
 		_ = pool.Close()
 		return nil, fmt.Errorf("migrate library database: %w", err)
 	}
@@ -101,8 +102,10 @@ func dsn(path string) string {
 }
 
 // migrate applies the per-library schema. Each statement is idempotent via
-// CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS.
-func migrate(db *sql.DB) error {
+// CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS. orchardDir is
+// needed only by addFTSContent, which reads extracted-text files from disk
+// to backfill a database created before fts_content existed.
+func migrate(db *sql.DB, orchardDir string) error {
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}
@@ -115,7 +118,10 @@ func migrate(db *sql.DB) error {
 	if err := addBookMetadataUserEdited(db); err != nil {
 		return err
 	}
-	return addReadingAndOpensIndexes(db)
+	if err := addReadingAndOpensIndexes(db); err != nil {
+		return err
+	}
+	return addFTSContent(db, orchardDir)
 }
 
 // addIndexedFileMediaType backfills indexed_files.media_type on a library
@@ -274,6 +280,106 @@ func addReadingAndOpensIndexes(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// addFTSContent backfills fts_content on a library database created before
+// it existed: book_metadata, quotes, highlights, and notes rows written
+// before the triggers/sync calls that keep fts_content current were in
+// place. Book text is backfilled too, read back from the .orchard/text/
+// files that extraction already writes (book_metadata.text_path) — that
+// content has no DB row of its own to trigger off of. Going forward, quotes/
+// highlights/notes are kept in sync by triggers (schema const below);
+// book_metadata and book text are synced explicitly by internal/bookmeta
+// (an UPSERT's trigger-firing semantics are not something to depend on, and
+// book text has no row to trigger off of at all).
+//
+// fts_content_state is a one-row-per-key marker table existing solely to
+// make this backfill cheap to skip on every subsequent Open() — a full
+// resync on every open (migrate runs per-Open, and Open is called per
+// request by several handlers) would be wasted work once already done.
+func addFTSContent(db *sql.DB, orchardDir string) error {
+	var done string
+	err := db.QueryRow(`SELECT value FROM fts_content_state WHERE key = 'backfilled'`).Scan(&done)
+	if err == nil {
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+
+	backfillRows := []struct {
+		sourceType string
+		query      string
+	}{
+		{"metadata", `SELECT file_id, file_id, '', trim(title || ' ' || author || ' ' || description)
+			FROM book_metadata WHERE trim(title || ' ' || author || ' ' || description) != ''`},
+		{"quote", `SELECT id, file_id, user_id, trim(text || ' ' || commentary) FROM quotes`},
+		{"highlight", `SELECT id, file_id, user_id, trim(text || ' ' || note) FROM highlights`},
+		{"note", `SELECT id, COALESCE(file_id, ''), user_id, trim(COALESCE(title, '') || ' ' || body) FROM notes`},
+	}
+	for _, b := range backfillRows {
+		rows, err := db.Query(b.query)
+		if err != nil {
+			return fmt.Errorf("backfill fts_content (%s): %w", b.sourceType, err)
+		}
+		type row struct{ sourceID, fileID, userID, text string }
+		var pending []row
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.sourceID, &r.fileID, &r.userID, &r.text); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			pending = append(pending, r)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		_ = rows.Close()
+		for _, r := range pending {
+			if _, err := db.Exec(
+				`INSERT INTO fts_content (source_type, source_id, file_id, user_id, text) VALUES (?, ?, ?, ?, ?)`,
+				b.sourceType, r.sourceID, r.fileID, r.userID, r.text); err != nil {
+				return fmt.Errorf("backfill fts_content (%s): %w", b.sourceType, err)
+			}
+		}
+	}
+
+	// Book text: read back what extraction already wrote to disk.
+	textRows, err := db.Query(`SELECT file_id, text_path FROM book_metadata WHERE text_path != ''`)
+	if err != nil {
+		return fmt.Errorf("backfill fts_content (book_text): %w", err)
+	}
+	type textRow struct{ fileID, textPath string }
+	var pendingText []textRow
+	for textRows.Next() {
+		var r textRow
+		if err := textRows.Scan(&r.fileID, &r.textPath); err != nil {
+			_ = textRows.Close()
+			return err
+		}
+		pendingText = append(pendingText, r)
+	}
+	if err := textRows.Err(); err != nil {
+		_ = textRows.Close()
+		return err
+	}
+	_ = textRows.Close()
+	for _, r := range pendingText {
+		data, err := os.ReadFile(filepath.Join(orchardDir, r.textPath))
+		if err != nil {
+			continue // file missing/unreadable: skip, not fatal to the migration.
+		}
+		if _, err := db.Exec(
+			`INSERT INTO fts_content (source_type, source_id, file_id, user_id, text) VALUES ('book_text', ?, ?, '', ?)`,
+			r.fileID, r.fileID, string(data)); err != nil {
+			return fmt.Errorf("backfill fts_content (book_text): %w", err)
+		}
+	}
+
+	_, err = db.Exec(`INSERT INTO fts_content_state (key, value) VALUES ('backfilled', '1')`)
+	return err
 }
 
 // columnExists reports whether a table already has the named column.
@@ -645,4 +751,94 @@ CREATE TABLE IF NOT EXISTS note_links (
 );
 
 CREATE INDEX IF NOT EXISTS note_links_linked_idx ON note_links (linked_note_id);
+
+-- fts_content is a second FTS5 table (separate from fts_files, which stays
+-- filename-only) indexing the content of annotations and extracted book
+-- text, so search can find a term inside a book or inside what a user
+-- wrote about it, not just in a filename. source_type/source_id identify
+-- the underlying row ('metadata'/'book_text' use file_id as source_id,
+-- since neither has an id of its own); file_id scopes a hit to a book
+-- (empty for a standalone note); user_id scopes per-user content (quote/
+-- highlight/note) so a search never surfaces another user's writing —
+-- empty for library-wide content (book_text/metadata), visible to anyone
+-- with library access. Quotes/highlights/notes are kept in sync by
+-- triggers below (safe: they are never written via UPSERT, so there is no
+-- INSERT-vs-UPDATE trigger ambiguity to worry about). book_metadata/
+-- book_text are synced explicitly by internal/bookmeta instead — bookmeta
+-- a) writes via UPSERT, where trigger-firing semantics are a needless risk
+-- to depend on, and b) book_text has no DB row to trigger off of at all
+-- (it lives in a file under .orchard/text/). A DELETE trigger on
+-- book_metadata still handles cleanup on cascade-delete, since that's a
+-- plain DELETE regardless of how it was triggered.
+CREATE VIRTUAL TABLE IF NOT EXISTS fts_content USING fts5(
+	source_type UNINDEXED,
+	source_id UNINDEXED,
+	file_id UNINDEXED,
+	user_id UNINDEXED,
+	text
+);
+
+CREATE TRIGGER IF NOT EXISTS fts_content_book_metadata_delete AFTER DELETE ON book_metadata BEGIN
+	DELETE FROM fts_content WHERE source_type IN ('metadata', 'book_text') AND source_id = old.file_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fts_content_quotes_insert AFTER INSERT ON quotes BEGIN
+	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+	VALUES ('quote', new.id, new.file_id, new.user_id, trim(new.text || ' ' || new.commentary));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_content_quotes_update AFTER UPDATE ON quotes BEGIN
+	DELETE FROM fts_content WHERE source_type = 'quote' AND source_id = old.id;
+	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+	VALUES ('quote', new.id, new.file_id, new.user_id, trim(new.text || ' ' || new.commentary));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_content_quotes_delete AFTER DELETE ON quotes BEGIN
+	DELETE FROM fts_content WHERE source_type = 'quote' AND source_id = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fts_content_highlights_insert AFTER INSERT ON highlights BEGIN
+	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+	VALUES ('highlight', new.id, new.file_id, new.user_id, trim(new.text || ' ' || new.note));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_content_highlights_update AFTER UPDATE ON highlights BEGIN
+	DELETE FROM fts_content WHERE source_type = 'highlight' AND source_id = old.id;
+	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+	VALUES ('highlight', new.id, new.file_id, new.user_id, trim(new.text || ' ' || new.note));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_content_highlights_delete AFTER DELETE ON highlights BEGIN
+	DELETE FROM fts_content WHERE source_type = 'highlight' AND source_id = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fts_content_notes_insert AFTER INSERT ON notes BEGIN
+	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+	VALUES ('note', new.id, COALESCE(new.file_id, ''), new.user_id, trim(COALESCE(new.title, '') || ' ' || new.body));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_content_notes_update AFTER UPDATE ON notes BEGIN
+	DELETE FROM fts_content WHERE source_type = 'note' AND source_id = old.id;
+	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+	VALUES ('note', new.id, COALESCE(new.file_id, ''), new.user_id, trim(COALESCE(new.title, '') || ' ' || new.body));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_content_notes_delete AFTER DELETE ON notes BEGIN
+	DELETE FROM fts_content WHERE source_type = 'note' AND source_id = old.id;
+END;
+
+-- fts_content_state is a tiny marker table so the one-time backfill in
+-- addFTSContent is cheap to skip on every subsequent Open() (migrate runs
+-- per-Open, and Open is called per request by several handlers).
+CREATE TABLE IF NOT EXISTS fts_content_state (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
+
+-- recent_searches is a per-user log of search queries, upserted by text so
+-- repeating a search just bumps its timestamp rather than duplicating rows.
+-- Trimmed to a bounded count per user at write time (see internal/
+-- recentsearch) rather than left to grow unbounded.
+CREATE TABLE IF NOT EXISTS recent_searches (
+	user_id     TEXT NOT NULL,
+	query       TEXT NOT NULL,
+	searched_at TEXT NOT NULL,
+	PRIMARY KEY (user_id, query)
+);
+
+CREATE INDEX IF NOT EXISTS recent_searches_user_time_idx ON recent_searches (user_id, searched_at);
 `

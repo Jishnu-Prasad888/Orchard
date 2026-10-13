@@ -244,6 +244,15 @@ func (s *Server) Handler() http.Handler {
 
 		// Search.
 		mux.Handle("GET /api/v1/libraries/{id}/search", s.withAuth(allowAny, s.handleSearch))
+		// Content search: extracted book text, metadata, quotes,
+		// highlights, and notes — as opposed to the path-only search above.
+		mux.Handle("GET /api/v1/libraries/{id}/search/content", s.withAuth(allowAny, s.handleSearchContent))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/search/content",
+			s.withAuth(allowAny, s.handleSearchFileContent))
+		// Per-user recent searches.
+		mux.Handle("GET /api/v1/libraries/{id}/search/recent", s.withAuth(allowAny, s.handleListRecentSearches))
+		mux.Handle("POST /api/v1/libraries/{id}/search/recent", s.withAuth(allowAny, s.handleRecordRecentSearch))
+		mux.Handle("DELETE /api/v1/libraries/{id}/search/recent", s.withAuth(allowAny, s.handleForgetRecentSearch))
 
 		// Tags.
 		mux.Handle("GET /api/v1/libraries/{id}/tags", s.withAuth(allowAny, s.handleListTags))

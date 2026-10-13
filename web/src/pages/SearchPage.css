@@ -8,3 +8,58 @@
     padding: var(--space-3) var(--content-gutter) 0;
   }
 }
+
+.content-search-results {
+  padding: 0 var(--content-gutter) var(--space-7);
+}
+
+.content-search-results h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+}
+
+.content-hit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.content-hit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.content-hit-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-1);
+}
+
+.content-hit-type {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.content-hit-file {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.content-hit-excerpt {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}

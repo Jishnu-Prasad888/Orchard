@@ -118,6 +118,17 @@
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
+.reader-search-result-static {
+  padding: var(--space-2);
+  opacity: 0.8;
+}
+
+.reader-search-section-heading {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
 .reader-search-input {
   width: 100%;
   margin-bottom: var(--space-3);

@@ -158,6 +158,23 @@ describe('NotesPage', () => {
     });
   });
 
+  it('opens a note from a deep link even when not in the loaded list', async () => {
+    const other = {
+      id: 'n2',
+      title: 'From search',
+      body: 'A note found via content search.',
+      created_at: note.created_at,
+      updated_at: note.updated_at,
+    };
+    setup(
+      [(url) => (url.endsWith('/api/v1/libraries/lib1/notes/n2') ? json({ note: other }) : undefined)],
+      { route: '/notes?open=n2' },
+    );
+
+    const detail = await screen.findByTestId('note-detail');
+    expect(within(detail).getByDisplayValue('From search')).toBeInTheDocument();
+  });
+
   it('retries a failed listing', async () => {
     let attempts = 0;
     mockApi(

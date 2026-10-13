@@ -448,3 +448,206 @@ func TestHandleFavoritesUnauthenticated(t *testing.T) {
 		t.Errorf("favorites unauthenticated status = %d, want 401", rec.Code)
 	}
 }
+
+// --- content search tests ---
+
+// adminUserID finds the bootstrapped admin's user ID, needed to seed
+// per-user content (quotes/highlights/notes) rows attributed to them.
+func adminUserID(t *testing.T, client *testClient) string {
+	t.Helper()
+	rec := client.do(t, http.MethodGet, "/api/v1/users", nil)
+	var users struct {
+		Users []struct {
+			ID       string `json:"id"`
+			Username string `json:"username"`
+		} `json:"users"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &users); err != nil {
+		t.Fatalf("unmarshal users: %v", err)
+	}
+	for _, u := range users.Users {
+		if u.Username == "admin" {
+			return u.ID
+		}
+	}
+	t.Fatalf("admin user not found among %+v", users.Users)
+	return ""
+}
+
+type contentHitDTO struct {
+	SourceType string `json:"source_type"`
+	SourceID   string `json:"source_id"`
+	FileID     string `json:"file_id"`
+	Excerpt    string `json:"excerpt"`
+	Location   string `json:"location"`
+}
+
+func TestHandleSearchContent_FindsQuoteWithLocation(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "dune.epub", 10); err != nil {
+		t.Fatal(err)
+	}
+	userID := adminUserID(t, client)
+
+	ldb, err := librarydb.Open(filepath.Join(libRoot, ".orchard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = ldb.Exec(`INSERT INTO quotes (id, user_id, file_id, text, location, commentary, created_at, updated_at)
+		VALUES ('q1', ?, 'f1', 'fear is the mindkiller', 'page:42', '', ?, ?)`, userID, now, now)
+	_ = ldb.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/search/content?q=mindkiller", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Hits []contentHitDTO `json:"hits"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Hits) != 1 {
+		t.Fatalf("hits = %+v, want 1", resp.Hits)
+	}
+	if resp.Hits[0].SourceType != "quote" || resp.Hits[0].SourceID != "q1" {
+		t.Errorf("hit = %+v, want the seeded quote", resp.Hits[0])
+	}
+	if resp.Hits[0].Location != "page:42" {
+		t.Errorf("Location = %q, want page:42 (jump-to-location enrichment)", resp.Hits[0].Location)
+	}
+}
+
+func TestHandleSearchContent_DoesNotLeakAnotherUsersQuote(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "dune.epub", 10); err != nil {
+		t.Fatal(err)
+	}
+
+	ldb, err := librarydb.Open(filepath.Join(libRoot, ".orchard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = ldb.Exec(`INSERT INTO quotes (id, user_id, file_id, text, location, commentary, created_at, updated_at)
+		VALUES ('q1', 'someone-else', 'f1', 'a secret quote', 'page:1', '', ?, ?)`, now, now)
+	_ = ldb.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/search/content?q=secret", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Hits []contentHitDTO `json:"hits"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Hits) != 0 {
+		t.Errorf("hits = %+v, want none (another user's quote must not leak)", resp.Hits)
+	}
+}
+
+func TestHandleSearchFileContent_ScopedToOneFile(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "a.epub", 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := seedLibraryFile(t, libRoot, "f2", "b.epub", 10); err != nil {
+		t.Fatal(err)
+	}
+	userID := adminUserID(t, client)
+
+	ldb, err := librarydb.Open(filepath.Join(libRoot, ".orchard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = ldb.Exec(`INSERT INTO quotes (id, user_id, file_id, text, location, commentary, created_at, updated_at)
+		VALUES ('qa', ?, 'f1', 'overlap term', 'page:1', '', ?, ?), ('qb', ?, 'f2', 'overlap term', 'page:1', '', ?, ?)`,
+		userID, now, now, userID, now, now)
+	_ = ldb.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/files/f1/search/content?q=overlap", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Hits []contentHitDTO `json:"hits"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Hits) != 1 || resp.Hits[0].SourceID != "qa" {
+		t.Errorf("hits = %+v, want only the quote scoped to f1", resp.Hits)
+	}
+}
+
+func TestHandleSearchContentUnauthenticated(t *testing.T) {
+	h, _, libID, _ := newSearchTestServer(t)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/libraries/"+libID+"/search/content?q=test", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
+// --- recent search tests ---
+
+func TestHandleRecentSearches_RecordAndList(t *testing.T) {
+	_, client, libID, _ := newSearchTestServer(t)
+
+	rec := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/search/recent", map[string]any{"query": "dune"})
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("record status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/search/recent", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Searches []struct {
+			Query string `json:"query"`
+		} `json:"searches"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Searches) != 1 || resp.Searches[0].Query != "dune" {
+		t.Errorf("searches = %+v, want [dune]", resp.Searches)
+	}
+}
+
+func TestHandleRecentSearches_Forget(t *testing.T) {
+	_, client, libID, _ := newSearchTestServer(t)
+
+	client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/search/recent", map[string]any{"query": "dune"})
+	rec := client.do(t, http.MethodDelete, "/api/v1/libraries/"+libID+"/search/recent?q=dune", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("forget status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/search/recent", nil)
+	var resp struct {
+		Searches []any `json:"searches"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Searches) != 0 {
+		t.Errorf("searches = %+v, want none after forget", resp.Searches)
+	}
+}

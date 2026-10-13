@@ -31,6 +31,7 @@ import type {
   Collection,
   CollectionEnvelope,
   CollectionListResponse,
+  ContentHitListResponse,
   DuplicateGroupListResponse,
   FileCollectionResponse,
   FileListResponse,
@@ -57,6 +58,7 @@ import type {
   Quote,
   QuoteEnvelope,
   QuoteListResponse,
+  RecentSearchListResponse,
   ReaderPreferences,
   ReaderPreferencesResponse,
   ReadingProgress,
@@ -336,6 +338,24 @@ export interface SearchParams {
 
 export const searchFiles = (libraryId: string, params: SearchParams = {}) =>
   apiGet<FileListResponse>(`/libraries/${libraryId}/search${query({ ...params })}`);
+
+/** Searches extracted book text, book metadata, quotes, highlights, and
+ * notes content — as opposed to searchFiles, which only matches paths. */
+export const searchContent = (libraryId: string, q: string) =>
+  apiGet<ContentHitListResponse>(`/libraries/${libraryId}/search/content${query({ q })}`);
+
+/** The reader-local variant: content search scoped to a single book. */
+export const searchFileContent = (libraryId: string, fileId: string, q: string) =>
+  apiGet<ContentHitListResponse>(`/libraries/${libraryId}/files/${fileId}/search/content${query({ q })}`);
+
+export const listRecentSearches = (libraryId: string, limit?: number) =>
+  apiGet<RecentSearchListResponse>(`/libraries/${libraryId}/search/recent${query({ limit })}`);
+
+export const recordRecentSearch = (libraryId: string, q: string) =>
+  apiPost<void>(`/libraries/${libraryId}/search/recent`, { query: q });
+
+export const forgetRecentSearch = (libraryId: string, q: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/search/recent${query({ q })}`);
 
 /* ------------------------------ trash ------------------------------ */
 

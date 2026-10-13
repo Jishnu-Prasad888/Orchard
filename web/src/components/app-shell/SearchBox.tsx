@@ -14,8 +14,7 @@ import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
-import { listTags } from '../../api/queries';
-import { forgetSearch, readRecentSearches, rememberSearch } from '../../lib/recentSearches';
+import { forgetRecentSearch, listRecentSearches, listTags, recordRecentSearch } from '../../api/queries';
 import { Icon, type IconName } from '../ui/Icon';
 import './SearchBox.css';
 
@@ -36,7 +35,13 @@ interface Entities {
   tags: Array<{ id: string; name: string }>;
 }
 
+interface RecentQueries {
+  libraryId: string;
+  queries: string[];
+}
+
 const MAX_PER_KIND = 3;
+const MAX_RECENT = 6;
 
 function matches(name: string, q: string) {
   return name.toLowerCase().includes(q.toLowerCase());
@@ -70,11 +75,12 @@ export function SearchBox({
 
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const [recent, setRecent] = useState<string[]>([]);
+  const [recent, setRecent] = useState<RecentQueries | null>(null);
   const [entities, setEntities] = useState<Entities | null>(null);
 
   // Names for suggestions, loaded once per library the first time the box is
-  // opened.
+  // opened. Recent searches are per-user and per-library (replacing the old
+  // per-browser localStorage list), so they are fetched the same way.
   useEffect(() => {
     if (!open || !libraryId || entities?.libraryId === libraryId) return;
     let cancelled = false;
@@ -89,10 +95,49 @@ export function SearchBox({
     };
   }, [open, libraryId, entities?.libraryId]);
 
+  useEffect(() => {
+    // Cached by libraryId, like tags: remember()/forget() keep this state
+    // current for the rest of the session (see below), so there is no need
+    // to re-fetch on every open — and re-fetching would race a just-taken
+    // search's optimistic update against the server call that persists it.
+    if (!open || !libraryId || recent?.libraryId === libraryId) return;
+    let cancelled = false;
+    void listRecentSearches(libraryId, MAX_RECENT)
+      .then((r) => (r.searches ?? []).map((s) => s.query))
+      .catch(() => [])
+      .then((queries) => {
+        if (!cancelled) setRecent({ libraryId, queries });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, libraryId, recent?.libraryId]);
+
+  // Remembers a search immediately (so reopening the box shows it right
+  // away) and persists it server-side in the background.
+  const remember = (text: string) => {
+    if (!libraryId) return;
+    setRecent((prev) => {
+      const base = prev?.libraryId === libraryId ? prev.queries : [];
+      const next = [text, ...base.filter((v) => v.toLowerCase() !== text.toLowerCase())];
+      return { libraryId, queries: next.slice(0, MAX_RECENT) };
+    });
+    void recordRecentSearch(libraryId, text).catch(() => {});
+  };
+
+  const forget = (text: string) => {
+    if (!libraryId) return;
+    setRecent((prev) =>
+      prev?.libraryId === libraryId ? { libraryId, queries: prev.queries.filter((v) => v !== text) } : prev,
+    );
+    void forgetRecentSearch(libraryId, text).catch(() => {});
+  };
+
   const q = query.trim();
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!q) {
-      return recent.map((text) => ({
+      const queries = recent?.libraryId === libraryId ? recent.queries : [];
+      return queries.map((text) => ({
         id: `recent:${text}`,
         label: text,
         icon: 'clock',
@@ -133,7 +178,7 @@ export function SearchBox({
   const showList = open && (suggestions.length > 0 || !q);
 
   const take = (suggestion: Suggestion) => {
-    if (suggestion.remember) rememberSearch(suggestion.remember);
+    if (suggestion.remember) remember(suggestion.remember);
     setOpen(false);
     setActive(-1);
     inputRef.current?.blur();
@@ -147,14 +192,13 @@ export function SearchBox({
       take(picked);
       return;
     }
-    if (q) rememberSearch(q);
+    if (q) remember(q);
     setOpen(false);
     inputRef.current?.blur();
     navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
   };
 
   const openList = () => {
-    setRecent(readRecentSearches());
     setOpen(true);
   };
 
@@ -267,8 +311,7 @@ export function SearchBox({
                         aria-label={`Remove ${s.label} from recent searches`}
                         onClick={(event) => {
                           event.stopPropagation();
-                          forgetSearch(s.label);
-                          setRecent(readRecentSearches());
+                          forget(s.label);
                         }}
                       >
                         <Icon name="close" size={14} />

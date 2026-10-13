@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/jobs"
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/search"
 )
 
 // Processor implements indexer.MediaProcessor for document files: it
@@ -65,7 +66,13 @@ func (p *Processor) Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error
 		applyExtracted(&m, ex, fileID, orchardDir, p.logger)
 	}
 
-	return NewStore(db).Upsert(ctx, m)
+	if err := NewStore(db).Upsert(ctx, m); err != nil {
+		return err
+	}
+	// book_text has no DB row of its own to trigger fts_content off of (the
+	// extracted text lives in a file under .orchard/text/), so it is synced
+	// explicitly here rather than by a trigger.
+	return search.SyncContent(ctx, db, search.ContentBookText, fileID, fileID, "", ex.Text)
 }
 
 // applyExtracted merges what was extracted into m, writing the cover image
