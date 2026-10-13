@@ -165,6 +165,61 @@ func TestWorkerExecutesJob(t *testing.T) {
 	}
 }
 
+func TestWorkerPersistsJobResultSetByHandler(t *testing.T) {
+	q := newTestQueue(t)
+	w := newTestWorker(t, q)
+	ctx := context.Background()
+
+	w.Register(jobs.KindIndex, func(_ context.Context, job *jobs.Job) error {
+		job.Result = `{"errors":2}`
+		return nil
+	})
+
+	id, _ := q.Enqueue(ctx, jobs.KindIndex, nil)
+	runCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := w.RunOnce(runCtx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	job, err := q.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Result != `{"errors":2}` {
+		t.Errorf("Result = %q, want the handler's JSON", job.Result)
+	}
+}
+
+func TestLastFinished(t *testing.T) {
+	q := newTestQueue(t)
+	w := newTestWorker(t, q)
+	ctx := context.Background()
+
+	if last, err := q.LastFinished(ctx, jobs.KindIndex); err != nil || last != nil {
+		t.Fatalf("LastFinished before any job = (%+v, %v), want (nil, nil)", last, err)
+	}
+
+	w.Register(jobs.KindIndex, func(_ context.Context, job *jobs.Job) error {
+		job.Result = `{"total_files":3}`
+		return nil
+	})
+	id, _ := q.Enqueue(ctx, jobs.KindIndex, nil)
+	runCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := w.RunOnce(runCtx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	last, err := q.LastFinished(ctx, jobs.KindIndex)
+	if err != nil {
+		t.Fatalf("LastFinished: %v", err)
+	}
+	if last == nil || last.ID != id || last.Result != `{"total_files":3}` {
+		t.Errorf("LastFinished = %+v, want the completed job with its result", last)
+	}
+}
+
 func TestWorkerRetryOnFailure(t *testing.T) {
 	q := newTestQueue(t)
 	w := newTestWorker(t, q)

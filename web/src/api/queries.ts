@@ -632,6 +632,11 @@ export const verifyBackup = (id: string) => apiPost<BackupRecord>(`/backups/${id
 export const restoreBackup = (id: string, destination: string) =>
   apiPost<BackupRecord>(`/backups/${id}/restore`, { destination });
 
+/** Every library's book metadata (title/author/publisher/year/isbn/
+ * description, and whether a cover exists) as one CSV — a human-readable
+ * catalog export, independent of the raw-SQLite backup/restore path. */
+export const exportBookMetadataUrl = (): string => `${API_BASE}/backups/export/book-metadata.csv`;
+
 /* ------------------------------- users ----------------------------- */
 
 export const listUsers = () => apiGet<UserListResponse>('/users');

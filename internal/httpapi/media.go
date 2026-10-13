@@ -71,8 +71,10 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request, u *auth
 			CodeInternal, "Failed to list files.")
 		return
 	}
+	out := toFileResponses(page.Files)
+	attachCoverURLs(out, s.coverURLsFor(r.Context(), lib, page.Files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
-		"files":       toFileResponses(page.Files),
+		"files":       out,
 		"next_cursor": page.NextCursor,
 		"total":       page.Total,
 	})
@@ -509,7 +511,9 @@ func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request, u *auth
 			CodeInternal, "Failed to list trash.")
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": toFileResponses(files)})
+	out := toFileResponses(files)
+	attachCoverURLs(out, s.coverURLsFor(r.Context(), lib, files))
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": out})
 }
 
 // --- error mapping ---
@@ -555,6 +559,11 @@ type fileResponse struct {
 	MIMEType    string `json:"mime_type"`
 	Status      string `json:"status"`
 	ContentHash string `json:"content_hash,omitempty"`
+	// CoverURL is set only for a document file known to have an extracted
+	// or user-uploaded cover (see coverURLsFor) — a grid-listing handler
+	// opts in by calling it, since most single-file responses have no use
+	// for it.
+	CoverURL string `json:"cover_url,omitempty"`
 }
 
 type folderResponse struct {

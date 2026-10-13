@@ -1,11 +1,16 @@
 package httpapi
 
 import (
+	"encoding/csv"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 	"github.com/Jishnu-Prasad888/Orchard/internal/backups"
+	"github.com/Jishnu-Prasad888/Orchard/internal/bookmeta"
+	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 // backupResponse is the API representation of a backup record.
@@ -137,4 +142,55 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request, u *
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, toBackupResponse(rec))
+}
+
+// handleExportBookMetadata — GET /api/v1/backups/export/book-metadata.csv
+//
+// A human-readable catalog export, independent of the raw-SQLite backup
+// path: every library's book metadata (title/author/publisher/year/isbn/
+// description, and whether a cover exists), one row per book, ordered by
+// library then path. Covers every library in one file rather than asking
+// for one first, matching "back up now" running over every library too.
+// Best-effort per library — a library this server cannot currently open
+// (offline, or some other read error) is skipped rather than failing the
+// whole export.
+func (s *Server) handleExportBookMetadata(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	libs, err := s.libraries.List(r.Context())
+	if err != nil {
+		s.logger.Error("list libraries for book metadata export", "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+			CodeInternal, "Internal server error.")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="book-metadata.csv"`)
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{
+		"library", "path", "title", "author", "publisher", "year", "isbn", "description", "has_cover",
+	})
+
+	for _, lib := range libs {
+		if lib.Status == library.StatusOffline {
+			continue
+		}
+		db, err := librarydb.Open(lib.Root + "/.orchard")
+		if err != nil {
+			s.logger.Error("open library db for book metadata export", "library_id", lib.ID, "error", err)
+			continue
+		}
+		rows, err := bookmeta.NewStore(db).ListAllWithPaths(r.Context())
+		_ = db.Close()
+		if err != nil {
+			s.logger.Error("list book metadata for export", "library_id", lib.ID, "error", err)
+			continue
+		}
+		for _, m := range rows {
+			_ = cw.Write([]string{
+				lib.Name, m.RelPath, m.Title, m.Author, m.Publisher, m.Year, m.ISBN, m.Description,
+				strconv.FormatBool(m.CoverPath != ""),
+			})
+		}
+	}
+	cw.Flush()
 }

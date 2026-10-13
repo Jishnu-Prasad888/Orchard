@@ -136,6 +136,22 @@ describe('NotesPage', () => {
     expect(await screen.findByTestId('notes-list')).toBeInTheDocument();
   });
 
+  it('exports all notes as a Markdown file', async () => {
+    setup();
+    await screen.findByTestId('notes-list');
+
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    fireEvent.click(screen.getByTestId('export-notes-button'));
+
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
   it('filters by tag', async () => {
     const fetchMock = setup();
 

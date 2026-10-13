@@ -486,6 +486,50 @@ function LibraryRow({ library, isAdmin }: { library: Library; isAdmin: boolean }
               {status.active_job ? ' · scan in progress' : ''}
             </p>
           )}
+          {status?.last_scan && (status.last_scan.errors > 0 || status.last_scan.missing > 0) && (
+            <details className="library-scan-report" data-testid="library-scan-report">
+              <summary>
+                Last scan: {status.last_scan.errors > 0 && `${status.last_scan.errors} errors`}
+                {status.last_scan.errors > 0 && status.last_scan.missing > 0 && ', '}
+                {status.last_scan.missing > 0 && `${status.last_scan.missing} newly missing`}
+              </summary>
+              {(status.last_scan.error_details?.length ?? 0) > 0 && (
+                <>
+                  <p className="muted">
+                    Couldn&rsquo;t read {status.last_scan.error_details!.length === status.last_scan.errors
+                      ? 'these files'
+                      : `the first ${status.last_scan.error_details!.length} of ${status.last_scan.errors}`}
+                    :
+                  </p>
+                  <ul>
+                    {status.last_scan.error_details!.map((e, i) => (
+                      <li key={i}>
+                        <code>{e.Path}</code> — {e.Reason}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {(status.last_scan.missing_paths?.length ?? 0) > 0 && (
+                <>
+                  <p className="muted">
+                    No longer found on disk
+                    {status.last_scan.missing_paths!.length === status.last_scan.missing
+                      ? ''
+                      : ` (first ${status.last_scan.missing_paths!.length} of ${status.last_scan.missing})`}
+                    :
+                  </p>
+                  <ul>
+                    {status.last_scan.missing_paths!.map((p) => (
+                      <li key={p}>
+                        <code>{p}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </details>
+          )}
         </div>
 
         <div className="library-row-actions">

@@ -86,13 +86,16 @@ func (s *StateStore) AllPresent(ctx context.Context) ([]*IndexedFile, error) {
 
 // MarkMissing marks indexed files that were not observed during a scan as
 // missing. seenIDs is the set of file IDs touched in this scan run.
-func (s *StateStore) MarkMissing(ctx context.Context, seenIDs map[string]struct{}, now time.Time) (int, error) {
+// MarkMissing marks every present file not in seenIDs as missing and
+// returns those files (newly missing this scan — a file already missing
+// before this scan is left alone and not returned).
+func (s *StateStore) MarkMissing(ctx context.Context, seenIDs map[string]struct{}, now time.Time) ([]*IndexedFile, error) {
 	// Fetch all present files and mark the ones not in seenIDs.
 	files, err := s.AllPresent(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	var count int
+	var newlyMissing []*IndexedFile
 	for _, f := range files {
 		if _, seen := seenIDs[f.ID]; seen {
 			continue
@@ -104,11 +107,11 @@ func (s *StateStore) MarkMissing(ctx context.Context, seenIDs map[string]struct{
 		f.LastSeenAt = now
 		f.IndexedAt = now
 		if err := s.Upsert(ctx, f); err != nil {
-			return count, err
+			return newlyMissing, err
 		}
-		count++
+		newlyMissing = append(newlyMissing, f)
 	}
-	return count, nil
+	return newlyMissing, nil
 }
 
 // UpdatePath updates the relative path of an existing record. Used when a

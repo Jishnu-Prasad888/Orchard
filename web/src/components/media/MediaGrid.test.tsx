@@ -117,6 +117,49 @@ describe('MediaGrid', () => {
       vi.useRealTimers();
     }
   });
+
+  it('shows a resume-progress bar only on the files given one', () => {
+    const books = [
+      fileFixture({ id: 'b1', name: 'reading.epub', media_type: 'document' }),
+      fileFixture({ id: 'b2', name: 'untouched.epub', media_type: 'document' }),
+    ];
+    render(
+      <MediaGrid
+        libraryId="lib1"
+        files={books}
+        onOpen={() => {}}
+        progress={new Map([['b1', 42]])}
+        label="Books"
+      />,
+    );
+    const reading = screen.getByRole('button', { name: 'reading.epub' }).closest('.media-tile');
+    const untouched = screen.getByRole('button', { name: 'untouched.epub' }).closest('.media-tile');
+    expect(within(reading as HTMLElement).getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '42',
+    );
+    expect(within(untouched as HTMLElement).queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('shows a book cover as its thumbnail instead of the document glyph', () => {
+    const books = [
+      fileFixture({
+        id: 'b1',
+        name: 'covered.epub',
+        media_type: 'document',
+        cover_url: '/api/v1/libraries/lib1/files/b1/cover',
+      }),
+      fileFixture({ id: 'b2', name: 'no-cover.epub', media_type: 'document' }),
+    ];
+    render(<MediaGrid libraryId="lib1" files={books} onOpen={() => {}} label="Books" />);
+    const covered = screen.getByRole('button', { name: 'covered.epub' });
+    const uncovered = screen.getByRole('button', { name: 'no-cover.epub' });
+    expect(covered.querySelector('img')).toHaveAttribute(
+      'src',
+      '/api/v1/libraries/lib1/files/b1/cover',
+    );
+    expect(uncovered.querySelector('img')).not.toBeInTheDocument();
+  });
 });
 
 describe('useSelection', () => {

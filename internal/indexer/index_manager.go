@@ -6,6 +6,7 @@ package indexer
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -26,12 +27,16 @@ type MediaProcessor interface {
 
 // IndexStatus is the current state of a library's index.
 type IndexStatus struct {
-	LibraryID string    `json:"library_id"`
-	Present   int       `json:"present"`
-	Missing   int       `json:"missing"`
-	Deleted   int       `json:"deleted"`
-	ActiveJob *jobs.Job `json:"active_job,omitempty"`
-	LastJobID string    `json:"last_job_id,omitempty"`
+	LibraryID string       `json:"library_id"`
+	Present   int          `json:"present"`
+	Missing   int          `json:"missing"`
+	Deleted   int          `json:"deleted"`
+	ActiveJob *jobs.Job    `json:"active_job,omitempty"`
+	LastJobID string       `json:"last_job_id,omitempty"`
+	// LastScan is the most recently finished scan's summary (errors and
+	// newly-missing files, capped — see ScanSummary), independent of
+	// whether another scan is active or queued right now.
+	LastScan *ScanSummary `json:"last_scan,omitempty"`
 }
 
 // IndexManager coordinates opening the per-library database, enqueueing scan
@@ -230,6 +235,15 @@ func (m *IndexManager) Status(ctx context.Context, libraryID, root string) (*Ind
 			status.LastJobID = queued[0].ID
 		}
 	}
+
+	if last, err := q.LastFinished(ctx, jobs.KindIndex); err == nil && last != nil && last.Result != "" {
+		var summary ScanSummary
+		if err := json.Unmarshal([]byte(last.Result), &summary); err == nil {
+			status.LastScan = &summary
+		} else {
+			m.logger.Warn("decode last scan summary", "library_id", libraryID, "job_id", last.ID, "error", err)
+		}
+	}
 	return status, nil
 }
 
@@ -263,7 +277,13 @@ func (m *IndexManager) RunScanJob(ctx context.Context, job *jobs.Job) error {
 		"modified", result.Modified,
 		"moved", result.Moved,
 		"missing", result.Missing,
+		"errors", result.Errors,
 	)
+	if summary, err := json.Marshal(result.Summary()); err != nil {
+		m.logger.Warn("encode scan summary", "library_id", libraryID, "error", err)
+	} else {
+		job.Result = string(summary)
+	}
 
 	// Enqueue media-processing jobs for new and modified files.
 	q := jobs.NewQueue(ldb.DB(), m.logger)

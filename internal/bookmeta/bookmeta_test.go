@@ -214,9 +214,79 @@ func TestStore_SetCover(t *testing.T) {
 	}
 }
 
+func TestStore_HasCovers(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "has-cover.epub")
+	seed("f2", "no-cover.epub")
+	seed("f3", "never-extracted.epub")
+	ctx := context.Background()
+
+	if err := store.Upsert(ctx, Metadata{FileID: "f1", Title: "A", CoverPath: "covers/f1.jpg"}); err != nil {
+		t.Fatalf("Upsert f1: %v", err)
+	}
+	if err := store.Upsert(ctx, Metadata{FileID: "f2", Title: "B"}); err != nil {
+		t.Fatalf("Upsert f2: %v", err)
+	}
+	// f3 has no book_metadata row at all.
+
+	got, err := store.HasCovers(ctx, []string{"f1", "f2", "f3"})
+	if err != nil {
+		t.Fatalf("HasCovers: %v", err)
+	}
+	if !got["f1"] {
+		t.Errorf("f1: got %v, want true", got["f1"])
+	}
+	if got["f2"] {
+		t.Errorf("f2: got %v, want false (empty cover_path)", got["f2"])
+	}
+	if got["f3"] {
+		t.Errorf("f3: got %v, want false (no row)", got["f3"])
+	}
+}
+
+func TestStore_HasCovers_EmptyInput(t *testing.T) {
+	store, _, _ := newTestStore(t)
+	got, err := store.HasCovers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("HasCovers: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty", got)
+	}
+}
+
 // TestBookMetadataCascadesWithFile proves the book_metadata row is removed
 // when its indexed_files row is permanently deleted, matching the same
 // ON DELETE CASCADE pattern used by favorites and file_notes.
+func TestStore_ListAllWithPaths(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "fiction/dune.epub")
+	seed("f2", "reference/manual.pdf")
+	ctx := context.Background()
+
+	if err := store.Upsert(ctx, Metadata{FileID: "f1", Title: "Dune", Author: "Herbert", CoverPath: "covers/f1.jpg"}); err != nil {
+		t.Fatalf("Upsert f1: %v", err)
+	}
+	if err := store.Upsert(ctx, Metadata{FileID: "f2", Title: "Manual"}); err != nil {
+		t.Fatalf("Upsert f2: %v", err)
+	}
+
+	got, err := store.ListAllWithPaths(ctx)
+	if err != nil {
+		t.Fatalf("ListAllWithPaths: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d rows, want 2: %+v", len(got), got)
+	}
+	// Ordered by path: "fiction/..." sorts before "reference/...".
+	if got[0].RelPath != "fiction/dune.epub" || got[0].Title != "Dune" || got[0].CoverPath == "" {
+		t.Errorf("row 0 = %+v, want Dune with its path and cover", got[0])
+	}
+	if got[1].RelPath != "reference/manual.pdf" || got[1].CoverPath != "" {
+		t.Errorf("row 1 = %+v, want Manual with its path and no cover", got[1])
+	}
+}
+
 func TestBookMetadataCascadesWithFile(t *testing.T) {
 	store, db, seed := newTestStore(t)
 	seed("f1", "book.epub")

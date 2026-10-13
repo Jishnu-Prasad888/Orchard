@@ -126,6 +126,22 @@ func (q *Queue) ListByStatus(ctx context.Context, status string) ([]*Job, error)
 	return scanJobs(rows)
 }
 
+// LastFinished returns the most recently finished (completed or failed) job
+// of the given kind, or nil if none has finished yet.
+func (q *Queue) LastFinished(ctx context.Context, kind string) (*Job, error) {
+	row := q.db.QueryRowContext(ctx,
+		`SELECT id, kind, status, priority, payload, result, error_msg,
+		        attempt, max_attempts, created_at, started_at, finished_at, next_run_at
+		 FROM index_jobs
+		 WHERE kind = ? AND status IN ('completed', 'failed') AND finished_at IS NOT NULL AND finished_at != ''
+		 ORDER BY finished_at DESC LIMIT 1`, kind)
+	job, err := scanJob(row)
+	if err != nil {
+		return nil, fmt.Errorf("last finished job: %w", err)
+	}
+	return job, nil
+}
+
 // Cancel marks a queued or running job as cancelled.
 func (q *Queue) Cancel(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx,
@@ -270,8 +286,8 @@ func (w *Worker) claimNext(ctx context.Context) (*Job, error) {
 func (w *Worker) completeJob(ctx context.Context, job *Job) error {
 	now := rfc3339(time.Now().UTC())
 	_, err := w.queue.db.ExecContext(ctx,
-		`UPDATE index_jobs SET status = 'completed', finished_at = ? WHERE id = ?`,
-		now, job.ID)
+		`UPDATE index_jobs SET status = 'completed', result = ?, finished_at = ? WHERE id = ?`,
+		job.Result, now, job.ID)
 	if err != nil {
 		return fmt.Errorf("complete job: %w", err)
 	}

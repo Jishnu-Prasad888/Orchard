@@ -66,7 +66,7 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		}
 		if walkInErr != nil {
 			sc.logger.Warn("walk error", "path", absPath, "error", walkInErr)
-			result.Errors++
+			result.addError(absPath, walkInErr)
 			return nil // continue walking; don't abort on inaccessible files
 		}
 
@@ -81,7 +81,7 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		relPath, err := filepath.Rel(root, absPath)
 		if err != nil {
 			sc.logger.Warn("relative path error", "abs", absPath, "error", err)
-			result.Errors++
+			result.addError(absPath, err)
 			return nil
 		}
 		// Normalise to forward slashes for portability.
@@ -90,7 +90,7 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		info, err := d.Info()
 		if err != nil {
 			sc.logger.Warn("stat error", "path", absPath, "error", err)
-			result.Errors++
+			result.addError(relPath, err)
 			return nil
 		}
 
@@ -98,7 +98,7 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 			existingByPath, existingByHash, seenIDs)
 		if err != nil {
 			sc.logger.Warn("reconcile error", "path", relPath, "error", err)
-			result.Errors++
+			result.addError(relPath, err)
 			return nil
 		}
 		result.TotalFiles++
@@ -121,11 +121,17 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 	}
 
 	// Mark files not seen in this scan as missing.
-	missingCount, err := sc.store.MarkMissing(ctx, seenIDs, now)
+	newlyMissing, err := sc.store.MarkMissing(ctx, seenIDs, now)
 	if err != nil && !isContextErr(err) {
 		return result, fmt.Errorf("mark missing: %w", err)
 	}
-	result.Missing = missingCount
+	result.Missing = len(newlyMissing)
+	for i, f := range newlyMissing {
+		result.Changes = append(result.Changes, FileChange{Kind: ChangeMissing, File: f})
+		if i < maxScanDetailEntries {
+			result.MissingPaths = append(result.MissingPaths, f.RelPath)
+		}
+	}
 
 	result.FinishedAt = time.Now().UTC()
 	sc.logger.Info("scan complete",

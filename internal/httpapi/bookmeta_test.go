@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/csv"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -150,6 +151,84 @@ func TestCover_UploadServeAndReject(t *testing.T) {
 	rec = rawPut(t, client, "/api/v1/libraries/"+libID+"/files/f1/cover",
 		"text/plain", []byte("not an image"))
 	assertErrorEnvelope(t, rec, http.StatusBadRequest, CodeBadRequest)
+}
+
+func TestExportBookMetadata_WritesOneRowPerBook(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "dune.epub", 10); err != nil {
+		t.Fatalf("seed f1: %v", err)
+	}
+	if err := seedLibraryFile(t, libRoot, "f2", "manual.pdf", 10); err != nil {
+		t.Fatalf("seed f2: %v", err)
+	}
+
+	rec := client.do(t, http.MethodPatch, "/api/v1/libraries/"+libID+"/files/f1/book-metadata", map[string]any{
+		"title": "Dune", "author": "Frank Herbert",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set book metadata status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = client.roundTrip(t, http.MethodGet, "/api/v1/backups/export/book-metadata.csv", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/csv; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want text/csv", ct)
+	}
+	rows, err := csv.NewReader(rec.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("parse csv: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows (incl. header), want 2 (header + one book — manual.pdf has no title set)", len(rows))
+	}
+	header := rows[0]
+	if header[0] != "library" || header[1] != "path" || header[2] != "title" {
+		t.Fatalf("header = %v, want library,path,title,...", header)
+	}
+	data := rows[1]
+	if data[1] != "dune.epub" || data[2] != "Dune" || data[3] != "Frank Herbert" {
+		t.Fatalf("row = %v, want dune.epub's metadata", data)
+	}
+}
+
+func TestListFiles_IncludesCoverURLOnlyForBooksWithACover(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "has-cover.epub", 10); err != nil {
+		t.Fatalf("seed f1: %v", err)
+	}
+	if err := seedLibraryFile(t, libRoot, "f2", "no-cover.epub", 10); err != nil {
+		t.Fatalf("seed f2: %v", err)
+	}
+
+	rec := rawPut(t, client, "/api/v1/libraries/"+libID+"/files/f1/cover",
+		"image/jpeg", []byte("\xff\xd8\xff\xe0fake-jpeg-bytes"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload cover status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/files?recursive=true", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list files status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Files []struct {
+			ID       string `json:"id"`
+			CoverURL string `json:"cover_url"`
+		} `json:"files"`
+	}
+	jsonUnmarshalRec(t, rec, &body)
+	byID := make(map[string]string)
+	for _, f := range body.Files {
+		byID[f.ID] = f.CoverURL
+	}
+	if byID["f1"] == "" {
+		t.Errorf("f1 cover_url = %q, want non-empty", byID["f1"])
+	}
+	if byID["f2"] != "" {
+		t.Errorf("f2 cover_url = %q, want empty (no cover uploaded)", byID["f2"])
+	}
 }
 
 func TestReadingStatus_RoundTripAndClear(t *testing.T) {
