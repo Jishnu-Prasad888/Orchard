@@ -1,28 +1,54 @@
 /**
  * Home — a living view of the library, not a dashboard.
  *
- * It leads with the most recently added files. There are no counters or
- * status tiles — the library's status lives in the sidebar and Settings.
+ * It leads with the most recently added files, then continue-reading,
+ * favorites, pinned collections, and recent writing — each a "taste, not the
+ * library" (a row or two, with a link to the full page). Section order and
+ * visibility are per-user (see Customize), so this list is the default, not
+ * the only shape Home can take.
  *
- * It is one small request, so the page stays quick on a Raspberry Pi with a
- * hundred thousand files.
+ * It is one small request per section, so the page stays quick on a
+ * Raspberry Pi with a hundred thousand files.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
+import { useFileLabels } from '../api/fileLabels';
 import { notifyLibraryChanged } from '../api/libraryEvents';
 import { useLibraryResource } from '../api/resources';
-import { listFiles, listRecentlyOpened } from '../api/queries';
-import type { FileSummary, Library } from '../api/types';
+import {
+  getHomeLayout,
+  listCollections,
+  listFavorites,
+  listFiles,
+  listInProgress,
+  listLibraryQuotes,
+  listNotes,
+  listRecentlyOpened,
+  setHomeLayout,
+} from '../api/queries';
+import type {
+  Collection,
+  FileSummary,
+  HomeLayoutSection,
+  HomeSectionId,
+  InProgressFile,
+  Library,
+  Note,
+  Quote,
+} from '../api/types';
+import { Dialog } from '../components/Dialog';
 import { useFileOperations } from '../components/FileOperations';
 import { LibraryGatePage } from '../components/LibraryGatePage';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { gridMetrics } from '../components/media/layout';
 import { EmptyState, ErrorState, LibraryOfflineNotice } from '../components/States';
 import { Icon } from '../components/ui/Icon';
+import { useUploads } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
+import { extractExcerpt } from '../lib/markdown';
 import { greeting } from '../lib/dates';
 import { isIndexing, useIndexStatus } from '../components/app-shell/useIndexStatus';
 import './HomePage.css';
@@ -35,8 +61,26 @@ const PHOTO_GAP = 4;
 const HOME_EMPTY_REFRESH_MS = 3000;
 const HOME_REFRESH_MS = 15000;
 
+/** How many quotes/notes/collections to fetch for their Home sections. */
+const WRITING_LIMIT = 6;
+const PINNED_COLLECTIONS_LIMIT = 8;
+
 /** Width assumed before the first measurement (and in jsdom). */
 const FALLBACK_WIDTH = 1024;
+
+const SECTION_LABEL: Record<HomeSectionId, string> = {
+  'continue-reading': 'Continue reading',
+  'recently-opened': 'Recently opened',
+  'recently-added': 'Recently added',
+  favorites: 'Favorites',
+  'pinned-collections': 'Pinned collections',
+  'recent-quotes': 'Recent quotes',
+  'recent-notes': 'Recent notes',
+};
+
+const DEFAULT_LAYOUT: HomeLayoutSection[] = (
+  Object.keys(SECTION_LABEL) as HomeSectionId[]
+).map((id) => ({ id, visible: true }));
 
 /**
  * Track an element's width so the grid can know how many columns it has. A
@@ -70,6 +114,11 @@ function cleanRows(total: number, columns: number, rows = HOME_ROWS): number {
 interface HomeData {
   recent: FileSummary[];
   recentlyOpened: FileSummary[];
+  inProgress: InProgressFile[];
+  favorites: FileSummary[];
+  pinnedCollections: Collection[];
+  recentQuotes: Quote[];
+  recentNotes: Note[];
 }
 
 /** "Good evening, name" in the brand face, the same in every state. */
@@ -102,22 +151,51 @@ function Home({ library }: { library: Library }) {
 
   const home = useLibraryResource<HomeData>(
     useCallback(async (id: string) => {
-      const [recent, recentlyOpened] = await Promise.all([
-        listFiles(id, {
-          recursive: true,
-          sort: 'mod_time',
-          order: 'desc',
-          limit: RECENT_LIMIT,
-        })
-          .then((r) => r.files ?? [])
-          .catch(() => [] as FileSummary[]),
-        listRecentlyOpened(id, RECENT_LIMIT)
-          .then((r) => r.files ?? [])
-          .catch(() => [] as FileSummary[]),
-      ]);
-      return { recent, recentlyOpened };
+      const [recent, recentlyOpened, inProgress, favorites, collections, recentQuotes, recentNotes] =
+        await Promise.all([
+          listFiles(id, {
+            recursive: true,
+            sort: 'mod_time',
+            order: 'desc',
+            limit: RECENT_LIMIT,
+          })
+            .then((r) => r.files ?? [])
+            .catch(() => [] as FileSummary[]),
+          listRecentlyOpened(id, RECENT_LIMIT)
+            .then((r) => r.files ?? [])
+            .catch(() => [] as FileSummary[]),
+          listInProgress(id)
+            .then((r) => r.files ?? [])
+            .catch(() => [] as InProgressFile[]),
+          listFavorites(id)
+            .then((r) => r.files ?? [])
+            .catch(() => [] as FileSummary[]),
+          listCollections(id)
+            .then((r) => r.collections ?? [])
+            .catch(() => [] as Collection[]),
+          listLibraryQuotes(id, { limit: WRITING_LIMIT })
+            .then((r) => r.quotes ?? [])
+            .catch(() => [] as Quote[]),
+          listNotes(id, { limit: WRITING_LIMIT })
+            .then((r) => r.notes ?? [])
+            .catch(() => [] as Note[]),
+        ]);
+      return {
+        recent,
+        recentlyOpened,
+        inProgress,
+        favorites,
+        pinnedCollections: collections.filter((c) => c.pinned).slice(0, PINNED_COLLECTIONS_LIMIT),
+        recentQuotes,
+        recentNotes,
+      };
     }, []),
   );
+
+  const layout = useLibraryResource<HomeLayoutSection[]>(
+    useCallback(async () => (await getHomeLayout()).sections ?? DEFAULT_LAYOUT, []),
+  );
+  const [customizing, setCustomizing] = useState(false);
 
   const ops = useFileOperations(libraryId, home.reload);
   const data = home.data;
@@ -156,13 +234,218 @@ function Home({ library }: { library: Library }) {
     ? data.recentlyOpened.slice(0, cleanRows(data.recentlyOpened.length, openedColumns))
     : [];
 
+  const [inProgressRef, inProgressWidth] = useWidth();
+  const inProgressColumns = gridMetrics(inProgressWidth, PHOTO_GAP).columns;
+  const inProgressFiles = data
+    ? data.inProgress.slice(0, cleanRows(data.inProgress.length, inProgressColumns))
+    : [];
+  const inProgressMap = new Map(inProgressFiles.map((f) => [f.id, f.percent]));
+
+  const [favoritesRef, favoritesWidth] = useWidth();
+  const favoritesColumns = gridMetrics(favoritesWidth, PHOTO_GAP).columns;
+  const favoriteFiles = data
+    ? data.favorites.slice(0, cleanRows(data.favorites.length, favoritesColumns))
+    : [];
+
+  const quoteFileIds = (data?.recentQuotes ?? []).map((q) => q.file_id);
+  const quoteLabels = useFileLabels(libraryId, quoteFileIds);
+
   const name = user?.username;
 
   const nothingYet = data !== null && !scanning && data.recent.length === 0;
 
+  const sectionOrder = layout.data ?? DEFAULT_LAYOUT;
+  const visible = (id: HomeSectionId) => sectionOrder.find((s) => s.id === id)?.visible ?? true;
+
+  const sectionNode = (id: HomeSectionId) => {
+    if (!data || !visible(id)) return null;
+    switch (id) {
+      case 'continue-reading':
+        return inProgressFiles.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-progress-title">
+            <div className="section-head">
+              <h2 id="home-progress-title" className="section-title">
+                Continue reading
+              </h2>
+            </div>
+            <div data-testid="home-in-progress" ref={inProgressRef}>
+              <MediaGrid
+                libraryId={libraryId}
+                files={inProgressFiles}
+                progress={inProgressMap}
+                onOpen={ops.openViewer}
+                label="Books in progress"
+                testId="home-in-progress-grid"
+              />
+            </div>
+          </section>
+        ) : null;
+      case 'recently-opened':
+        return recentlyOpened.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-opened-title">
+            <div className="section-head">
+              <h2 id="home-opened-title" className="section-title">
+                Recently opened
+              </h2>
+            </div>
+            <div data-testid="home-recently-opened" ref={openedRef}>
+              <MediaGrid
+                libraryId={libraryId}
+                files={recentlyOpened}
+                onOpen={ops.openViewer}
+                label="Recently opened files"
+                testId="home-recently-opened-grid"
+              />
+            </div>
+          </section>
+        ) : null;
+      case 'recently-added':
+        return recent.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-recent-title">
+            <div className="section-head">
+              <h2 id="home-recent-title" className="section-title">
+                Recently added
+              </h2>
+              <Link to="/files" className="link-button">
+                All files
+                <Icon name="chevron-right" size={16} />
+              </Link>
+            </div>
+            <div data-testid="home-recent" ref={recentRef}>
+              <MediaGrid
+                libraryId={libraryId}
+                files={recent}
+                onOpen={ops.openViewer}
+                label="Recently added files"
+                testId="home-recent-grid"
+              />
+            </div>
+          </section>
+        ) : null;
+      case 'favorites':
+        return favoriteFiles.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-favorites-title">
+            <div className="section-head">
+              <h2 id="home-favorites-title" className="section-title">
+                Favorites
+              </h2>
+              <Link to="/favorites" className="link-button">
+                All favorites
+                <Icon name="chevron-right" size={16} />
+              </Link>
+            </div>
+            <div data-testid="home-favorites" ref={favoritesRef}>
+              <MediaGrid
+                libraryId={libraryId}
+                files={favoriteFiles}
+                onOpen={ops.openViewer}
+                label="Favorite files"
+                testId="home-favorites-grid"
+              />
+            </div>
+          </section>
+        ) : null;
+      case 'pinned-collections':
+        return data.pinnedCollections.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-collections-title">
+            <div className="section-head">
+              <h2 id="home-collections-title" className="section-title">
+                Pinned collections
+              </h2>
+              <Link to="/collections" className="link-button">
+                All collections
+                <Icon name="chevron-right" size={16} />
+              </Link>
+            </div>
+            <ul className="home-collections" data-testid="home-pinned-collections">
+              {data.pinnedCollections.map((c) => (
+                <li key={c.id}>
+                  <Link to={`/collections?open=${c.id}`} className="home-collection-card">
+                    <Icon name="pin" size={16} />
+                    <span className="home-collection-name">{c.name}</span>
+                    <span className="home-collection-count">
+                      {c.item_count} {c.item_count === 1 ? 'item' : 'items'}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null;
+      case 'recent-quotes':
+        return data.recentQuotes.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-quotes-title">
+            <div className="section-head">
+              <h2 id="home-quotes-title" className="section-title">
+                Recent quotes
+              </h2>
+              <Link to="/quotes" className="link-button">
+                All quotes
+                <Icon name="chevron-right" size={16} />
+              </Link>
+            </div>
+            <ul className="home-writing-grid" data-testid="home-recent-quotes">
+              {data.recentQuotes.map((q) => (
+                <li key={q.id}>
+                  <Link to="/quotes" className="home-quote-card">
+                    <Icon name="quote" size={16} />
+                    <span className="home-quote-text">{q.text}</span>
+                    <span className="home-quote-source">{quoteLabels[q.file_id]?.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null;
+      case 'recent-notes':
+        return data.recentNotes.length > 0 ? (
+          <section key={id} className="section" aria-labelledby="home-notes-title">
+            <div className="section-head">
+              <h2 id="home-notes-title" className="section-title">
+                Recent notes
+              </h2>
+              <Link to="/notes" className="link-button">
+                All notes
+                <Icon name="chevron-right" size={16} />
+              </Link>
+            </div>
+            <ul className="home-writing-grid" data-testid="home-recent-notes">
+              {data.recentNotes.map((n) => (
+                <li key={n.id}>
+                  <Link to={`/notes?open=${n.id}`} className="home-note-card">
+                    <Icon name="notebook" size={16} />
+                    <span className="home-note-title">
+                      {n.title || extractExcerpt(n.body, 40) || 'Untitled note'}
+                    </span>
+                    <span className="home-note-excerpt">{extractExcerpt(n.body, 100)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
   return (
     <main className="page home">
-      <Greeting name={name} />
+      <div className="home-hello-row">
+        <Greeting name={name} />
+        <div className="home-hello-actions">
+          {!offline && <QuickImport library={library} />}
+          <button
+            type="button"
+            className="button ghost-button"
+            onClick={() => setCustomizing(true)}
+            data-testid="home-customize-button"
+          >
+            <Icon name="settings" size={16} />
+            Customize
+          </button>
+        </div>
+      </div>
 
       {offline && <LibraryOfflineNotice library={library} />}
       {home.error && (
@@ -204,47 +487,7 @@ function Home({ library }: { library: Library }) {
         </EmptyState>
       )}
 
-      {data && data.recentlyOpened.length > 0 && (
-        <section className="section" aria-labelledby="home-opened-title">
-          <div className="section-head">
-            <h2 id="home-opened-title" className="section-title">
-              Recently opened
-            </h2>
-          </div>
-          <div data-testid="home-recently-opened" ref={openedRef}>
-            <MediaGrid
-              libraryId={libraryId}
-              files={recentlyOpened}
-              onOpen={ops.openViewer}
-              label="Recently opened files"
-              testId="home-recently-opened-grid"
-            />
-          </div>
-        </section>
-      )}
-
-      {data && data.recent.length > 0 && (
-        <section className="section" aria-labelledby="home-recent-title">
-          <div className="section-head">
-            <h2 id="home-recent-title" className="section-title">
-              Recently added
-            </h2>
-            <Link to="/files" className="link-button">
-              All files
-              <Icon name="chevron-right" size={16} />
-            </Link>
-          </div>
-          <div data-testid="home-recent" ref={recentRef}>
-            <MediaGrid
-              libraryId={libraryId}
-              files={recent}
-              onOpen={ops.openViewer}
-              label="Recently added files"
-              testId="home-recent-grid"
-            />
-          </div>
-        </section>
-      )}
+      {data && sectionOrder.map((s) => sectionNode(s.id))}
 
       {ops.viewer && data && (
         <ViewerModal
@@ -258,6 +501,150 @@ function Home({ library }: { library: Library }) {
         />
       )}
       {ops.dialogs}
+
+      {customizing && (
+        <CustomizeHomeDialog
+          sections={sectionOrder}
+          onCancel={() => setCustomizing(false)}
+          onSave={async (next) => {
+            await setHomeLayout(next);
+            layout.reload();
+            setCustomizing(false);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+/** A button that opens the OS file picker and hands the result to the
+ * existing upload provider — the same mechanism the top bar's Upload button
+ * uses, surfaced here for a quick add-books-and-go without leaving Home. */
+function QuickImport({ library }: { library: Library }) {
+  const { enqueue } = useUploads();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        className="button ghost-button"
+        onClick={() => fileRef.current?.click()}
+        title={`Add books to ${library.name}`}
+        data-testid="home-quick-import"
+      >
+        <Icon name="upload" size={16} />
+        Add books
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        hidden
+        aria-label={`Add books to ${library.name}`}
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length) enqueue(library.id, files, '');
+          event.target.value = '';
+        }}
+      />
+    </>
+  );
+}
+
+/** Reorder and show/hide Home's sections. Order changes by swapping a
+ * section with its neighbor — plain buttons, not drag-and-drop, so it works
+ * the same with a mouse, a keyboard, or a finger. */
+function CustomizeHomeDialog({
+  sections,
+  onCancel,
+  onSave,
+}: {
+  sections: HomeLayoutSection[];
+  onCancel: () => void;
+  onSave: (sections: HomeLayoutSection[]) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState(sections);
+  const [saving, setSaving] = useState(false);
+
+  const move = (index: number, dir: -1 | 1) => {
+    setDraft((prev) => {
+      const next = prev.slice();
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target] as HomeLayoutSection, next[index] as HomeLayoutSection];
+      return next;
+    });
+  };
+
+  const toggle = (index: number) => {
+    setDraft((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, visible: !s.visible } : s)),
+    );
+  };
+
+  return (
+    <Dialog
+      open
+      size="medium"
+      title="Customize Home"
+      onClose={onCancel}
+      dismissible={!saving}
+      testId="home-customize-dialog"
+      footer={
+        <>
+          <button type="button" className="button" onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="button primary-button"
+            disabled={saving}
+            onClick={() => {
+              setSaving(true);
+              Promise.resolve(onSave(draft)).finally(() => setSaving(false));
+            }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </>
+      }
+    >
+      <p className="muted">Choose which sections show, and in what order.</p>
+      <ul className="home-customize-list">
+        {draft.map((s, i) => (
+          <li key={s.id} className="home-customize-row">
+            <label className="home-customize-label">
+              <input
+                type="checkbox"
+                checked={s.visible}
+                onChange={() => toggle(i)}
+                data-testid={`home-customize-toggle-${s.id}`}
+              />
+              {SECTION_LABEL[s.id]}
+            </label>
+            <span className="home-customize-move">
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={`Move ${SECTION_LABEL[s.id]} up`}
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+              >
+                <Icon name="chevron-left" size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={`Move ${SECTION_LABEL[s.id]} down`}
+                disabled={i === draft.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                <Icon name="chevron-right" size={16} />
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Dialog>
   );
 }

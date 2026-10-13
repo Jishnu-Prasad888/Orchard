@@ -381,6 +381,38 @@ export interface NoteEnvelope {
   note: Note;
 }
 
+/** A file the acting user has started reading but not finished, carrying
+ * their resume point alongside the usual file fields. */
+export interface InProgressFile extends FileSummary {
+  percent: number;
+  location: string;
+  updated_at?: string;
+}
+
+export interface InProgressListResponse {
+  files: InProgressFile[];
+}
+
+/** One Home dashboard section's position and visibility, as the user has
+ * (or hasn't) customized it. */
+export type HomeSectionId =
+  | 'continue-reading'
+  | 'recently-opened'
+  | 'recently-added'
+  | 'favorites'
+  | 'pinned-collections'
+  | 'recent-quotes'
+  | 'recent-notes';
+
+export interface HomeLayoutSection {
+  id: HomeSectionId;
+  visible: boolean;
+}
+
+export interface HomeLayoutResponse {
+  sections: HomeLayoutSection[];
+}
+
 /** One set of present files that share a content hash. */
 export interface DuplicateGroup {
   content_hash: string;

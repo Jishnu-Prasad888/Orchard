@@ -50,6 +50,9 @@ export interface MediaGridProps {
   /** Omit to make the grid read-only (no selection circles). */
   selection?: Selection;
   favorites?: ReadonlySet<string>;
+  /** file id -> 0-100 resume point, shown as a bar along each tile's bottom
+   * edge (Home's "continue reading" section). */
+  progress?: ReadonlyMap<string, number>;
   /** Right-click or long-press menu for a single tile. */
   onContextMenu?: (file: FileSummary, x: number, y: number) => void;
   /** Infinite scroll: more pages exist and how to fetch the next. */
@@ -68,6 +71,7 @@ export function MediaGrid({
   onOpen,
   selection,
   favorites,
+  progress,
   onContextMenu,
   hasMore = false,
   loadingMore = false,
@@ -290,6 +294,7 @@ export function MediaGrid({
                     selectable={selectable}
                     selecting={selecting}
                     favorite={favorites?.has(file.id) ?? false}
+                    progress={progress?.get(file.id)}
                     tabbable={index === safeFocus}
                     onActivate={onActivate}
                     onToggleSelect={onToggleSelect}

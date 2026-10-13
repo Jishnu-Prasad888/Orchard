@@ -209,7 +209,7 @@ export default function QuotesPage() {
 
   const quotes = useLibraryResource(
     useCallback(
-      async (id: string) => (await listLibraryQuotes(id, favoriteOnly)).quotes ?? [],
+      async (id: string) => (await listLibraryQuotes(id, { favoriteOnly })).quotes ?? [],
       [favoriteOnly],
     ),
     [favoriteOnly],

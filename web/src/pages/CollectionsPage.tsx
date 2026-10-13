@@ -7,7 +7,8 @@
  * almost the same shape (a named group, and everything carrying it).
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
 import { useLibraryGate } from '../api/libraries';
@@ -43,6 +44,8 @@ export default function CollectionsPage() {
   const gate = useLibraryGate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [params, setParams] = useSearchParams();
+  const openID = params.get('open');
   const [active, setActive] = useState<Collection | null>(null);
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Collection | null>(null);
@@ -54,6 +57,25 @@ export default function CollectionsPage() {
   const collections = useLibraryResource(
     useCallback(async (libraryId: string) => (await listCollections(libraryId)).collections ?? [], []),
   );
+
+  // A deep link from elsewhere (e.g. a pinned collection on Home) opens a
+  // specific collection once the list has loaded.
+  useEffect(() => {
+    if (!openID || active || !collections.data) return;
+    const match = collections.data.find((c) => c.id === openID);
+    if (match) setActive(match);
+  }, [openID, active, collections.data]);
+
+  const clearOpenParam = useCallback(() => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('open');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setParams]);
 
   const activeId = active?.id;
   const files = useLibraryResource(
@@ -188,7 +210,14 @@ export default function CollectionsPage() {
       {active ? (
         <section className="collection-detail" data-testid="collection-detail">
           <div className="collection-detail-header">
-            <button type="button" className="button" onClick={() => setActive(null)}>
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                setActive(null);
+                clearOpenParam();
+              }}
+            >
               ← Collections
             </button>
             <h2>{active.name}</h2>
@@ -368,6 +397,7 @@ export default function CollectionsPage() {
             () => deleteCollection(gate.libraryId, target.id),
             () => {
               setActive(null);
+              clearOpenParam();
               setDeleting(null);
             },
           );

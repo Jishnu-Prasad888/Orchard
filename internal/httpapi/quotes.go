@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
@@ -11,6 +12,10 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/quotes"
 )
+
+// maxQuoteListLimit bounds a caller-supplied ?limit= on the library-wide
+// quotes listing (e.g. Home's "recent quotes" section).
+const maxQuoteListLimit = 100
 
 // openQuoteStore opens the per-library DB and returns a quotes.Store.
 func (s *Server) openQuoteStore(
@@ -86,8 +91,15 @@ func (s *Server) handleListLibraryQuotes(w http.ResponseWriter, r *http.Request,
 	}
 	defer cleanup()
 
+	limit := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = min(n, maxQuoteListLimit)
+		}
+	}
 	qs, err := store.List(r.Context(), u.ID, quotes.ListOptions{
 		FavoriteOnly: r.URL.Query().Get("favorite") == "1",
+		Limit:        limit,
 	})
 	if err != nil {
 		s.logger.Error("list quotes", "error", err)

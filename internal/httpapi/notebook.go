@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
@@ -11,6 +12,10 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/notebook"
 )
+
+// maxNoteListLimit bounds a caller-supplied ?limit= on the library-wide
+// notes listing (e.g. Home's "recent notes" section).
+const maxNoteListLimit = 100
 
 // openNotebookStore opens the per-library DB and returns a notebook.Store.
 func (s *Server) openNotebookStore(
@@ -64,7 +69,7 @@ func toNotebookNoteResponses(ns []*notebook.Note) []notebookNoteResponse {
 	return out
 }
 
-// handleListNotes — GET /api/v1/libraries/{id}/notes?file_id=&tag_id=&standalone=1
+// handleListNotes — GET /api/v1/libraries/{id}/notes?file_id=&tag_id=&standalone=1&limit=N
 func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	lib, err := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
 	if err != nil {
@@ -81,10 +86,17 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request, u *auth
 	defer cleanup()
 
 	q := r.URL.Query()
+	limit := 0
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = min(n, maxNoteListLimit)
+		}
+	}
 	ns, err := store.List(r.Context(), u.ID, notebook.ListOptions{
 		FileID:     q.Get("file_id"),
 		TagID:      q.Get("tag_id"),
 		Standalone: q.Get("standalone") == "1",
+		Limit:      limit,
 	})
 	if err != nil {
 		s.logger.Error("list notes", "error", err)

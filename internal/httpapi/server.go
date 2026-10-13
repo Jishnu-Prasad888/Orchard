@@ -161,6 +161,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/settings/reader", s.withAuth(allowAny, s.handleGetReaderPreferences))
 	mux.Handle("PUT /api/v1/settings/reader", s.withAuth(allowAny, s.handleSetReaderPreferences))
 
+	// Home dashboard layout (section order/visibility) is likewise a
+	// server-level preference, not per-library: a user picks one layout for
+	// Home regardless of which library is currently active.
+	mux.Handle("GET /api/v1/settings/home-layout", s.withAuth(allowAny, s.handleGetHomeLayout))
+	mux.Handle("PUT /api/v1/settings/home-layout", s.withAuth(allowAny, s.handleSetHomeLayout))
+
 	// Library surface. Listing is open to any session and filtered by the
 	// caller's read capability, so a member can find the libraries it was
 	// granted; registering, probing, refreshing, and unregistering are
@@ -225,6 +231,8 @@ func (s *Server) Handler() http.Handler {
 			s.withAuth(allowAny, s.handleSetReadingProgress))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/progress",
 			s.withAuth(allowAny, s.handleClearReadingProgress))
+		mux.Handle("GET /api/v1/libraries/{id}/reading/in-progress",
+			s.withAuth(allowAny, s.handleListInProgress))
 
 		// Recently opened (per-user "last opened" tracking) and duplicate
 		// detection. The literal "recently-opened"/"duplicates" segments take
