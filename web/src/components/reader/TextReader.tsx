@@ -50,7 +50,7 @@ function flashHighlight(el: HTMLElement) {
 }
 
 export const TextReader = forwardRef<ReaderHandle, ReaderProps>(function TextReader(
-  { fileName, contentUrl, initialLocation, preferences, onProgress, onToc, onError },
+  { fileName, contentUrl, initialLocation, preferences, onProgress, onToc, onError, onSelectionChange },
   ref,
 ) {
   const [html, setHtml] = useState<string | null>(null);
@@ -100,16 +100,42 @@ export const TextReader = forwardRef<ReaderHandle, ReaderProps>(function TextRea
       appliedInitialLocation.current = true;
       if (initialLocation.startsWith('block-')) {
         blocks.get(initialLocation)?.scrollIntoView?.({ block: 'start' });
+        onProgress(initialLocation, 0);
       } else {
         const fraction = Number(initialLocation);
         if (Number.isFinite(fraction) && fraction > 0) {
           root.scrollTop = fraction * (root.scrollHeight - root.clientHeight);
         }
+        // Report a position immediately rather than waiting for the first
+        // scroll, so "add bookmark here" has a location to use right away
+        // (bookmarks, unlike resume progress, can't be stored as "").
+        onProgress(Number.isFinite(fraction) ? fraction.toFixed(4) : '0.0000', Math.max(0, fraction) * 100);
       }
     }
     // Re-runs only when the rendered content itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, plainText]);
+
+  // Plain DOM, so native selection works; report it whenever it changes so
+  // ReaderPage can offer "highlight"/"save as quote". The location anchor
+  // is the id of the nearest indexed block (same ids goTo/TOC/search use).
+  useEffect(() => {
+    const onSelectionEvent = () => {
+      const root = containerRef.current;
+      const sel = window.getSelection();
+      const text = sel?.toString().trim();
+      if (!root || !text || !sel?.anchorNode || !root.contains(sel.anchorNode)) {
+        onSelectionChange(null);
+        return;
+      }
+      let el: HTMLElement | null =
+        sel.anchorNode instanceof HTMLElement ? sel.anchorNode : sel.anchorNode.parentElement;
+      while (el && !el.id.startsWith('block-')) el = el.parentElement;
+      onSelectionChange({ text, location: el?.id ?? '' });
+    };
+    document.addEventListener('selectionchange', onSelectionEvent);
+    return () => document.removeEventListener('selectionchange', onSelectionEvent);
+  }, [onSelectionChange]);
 
   const onScroll = () => {
     const root = containerRef.current;

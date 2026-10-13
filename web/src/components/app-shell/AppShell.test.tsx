@@ -41,6 +41,8 @@ describe('AppShell', () => {
       'Home',
       'Files',
       'Favorites',
+      'Bookmarks',
+      'Quotes',
       'Tags',
       'Collections',
       'Shared',

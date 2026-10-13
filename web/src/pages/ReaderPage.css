@@ -69,6 +69,7 @@
 }
 
 .reader-surface {
+  position: relative;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -228,6 +229,118 @@
 
 .reader-pdf-page canvas {
   display: block;
+}
+
+/* --- Bookmarks / highlights panel --- */
+
+.reader-panel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.reader-panel-section-header h3,
+.reader-panel section h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.reader-annotation-list {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.reader-annotation-item {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.reader-annotation-jump {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--space-2);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.reader-annotation-jump:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+/* --- Selection action bar (appears over the reader when text is selected) --- */
+
+.reader-selection-bar {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100% - var(--space-6));
+  padding: var(--space-2) var(--space-3);
+  background: var(--reader-bg);
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  transform: translateX(-50%);
+}
+
+.reader-selection-preview {
+  max-width: 320px;
+  overflow: hidden;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.reader-selection-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reader-selection-input {
+  min-width: 200px;
+  padding: var(--space-2);
+  color: inherit;
+  background: color-mix(in srgb, var(--reader-bg) 95%, var(--reader-ink) 5%);
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-sm);
+}
+
+.reader-highlight-colors {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.reader-color-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.reader-color-swatch.active {
+  border-color: var(--reader-ink);
 }
 
 /* --- EPUB reader --- */

@@ -269,6 +269,28 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("DELETE /api/v1/libraries/{id}/collections/{collectionID}/files/{fileID}", s.withAuth(allowAny, s.handleRemoveCollectionFile))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/collections", s.withAuth(allowAny, s.handleListFileCollections))
 
+		// Bookmarks. Many per (user, file); each has its own id.
+		mux.Handle("GET /api/v1/libraries/{id}/bookmarks", s.withAuth(allowAny, s.handleListLibraryBookmarks))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/bookmarks", s.withAuth(allowAny, s.handleListFileBookmarks))
+		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/bookmarks", s.withAuth(allowAny, s.handleCreateBookmark))
+		mux.Handle("PATCH /api/v1/libraries/{id}/bookmarks/{bookmarkID}", s.withAuth(allowAny, s.handleUpdateBookmark))
+		mux.Handle("DELETE /api/v1/libraries/{id}/bookmarks/{bookmarkID}", s.withAuth(allowAny, s.handleDeleteBookmark))
+
+		// Highlights. A selected passage of text plus an optional note/color.
+		mux.Handle("GET /api/v1/libraries/{id}/highlights", s.withAuth(allowAny, s.handleListLibraryHighlights))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/highlights", s.withAuth(allowAny, s.handleListFileHighlights))
+		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/highlights", s.withAuth(allowAny, s.handleCreateHighlight))
+		mux.Handle("PATCH /api/v1/libraries/{id}/highlights/{highlightID}", s.withAuth(allowAny, s.handleUpdateHighlight))
+		mux.Handle("DELETE /api/v1/libraries/{id}/highlights/{highlightID}", s.withAuth(allowAny, s.handleDeleteHighlight))
+
+		// Quotes. Saved passages with citation details and commentary,
+		// independent of highlights (can be typed in by hand).
+		mux.Handle("GET /api/v1/libraries/{id}/quotes", s.withAuth(allowAny, s.handleListLibraryQuotes))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/quotes", s.withAuth(allowAny, s.handleListFileQuotes))
+		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/quotes", s.withAuth(allowAny, s.handleCreateQuote))
+		mux.Handle("PATCH /api/v1/libraries/{id}/quotes/{quoteID}", s.withAuth(allowAny, s.handleUpdateQuote))
+		mux.Handle("DELETE /api/v1/libraries/{id}/quotes/{quoteID}", s.withAuth(allowAny, s.handleDeleteQuote))
+
 		// Backups surface (admin). Backup policy is server-wide: where they
 		// are written, when they run, and restore destinations. All serverside.
 		if s.backups != nil {

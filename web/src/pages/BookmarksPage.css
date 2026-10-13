@@ -1,0 +1,74 @@
+.annotation-section {
+  margin-top: var(--space-5);
+}
+
+.annotation-section h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+}
+
+.annotation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.annotation-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.annotation-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-1);
+}
+
+.annotation-card-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid transparent;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.annotation-card-title {
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.annotation-card-excerpt {
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.annotation-card-note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.annotation-card-date {
+  font-size: var(--font-size-xs);
+}

@@ -59,6 +59,10 @@ function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
       url.endsWith('/api/v1/libraries/lib1/files/f1/reading-status')
         ? json({ status: null })
         : undefined,
+    (url) =>
+      url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks') ? json({ bookmarks: [] }) : undefined,
+    (url) =>
+      url.endsWith('/api/v1/libraries/lib1/files/f1/highlights') ? json({ highlights: [] }) : undefined,
     (url) => (url.endsWith('/api/v1/settings/reader') ? json({ preferences: DEFAULT_PREFS }) : undefined),
     (url, init) =>
       init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/opened')
@@ -209,5 +213,60 @@ describe('ReaderPage', () => {
     await screen.findByText('The Great Essay');
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByText('files page')).toBeInTheDocument();
+  });
+
+  it('adds a bookmark at the current location', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks')
+          ? json({ bookmark: { id: 'bm1', file_id: 'f1', location: '', label: '', created_at: '2026-10-01T00:00:00Z' } })
+          : undefined,
+    ]);
+    await screen.findByText('The Great Essay');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bookmarks and highlights' }));
+    const panel = await screen.findByTestId('reader-annotations');
+    fireEvent.click(within(panel).getByRole('button', { name: /Add here/ }));
+
+    await waitFor(() => {
+      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/bookmarks')).toBe(true);
+    });
+    expect(await within(panel).findByRole('button', { name: 'Remove bookmark' })).toBeInTheDocument();
+  });
+
+  it('selects text and saves a highlight', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/highlights')
+          ? json({
+              highlight: {
+                id: 'hl1',
+                file_id: 'f1',
+                location: 'block-2',
+                text: 'First section text.',
+                color: 'yellow',
+                note: '',
+                created_at: '2026-10-01T00:00:00Z',
+                updated_at: '2026-10-01T00:00:00Z',
+              },
+            })
+          : undefined,
+    ]);
+    const paragraph = await screen.findByText('First section text.');
+
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+
+    const bar = await screen.findByText('“First section text.”');
+    fireEvent.click(within(bar.closest('.reader-selection-bar')!).getByRole('button', { name: /Highlight/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/highlights')).toBe(true);
+    });
   });
 });

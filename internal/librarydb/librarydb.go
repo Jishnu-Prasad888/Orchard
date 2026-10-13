@@ -31,7 +31,7 @@ const (
 
 	// SchemaVersion is the current version of the library-level database
 	// schema. Bump this when adding new tables or changing existing ones.
-	SchemaVersion = 1
+	SchemaVersion = 2
 )
 
 // DB wraps a per-library SQLite connection pool. Use OpenDB to construct one.
@@ -529,4 +529,67 @@ CREATE TABLE IF NOT EXISTS collection_items (
 );
 
 CREATE INDEX IF NOT EXISTS collection_items_file_idx ON collection_items (file_id);
+
+-- bookmarks mark a specific place in a book a user wants to return to. A
+-- user can have many bookmarks per file (unlike reading_progress, which is
+-- a single resume point), so each row gets its own id rather than a
+-- (user_id, file_id) primary key. location is opaque to the server, exactly
+-- like reading_progress.location (page number / EPUB CFI / scroll anchor),
+-- meaningful only to the reader that wrote it.
+CREATE TABLE IF NOT EXISTS bookmarks (
+	id         TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	location   TEXT NOT NULL,
+	label      TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS bookmarks_user_file_idx ON bookmarks (user_id, file_id);
+CREATE INDEX IF NOT EXISTS bookmarks_file_idx ON bookmarks (file_id);
+
+-- highlights capture a passage of text a user selected in a reader, along
+-- with an optional note and a highlight color. location is the same opaque
+-- reader-position string used by reading_progress/bookmarks; text is a copy
+-- of the highlighted passage (kept even if the underlying file changes).
+CREATE TABLE IF NOT EXISTS highlights (
+	id         TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	location   TEXT NOT NULL,
+	text       TEXT NOT NULL DEFAULT '',
+	color      TEXT NOT NULL DEFAULT 'yellow',
+	note       TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS highlights_user_file_idx ON highlights (user_id, file_id);
+CREATE INDEX IF NOT EXISTS highlights_file_idx ON highlights (file_id);
+
+-- quotes are passages a user has saved out of a book together with their
+-- own commentary, independent of any highlight (a quote can be typed in by
+-- hand rather than selected in a reader). location is optional and, when
+-- present, lets "jump to quote" reuse the same reader navigation hook as
+-- bookmarks/highlights. author/chapter/page are free-text citation fields
+-- captured at save time so they survive even if book_metadata is edited
+-- later.
+CREATE TABLE IF NOT EXISTS quotes (
+	id         TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	text       TEXT NOT NULL,
+	location   TEXT NOT NULL DEFAULT '',
+	author     TEXT NOT NULL DEFAULT '',
+	chapter    TEXT NOT NULL DEFAULT '',
+	page       TEXT NOT NULL DEFAULT '',
+	commentary TEXT NOT NULL DEFAULT '',
+	favorite   INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS quotes_user_file_idx ON quotes (user_id, file_id);
+CREATE INDEX IF NOT EXISTS quotes_file_idx ON quotes (file_id);
+CREATE INDEX IF NOT EXISTS quotes_user_favorite_idx ON quotes (user_id, favorite);
 `
