@@ -11,7 +11,12 @@ import { useAuth } from '../auth/authContext';
 import { useFileLabels } from '../api/fileLabels';
 import { useLibraryGate } from '../api/libraries';
 import { useLibraryResource } from '../api/resources';
-import { deleteBookmark, deleteHighlight, listLibraryBookmarks, listLibraryHighlights } from '../api/queries';
+import {
+  deleteBookmark,
+  deleteHighlight,
+  listLibraryBookmarks,
+  listLibraryHighlights,
+} from '../api/queries';
 import {
   EmptyState,
   ErrorState,

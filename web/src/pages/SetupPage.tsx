@@ -191,8 +191,7 @@ function RequestAccessCard() {
 }
 
 export default function SetupPage() {
-  const { loading, bootstrapRequired, signupRequestsEnabled, user, bootstrap, refresh } =
-    useAuth();
+  const { loading, bootstrapRequired, signupRequestsEnabled, user, bootstrap, refresh } = useAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState('');

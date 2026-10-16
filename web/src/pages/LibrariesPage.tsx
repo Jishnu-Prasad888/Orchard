@@ -496,7 +496,8 @@ function LibraryRow({ library, isAdmin }: { library: Library; isAdmin: boolean }
               {(status.last_scan.error_details?.length ?? 0) > 0 && (
                 <>
                   <p className="muted">
-                    Couldn&rsquo;t read {status.last_scan.error_details!.length === status.last_scan.errors
+                    Couldn&rsquo;t read{' '}
+                    {status.last_scan.error_details!.length === status.last_scan.errors
                       ? 'these files'
                       : `the first ${status.last_scan.error_details!.length} of ${status.last_scan.errors}`}
                     :

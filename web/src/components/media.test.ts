@@ -9,9 +9,9 @@ describe('hasThumbnail', () => {
   });
 
   it('is true for a document with a cover, false without one', () => {
-    expect(
-      hasThumbnail(fileFixture({ media_type: 'document', cover_url: '/cover.jpg' })),
-    ).toBe(true);
+    expect(hasThumbnail(fileFixture({ media_type: 'document', cover_url: '/cover.jpg' }))).toBe(
+      true,
+    );
     expect(hasThumbnail(fileFixture({ media_type: 'document' }))).toBe(false);
   });
 

@@ -166,11 +166,19 @@ function AddQuoteDialog({
         <div className="quote-form-row">
           <label className="quote-field">
             <span>Author (optional)</span>
-            <input className="quote-input" value={author} onChange={(e) => setAuthor(e.target.value)} />
+            <input
+              className="quote-input"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+            />
           </label>
           <label className="quote-field">
             <span>Chapter (optional)</span>
-            <input className="quote-input" value={chapter} onChange={(e) => setChapter(e.target.value)} />
+            <input
+              className="quote-input"
+              value={chapter}
+              onChange={(e) => setChapter(e.target.value)}
+            />
           </label>
           <label className="quote-field">
             <span>Page (optional)</span>
@@ -247,7 +255,10 @@ export default function QuotesPage() {
 
   const exportQuotes = () => {
     const list = quotes.data ?? [];
-    downloadText('quotes.md', quotesToMarkdown(list, (id) => labels[id]?.title ?? ''));
+    downloadText(
+      'quotes.md',
+      quotesToMarkdown(list, (id) => labels[id]?.title ?? ''),
+    );
   };
 
   const header = (
@@ -347,7 +358,9 @@ export default function QuotesPage() {
               <li key={q.id} className="quote-card">
                 <blockquote className="quote-card-text">“{q.text}”</blockquote>
                 <div className="quote-card-meta">
-                  <Link to={`/read/${libraryId}/${q.file_id}${q.location ? `?loc=${encodeURIComponent(q.location)}` : ''}`}>
+                  <Link
+                    to={`/read/${libraryId}/${q.file_id}${q.location ? `?loc=${encodeURIComponent(q.location)}` : ''}`}
+                  >
                     {label?.title ?? '…'}
                   </Link>
                   {q.author && <span className="muted"> · {q.author}</span>}
@@ -401,7 +414,12 @@ export default function QuotesPage() {
       <ConfirmDialog
         open={deleting !== null}
         title="Delete this quote?"
-        message={<p>This quote will be removed. The highlight or passage it came from, if any, is not affected.</p>}
+        message={
+          <p>
+            This quote will be removed. The highlight or passage it came from, if any, is not
+            affected.
+          </p>
+        }
         destructive
         confirmLabel="Delete quote"
         busy={busy}

@@ -16,7 +16,12 @@ import {
 import type { RouteHandler } from '../test/harness';
 import QuotesPage from './QuotesPage';
 
-const book = fileFixture({ id: 'f1', rel_path: 'dune.epub', name: 'dune.epub', media_type: 'document' });
+const book = fileFixture({
+  id: 'f1',
+  rel_path: 'dune.epub',
+  name: 'dune.epub',
+  media_type: 'document',
+});
 
 const quote = {
   id: 'q1',
@@ -35,8 +40,12 @@ const quote = {
 function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
   return [
     ...overrides,
-    (url) => (url.includes('/api/v1/libraries/lib1/quotes') ? json({ quotes: [quote] }) : undefined),
-    (url) => (url.includes('/api/v1/libraries/lib1/files/f1/book-metadata') ? json({ book: null }) : undefined),
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/quotes') ? json({ quotes: [quote] }) : undefined,
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/files/f1/book-metadata')
+        ? json({ book: null })
+        : undefined,
     (url) => (url.endsWith('/api/v1/libraries/lib1/files/f1') ? json({ file: book }) : undefined),
   ];
 }
@@ -95,7 +104,9 @@ describe('QuotesPage', () => {
     await waitFor(() => {
       expect(called(fetchMock, 'PATCH', '/api/v1/libraries/lib1/quotes/q1')).toBe(true);
     });
-    expect(bodyOf(fetchMock, 'PATCH', '/api/v1/libraries/lib1/quotes/q1')).toEqual({ favorite: true });
+    expect(bodyOf(fetchMock, 'PATCH', '/api/v1/libraries/lib1/quotes/q1')).toEqual({
+      favorite: true,
+    });
   });
 
   it('deletes a quote through a confirm dialog, not window.confirm', async () => {

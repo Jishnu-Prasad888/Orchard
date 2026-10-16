@@ -30,7 +30,8 @@ function setup(overrides: RouteHandler[] = [], options = {}) {
   const fn = mockApi(
     [
       ...overrides,
-      (url) => (url.includes('/api/v1/libraries/lib1/files/duplicates') ? json(oneGroup) : undefined),
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/files/duplicates') ? json(oneGroup) : undefined,
     ],
     options,
   );
@@ -55,7 +56,8 @@ describe('DuplicatesPage', () => {
 
   it('says there are no duplicates when the library has none', async () => {
     setup([
-      (url) => (url.includes('/api/v1/libraries/lib1/files/duplicates') ? json({ groups: [] }) : undefined),
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/files/duplicates') ? json({ groups: [] }) : undefined,
     ]);
 
     expect(await screen.findByTestId('duplicates-empty')).toBeInTheDocument();

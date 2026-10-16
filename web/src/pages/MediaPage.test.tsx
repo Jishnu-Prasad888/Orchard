@@ -853,8 +853,7 @@ describe('MediaPage', () => {
           ? json({ collection: { id: 'c9', name: 'Beach reads', item_count: 0 } }, 201)
           : undefined,
       (url, init) =>
-        init?.method === 'POST' &&
-        url.endsWith('/api/v1/libraries/lib1/collections/c9/files')
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/collections/c9/files')
           ? noContent(201)
           : undefined,
       (url) =>
@@ -984,8 +983,7 @@ describe('MediaPage', () => {
 
   it('loads and saves book metadata from the book panel', async () => {
     const fetchMock = setup([
-      (url) =>
-        url.includes('/api/v1/libraries/lib1/files?') ? json(bookPageOne) : undefined,
+      (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(bookPageOne) : undefined),
       (url, init) =>
         init?.method === 'PATCH' && url.endsWith('/api/v1/libraries/lib1/files/f3/book-metadata')
           ? json({
@@ -1010,11 +1008,13 @@ describe('MediaPage', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(
-        called(fetchMock, 'PATCH', '/api/v1/libraries/lib1/files/f3/book-metadata'),
-      ).toBe(true);
+      expect(called(fetchMock, 'PATCH', '/api/v1/libraries/lib1/files/f3/book-metadata')).toBe(
+        true,
+      );
     });
-    expect(bodyOf(fetchMock, 'PATCH', '/api/v1/libraries/lib1/files/f3/book-metadata')).toMatchObject({
+    expect(
+      bodyOf(fetchMock, 'PATCH', '/api/v1/libraries/lib1/files/f3/book-metadata'),
+    ).toMatchObject({
       title: 'Corrected Title',
     });
     expect(await within(panel).findByText('Saved.')).toBeInTheDocument();
@@ -1022,8 +1022,7 @@ describe('MediaPage', () => {
 
   it('sets a reading status from the book panel', async () => {
     const fetchMock = setup([
-      (url) =>
-        url.includes('/api/v1/libraries/lib1/files?') ? json(bookPageOne) : undefined,
+      (url) => (url.includes('/api/v1/libraries/lib1/files?') ? json(bookPageOne) : undefined),
       (url, init) =>
         init?.method === 'PUT' && url.endsWith('/api/v1/libraries/lib1/files/f3/reading-status')
           ? json({ status: 'reading' })
@@ -1139,5 +1138,4 @@ describe('MediaPage', () => {
     fireEvent.keyDown(box, { key: 'Escape' });
     await waitFor(() => expect(box.value).toBe(''));
   });
-
 });

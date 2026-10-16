@@ -157,9 +157,7 @@ describe('LoginPage', () => {
     expect(screen.getByText('Need an account?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Create an account' })).toBeInTheDocument();
     expect(screen.queryByText('First time on this server?')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('Your library, kept quietly in your own hands.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Your library, kept quietly in your own hands.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Confirm password')).not.toBeInTheDocument();
     expect(fn.mock.calls.some(([url]) => String(url).endsWith('/auth/bootstrap'))).toBe(false);
   });

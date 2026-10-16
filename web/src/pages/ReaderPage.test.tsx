@@ -60,13 +60,21 @@ function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
         ? json({ status: null })
         : undefined,
     (url) =>
-      url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks') ? json({ bookmarks: [] }) : undefined,
+      url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks')
+        ? json({ bookmarks: [] })
+        : undefined,
     (url) =>
-      url.endsWith('/api/v1/libraries/lib1/files/f1/highlights') ? json({ highlights: [] }) : undefined,
-    (url) => (url.endsWith('/api/v1/libraries/lib1/files/f1/quotes') ? json({ quotes: [] }) : undefined),
+      url.endsWith('/api/v1/libraries/lib1/files/f1/highlights')
+        ? json({ highlights: [] })
+        : undefined,
     (url) =>
-      url.includes('/api/v1/libraries/lib1/files/f1/search/content') ? json({ hits: [] }) : undefined,
-    (url) => (url.includes('/api/v1/settings/reader') ? json({ preferences: DEFAULT_PREFS }) : undefined),
+      url.endsWith('/api/v1/libraries/lib1/files/f1/quotes') ? json({ quotes: [] }) : undefined,
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/files/f1/search/content')
+        ? json({ hits: [] })
+        : undefined,
+    (url) =>
+      url.includes('/api/v1/settings/reader') ? json({ preferences: DEFAULT_PREFS }) : undefined,
     (url, init) =>
       init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/opened')
         ? noContent()
@@ -154,7 +162,8 @@ describe('ReaderPage', () => {
   it('also shows content-search hits about this book, jumping to a located one', async () => {
     setup([
       (url, init) =>
-        (init?.method ?? 'GET') === 'GET' && url.includes('/api/v1/libraries/lib1/files/f1/search/content')
+        (init?.method ?? 'GET') === 'GET' &&
+        url.includes('/api/v1/libraries/lib1/files/f1/search/content')
           ? json({
               hits: [
                 {
@@ -164,7 +173,12 @@ describe('ReaderPage', () => {
                   excerpt: 'Closing thoughts on everything.',
                   location: 'block-3',
                 },
-                { source_type: 'book_text', source_id: 'f1', file_id: 'f1', excerpt: 'no location for this one' },
+                {
+                  source_type: 'book_text',
+                  source_id: 'f1',
+                  file_id: 'f1',
+                  excerpt: 'no location for this one',
+                },
               ],
             })
           : undefined,
@@ -247,7 +261,9 @@ describe('ReaderPage', () => {
       (url) =>
         url.endsWith('/api/v1/libraries/lib1/files/f1')
           ? new Response(
-              JSON.stringify({ error: { code: 'NOT_FOUND', message: 'File not found.', request_id: 'r1' } }),
+              JSON.stringify({
+                error: { code: 'NOT_FOUND', message: 'File not found.', request_id: 'r1' },
+              }),
               { status: 404, headers: { 'Content-Type': 'application/json' } },
             )
           : undefined,
@@ -286,7 +302,15 @@ describe('ReaderPage', () => {
     const fetchMock = setup([
       (url, init) =>
         init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks')
-          ? json({ bookmark: { id: 'bm1', file_id: 'f1', location: '', label: '', created_at: '2026-10-01T00:00:00Z' } })
+          ? json({
+              bookmark: {
+                id: 'bm1',
+                file_id: 'f1',
+                location: '',
+                label: '',
+                created_at: '2026-10-01T00:00:00Z',
+              },
+            })
           : undefined,
     ]);
     await screen.findByText('The Great Essay');
@@ -298,7 +322,9 @@ describe('ReaderPage', () => {
     await waitFor(() => {
       expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/bookmarks')).toBe(true);
     });
-    expect(await within(panel).findByRole('button', { name: 'Remove bookmark' })).toBeInTheDocument();
+    expect(
+      await within(panel).findByRole('button', { name: 'Remove bookmark' }),
+    ).toBeInTheDocument();
   });
 
   const savedHighlight = {
@@ -447,7 +473,12 @@ describe('ReaderPage', () => {
         url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks')
           ? json({
               bookmarks: [
-                { id: 'b1', file_id: 'f1', location: 'block-1', created_at: '2026-10-01T00:00:00Z' },
+                {
+                  id: 'b1',
+                  file_id: 'f1',
+                  location: 'block-1',
+                  created_at: '2026-10-01T00:00:00Z',
+                },
               ],
             })
           : undefined,

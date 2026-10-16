@@ -8,15 +8,15 @@ import SearchPage from './SearchPage';
 function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
   return [
     ...overrides,
-    (url) => (url.includes('/api/v1/libraries/lib1/collections') ? json({ collections: [] }) : undefined),
     (url) =>
-      url.includes('/api/v1/libraries/lib1/search?') || url.endsWith('/api/v1/libraries/lib1/search')
+      url.includes('/api/v1/libraries/lib1/collections') ? json({ collections: [] }) : undefined,
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/search?') ||
+      url.endsWith('/api/v1/libraries/lib1/search')
         ? json({ files: [], next_cursor: '', total: 0 })
         : undefined,
     (url) =>
-      url.includes('/api/v1/libraries/lib1/search/content')
-        ? json({ hits: [] })
-        : undefined,
+      url.includes('/api/v1/libraries/lib1/search/content') ? json({ hits: [] }) : undefined,
   ];
 }
 
@@ -71,7 +71,9 @@ describe('SearchPage', () => {
             })
           : undefined,
       (url) =>
-        url.endsWith('/api/v1/libraries/lib1/files/f1/book-metadata') ? json({ book: null }) : undefined,
+        url.endsWith('/api/v1/libraries/lib1/files/f1/book-metadata')
+          ? json({ book: null })
+          : undefined,
     ]);
 
     const section = await screen.findByTestId('content-search-results');
@@ -81,10 +83,14 @@ describe('SearchPage', () => {
     expect(within(section).getByText('Your highlight')).toBeInTheDocument();
 
     // A highlight with no saved location falls back to its list page.
-    const highlightLink = within(section).getByText(/spice must flow/).closest('a');
+    const highlightLink = within(section)
+      .getByText(/spice must flow/)
+      .closest('a');
     expect(highlightLink).toHaveAttribute('href', '/bookmarks');
 
-    const quoteLink = within(section).getByText(/mindkiller/).closest('a');
+    const quoteLink = within(section)
+      .getByText(/mindkiller/)
+      .closest('a');
     expect(quoteLink).toHaveAttribute('href', `/read/lib1/f1?loc=${encodeURIComponent('page:42')}`);
   });
 

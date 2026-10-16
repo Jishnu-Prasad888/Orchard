@@ -36,7 +36,10 @@ export function downloadUrl(libraryId: string, file: Pick<FileSummary, 'id'>): s
  * this when `hasThumbnail(file)` is true — everything else has no image to
  * show at all.
  */
-export function thumbnailUrl(libraryId: string, file: Pick<FileSummary, 'id' | 'media_type' | 'cover_url'>): string {
+export function thumbnailUrl(
+  libraryId: string,
+  file: Pick<FileSummary, 'id' | 'media_type' | 'cover_url'>,
+): string {
   if (file.media_type === 'document' && file.cover_url) return file.cover_url;
   return downloadUrl(libraryId, file);
 }

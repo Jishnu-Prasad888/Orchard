@@ -276,10 +276,11 @@ export const setReadingProgress = (
   fileId: string,
   location: string,
   percent: number,
-) => apiPut<{ progress: ReadingProgress }>(`/libraries/${libraryId}/files/${fileId}/progress`, {
-  location,
-  percent,
-});
+) =>
+  apiPut<{ progress: ReadingProgress }>(`/libraries/${libraryId}/files/${fileId}/progress`, {
+    location,
+    percent,
+  });
 
 export const clearReadingProgress = (libraryId: string, fileId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/progress`);
@@ -357,7 +358,9 @@ export const searchContent = (libraryId: string, q: string) =>
 
 /** The reader-local variant: content search scoped to a single book. */
 export const searchFileContent = (libraryId: string, fileId: string, q: string) =>
-  apiGet<ContentHitListResponse>(`/libraries/${libraryId}/files/${fileId}/search/content${query({ q })}`);
+  apiGet<ContentHitListResponse>(
+    `/libraries/${libraryId}/files/${fileId}/search/content${query({ q })}`,
+  );
 
 export const listRecentSearches = (libraryId: string, limit?: number) =>
   apiGet<RecentSearchListResponse>(`/libraries/${libraryId}/search/recent${query({ limit })}`);
@@ -524,9 +527,7 @@ export const createQuote = (
 export const updateQuote = (
   libraryId: string,
   quoteId: string,
-  patch: Partial<
-    Pick<Quote, 'text' | 'author' | 'chapter' | 'page' | 'commentary' | 'favorite'>
-  >,
+  patch: Partial<Pick<Quote, 'text' | 'author' | 'chapter' | 'page' | 'commentary' | 'favorite'>>,
 ) => apiPatch<QuoteEnvelope>(`/libraries/${libraryId}/quotes/${quoteId}`, patch);
 
 export const deleteQuote = (libraryId: string, quoteId: string) =>

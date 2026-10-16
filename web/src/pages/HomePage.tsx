@@ -148,38 +148,32 @@ function Home({ library }: { library: Library }) {
 
   const home = useLibraryResource<HomeData>(
     useCallback(async (id: string) => {
-      const [
-        recent,
-        recentlyOpened,
-        inProgress,
-        favorites,
-        collections,
-        recentQuotes,
-      ] = await Promise.all([
-        listFiles(id, {
-          recursive: true,
-          sort: 'mod_time',
-          order: 'desc',
-          limit: RECENT_LIMIT,
-        })
-          .then((r) => r.files ?? [])
-          .catch(() => [] as FileSummary[]),
-        listRecentlyOpened(id, RECENT_LIMIT)
-          .then((r) => r.files ?? [])
-          .catch(() => [] as FileSummary[]),
-        listInProgress(id)
-          .then((r) => r.files ?? [])
-          .catch(() => [] as InProgressFile[]),
-        listFavorites(id)
-          .then((r) => r.files ?? [])
-          .catch(() => [] as FileSummary[]),
-        listCollections(id)
-          .then((r) => r.collections ?? [])
-          .catch(() => [] as Collection[]),
-        listLibraryQuotes(id, { limit: WRITING_LIMIT })
-          .then((r) => r.quotes ?? [])
-          .catch(() => [] as Quote[]),
-      ]);
+      const [recent, recentlyOpened, inProgress, favorites, collections, recentQuotes] =
+        await Promise.all([
+          listFiles(id, {
+            recursive: true,
+            sort: 'mod_time',
+            order: 'desc',
+            limit: RECENT_LIMIT,
+          })
+            .then((r) => r.files ?? [])
+            .catch(() => [] as FileSummary[]),
+          listRecentlyOpened(id, RECENT_LIMIT)
+            .then((r) => r.files ?? [])
+            .catch(() => [] as FileSummary[]),
+          listInProgress(id)
+            .then((r) => r.files ?? [])
+            .catch(() => [] as InProgressFile[]),
+          listFavorites(id)
+            .then((r) => r.files ?? [])
+            .catch(() => [] as FileSummary[]),
+          listCollections(id)
+            .then((r) => r.collections ?? [])
+            .catch(() => [] as Collection[]),
+          listLibraryQuotes(id, { limit: WRITING_LIMIT })
+            .then((r) => r.quotes ?? [])
+            .catch(() => [] as Quote[]),
+        ]);
       return {
         recent,
         recentlyOpened,
