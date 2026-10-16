@@ -3,8 +3,8 @@
  * page underneath it.
  *
  *   settings                      finds a setting (SettingsSearch)
- *   quotes, bookmarks, notes,     filters the page's own list in place, via
- *   tags, collections             a `?q=` on the page's URL
+ *   quotes, bookmarks, tags,      filters the page's own list in place, via
+ *   collections                   a `?q=` on the page's URL
  *   everything else               finds files (the global SearchBox)
  *
  * Filtering pages read the query back with `usePageQuery()` and narrow their
@@ -20,7 +20,6 @@ export type PageSearchMode =
 const FILTER_PAGES: Record<string, string> = {
   '/quotes': 'quotes',
   '/bookmarks': 'bookmarks & highlights',
-  '/notes': 'notes',
   '/tags': 'tags',
   '/collections': 'collections',
 };

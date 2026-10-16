@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { apiError, called, fileFixture, json, mockApi, originalFetch, renderPage } from '../test/harness';
-import type { Collection, InProgressFile, Note, Quote } from '../api/types';
+import type { Collection, InProgressFile, Quote } from '../api/types';
 import HomePage from './HomePage';
 
 interface Options {
@@ -12,7 +12,6 @@ interface Options {
   favorites?: ReturnType<typeof fileFixture>[];
   collections?: Collection[];
   quotes?: Quote[];
-  notes?: Note[];
 }
 
 function setup(options: Options = {}) {
@@ -25,7 +24,6 @@ function setup(options: Options = {}) {
   const favorites = options.favorites ?? [];
   const collections = options.collections ?? [];
   const quotes = options.quotes ?? [];
-  const notes = options.notes ?? [];
   const fn = mockApi([
     (url) =>
       url.includes('/api/v1/libraries/lib1/files/recently-opened')
@@ -48,10 +46,6 @@ function setup(options: Options = {}) {
         ? json({ quotes })
         : undefined,
     (url) =>
-      url.includes('/api/v1/libraries/lib1/notes')
-        ? json({ notes })
-        : undefined,
-    (url) =>
       url.includes('/api/v1/settings/home-layout')
         ? json({
             sections: [
@@ -61,7 +55,6 @@ function setup(options: Options = {}) {
               { id: 'favorites', visible: true },
               { id: 'pinned-collections', visible: true },
               { id: 'recent-quotes', visible: true },
-              { id: 'recent-notes', visible: true },
             ],
           })
         : undefined,
@@ -208,7 +201,7 @@ describe('HomePage', () => {
     );
   });
 
-  it('shows recent quotes and recent notes, the note deep-linked', async () => {
+  it('shows recent quotes', async () => {
     setup({
       quotes: [
         {
@@ -220,25 +213,10 @@ describe('HomePage', () => {
           updated_at: '2026-01-01T00:00:00Z',
         },
       ],
-      notes: [
-        {
-          id: 'n1',
-          title: 'Reading notes',
-          body: 'Some thoughts.',
-          created_at: '2026-01-01T00:00:00Z',
-          updated_at: '2026-01-01T00:00:00Z',
-        },
-      ],
     });
 
     const quoteSection = await screen.findByTestId('home-recent-quotes');
     expect(within(quoteSection).getByText('A line worth keeping.')).toBeInTheDocument();
-
-    const noteSection = await screen.findByTestId('home-recent-notes');
-    expect(within(noteSection).getByRole('link', { name: /Reading notes/ })).toHaveAttribute(
-      'href',
-      '/notes?open=n1',
-    );
   });
 
   it('lets a user hide a section and saves the change', async () => {

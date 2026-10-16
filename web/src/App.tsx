@@ -23,7 +23,6 @@ const BookmarksPage = lazyPage(() => import('./pages/BookmarksPage'));
 const CollectionsPage = lazyPage(() => import('./pages/CollectionsPage'));
 const DuplicatesPage = lazyPage(() => import('./pages/DuplicatesPage'));
 const LibrariesPage = lazyPage(() => import('./pages/LibrariesPage'));
-const NotesPage = lazyPage(() => import('./pages/NotesPage'));
 const PermissionsPage = lazyPage(() => import('./pages/PermissionsPage'));
 const QuotesPage = lazyPage(() => import('./pages/QuotesPage'));
 const SharingPage = lazyPage(() => import('./pages/SharingPage'));
@@ -80,7 +79,6 @@ export default function App() {
                   <Route path="/favorites" element={<FavoritesPage />} />
                   <Route path="/bookmarks" element={<BookmarksPage />} />
                   <Route path="/quotes" element={<QuotesPage />} />
-                  <Route path="/notes" element={<NotesPage />} />
                   <Route path="/trash" element={<TrashPage />} />
                   <Route path="/shared" element={<SharingPage />} />
                   <Route path="/duplicates" element={<DuplicatesPage />} />

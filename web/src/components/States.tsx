@@ -218,7 +218,7 @@ export function NoLibrariesState({ isAdmin }: { isAdmin: boolean }) {
 
 /**
  * The library's drive is not connected. Not an error and not empty: the
- * details Orchard keeps (tags, notes) are still here, the files are not.
+ * details Orchard keeps (tags, bookmarks, quotes) are still here, the files are not.
  * Administrators also see where the drive was last mounted.
  */
 export function LibraryOfflineNotice({ library }: { library: Library }) {
@@ -231,8 +231,8 @@ export function LibraryOfflineNotice({ library }: { library: Library }) {
       <div className="notice-text">
         <p className="notice-title">{library.name} is unavailable</p>
         <p>
-          The drive holding this library is disconnected. Your tags and notes are safe — reconnect
-          it and Orchard will pick up where it left off.
+          The drive holding this library is disconnected. Your tags, bookmarks, and quotes are safe
+          — reconnect it and Orchard will pick up where it left off.
         </p>
         {user?.role === 'admin' && (
           <p className="notice-detail">

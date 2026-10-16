@@ -344,8 +344,8 @@ function AddLibraryDialog({ onClose }: { onClose: () => void }) {
             ))}
             {probe?.has_metadata && (
               <p className="muted">
-                Its tags and notes travel with the library, so it can be unplugged and reopened on
-                another machine.
+                Its tags, bookmarks, and quotes travel with the library, so it can be unplugged and
+                reopened on another machine.
               </p>
             )}
           </div>

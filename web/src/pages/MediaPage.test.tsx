@@ -72,25 +72,14 @@ const emptyBook = {
 };
 const noReadingStatus = { status: null };
 
-const note = { note: { file_id: 'f1', body: '', updated_at: '' } };
-
 /**
  * The endpoints the browser and the viewer touch, in the order they have to be
- * matched: `/files/f1/note` also contains `/files`, so the longer path comes
- * first.
+ * matched: `/files/f1/favorite` also contains `/files`, so the longer path
+ * comes first.
  */
 function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
   return [
     ...overrides,
-    (url, init) =>
-      url.endsWith('/api/v1/libraries/lib1/files/f1/note') && init?.method === 'PUT'
-        ? json({ note: { file_id: 'f1', body: '', updated_at: '' } })
-        : undefined,
-    (url) =>
-      url.includes('/api/v1/libraries/lib1/files/f1/note') ||
-      url.includes('/api/v1/libraries/lib1/files/f2/note')
-        ? json(note)
-        : undefined,
     (url) =>
       url.includes('/api/v1/libraries/lib1/files/f1/favorite') ||
       url.includes('/api/v1/libraries/lib1/files/f2/favorite')
@@ -813,31 +802,16 @@ describe('MediaPage', () => {
     });
   });
 
-  it('autosaves a Markdown note and previews it', async () => {
+  it('offers no note or caption in the viewer', async () => {
     const fetchMock = setup();
 
     await screen.findByTestId('file-grid');
     fireEvent.click(screen.getByText('IMG_0001.png'));
     const viewer = await screen.findByTestId('viewer');
-    const noteSection = await within(viewer).findByTestId('viewer-note');
 
-    fireEvent.click(within(noteSection).getByRole('button', { name: 'Add a caption' }));
-    const textarea = within(noteSection).getByLabelText('Markdown note');
-    fireEvent.change(textarea, { target: { value: '# Beach day\n\nSunset over the **dunes**.' } });
-    fireEvent.click(within(noteSection).getByRole('button', { name: 'Preview' }));
-
-    expect(within(noteSection).getByRole('heading', { name: 'Beach day' })).toBeInTheDocument();
-    expect(within(noteSection).getByText('dunes')).toBeInTheDocument();
-
-    await waitFor(
-      () => {
-        expect(called(fetchMock, 'PUT', '/api/v1/libraries/lib1/files/f1/note')).toBe(true);
-      },
-      { timeout: 3000 },
-    );
-    expect(bodyOf(fetchMock, 'PUT', '/api/v1/libraries/lib1/files/f1/note')).toMatchObject({
-      body: '# Beach day\n\nSunset over the **dunes**.',
-    });
+    expect(within(viewer).queryByTestId('viewer-note')).not.toBeInTheDocument();
+    expect(within(viewer).queryByRole('button', { name: 'Add a caption' })).not.toBeInTheDocument();
+    expect(called(fetchMock, 'GET', '/files/f1/note')).toBe(false);
   });
 
   it('attaches an existing tag to a file from the tags panel', async () => {

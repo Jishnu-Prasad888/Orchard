@@ -24,7 +24,6 @@ import { addFavorite, listFavorites, removeFavorite } from '../api/queries';
 import type { FileSummary } from '../api/types';
 import { formatDateTime } from '../lib/dates';
 import { useFocusTrap } from '../lib/focusTrap';
-import { FileNote } from './FileNote';
 import { downloadUrl, thumbnailUrl, mediaTypeIcon } from './media';
 import { Icon, type IconName } from './ui/Icon';
 import { Menu, useMenuButton, withDangerLast } from './ui/Menu';
@@ -187,10 +186,6 @@ export function ViewerModal({
   // Chosen speed carries over to the next video while the viewer stays open.
   const [speed, setSpeed] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Height of the caption/filmstrip strip, so a video's own controls are never
-  // drawn underneath it.
-  const [bottomH, setBottomH] = useState(0);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
 
   const index = siblings.findIndex((f) => f.id === file.id);
@@ -257,15 +252,6 @@ export function ViewerModal({
     const onChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-
-  useEffect(() => {
-    const el = bottomRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setBottomH(el.offsetHeight));
-    ro.observe(el);
-    setBottomH(el.offsetHeight);
-    return () => ro.disconnect();
   }, []);
 
   const togglePanel = useCallback(() => {
@@ -855,7 +841,6 @@ export function ViewerModal({
             data-zoomed={zoom > 1}
             data-dragging={dragging || undefined}
             data-video={isVideo && !isFullscreen ? 'true' : undefined}
-            style={{ '--viewer-bottom-h': `${bottomH}px` } as CSSProperties}
           >
             {isPhoto ? (
               <>
@@ -955,11 +940,6 @@ export function ViewerModal({
             <Icon name="chevron-right" size={28} />
           </button>
         )}
-
-        <div className="viewer-bottom viewer-chrome" ref={bottomRef}>
-          {/* Keyed by file so navigating remounts it with a clean note. */}
-          <FileNote key={file.id} libraryId={libraryId} fileId={file.id} />
-        </div>
 
         {panelOpen && (
           <aside className="viewer-panel" id="viewer-panel" aria-label="File details and actions">

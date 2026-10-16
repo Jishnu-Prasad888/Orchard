@@ -29,10 +29,6 @@ func TestSearchContentFindsAcrossSourceTypes(t *testing.T) {
 		VALUES ('h1', 'u1', ?, 'page:1', 'the spice must flow', '', ?, ?)`, file.ID, now, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO notes (id, user_id, title, body, created_at, updated_at)
-		VALUES ('n1', 'u1', 'thoughts', 'a standalone note about dunes', ?, ?)`, now, now); err != nil {
-		t.Fatal(err)
-	}
 
 	hits, err := ss.SearchContent(ctx, search.ContentQuery{Text: "mindkiller", UserID: "u1"})
 	if err != nil {
@@ -48,14 +44,6 @@ func TestSearchContentFindsAcrossSourceTypes(t *testing.T) {
 	}
 	if len(hits) != 1 || hits[0].SourceType != search.ContentHighlight {
 		t.Fatalf("hits = %+v, want one highlight hit", hits)
-	}
-
-	hits, err = ss.SearchContent(ctx, search.ContentQuery{Text: "dunes", UserID: "u1"})
-	if err != nil {
-		t.Fatalf("SearchContent: %v", err)
-	}
-	if len(hits) != 1 || hits[0].SourceType != search.ContentNote {
-		t.Fatalf("hits = %+v, want one note hit", hits)
 	}
 }
 

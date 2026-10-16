@@ -69,8 +69,6 @@ function setup(
     (url) =>
       url.endsWith('/api/v1/libraries/lib1/collections/c1/files') ? json(filesResp) : undefined,
     (url) => (url.endsWith('/api/v1/libraries/lib1/collections') ? json(collectionsResp) : undefined),
-    (url) =>
-      url.includes('/files/f1/note') ? json({ note: { file_id: 'f1', body: '' } }) : undefined,
     (url) => (url.includes('/favorites') ? json({ files: [] }) : undefined),
     (url) =>
       url.includes('/files/f1/metadata')

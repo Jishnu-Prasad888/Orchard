@@ -247,13 +247,6 @@ export interface CollectionEnvelope {
   collection: Collection;
 }
 
-/** A per-file Markdown note (caption / description) shown under the media. */
-export interface FileNote {
-  file_id: string;
-  body: string;
-  updated_at?: string;
-}
-
 /** Book-style metadata for a document file, library-wide (not per-user). */
 export interface BookMetadata {
   file_id: string;
@@ -402,28 +395,6 @@ export interface QuoteEnvelope {
   quote: Quote;
 }
 
-/** Long-form, per-user Markdown writing: many notes per file, or a
- * standalone note with no file/quote/highlight link at all. Distinct from
- * FileNote, the single-caption-per-file editor shown in the viewer. */
-export interface Note {
-  id: string;
-  file_id?: string | undefined;
-  quote_id?: string | undefined;
-  highlight_id?: string | undefined;
-  title?: string | undefined;
-  body: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface NoteListResponse {
-  notes: Note[];
-}
-
-export interface NoteEnvelope {
-  note: Note;
-}
-
 /** A file the acting user has started reading but not finished, carrying
  * their resume point alongside the usual file fields. */
 export interface InProgressFile extends FileSummary {
@@ -444,8 +415,7 @@ export type HomeSectionId =
   | 'recently-added'
   | 'favorites'
   | 'pinned-collections'
-  | 'recent-quotes'
-  | 'recent-notes';
+  | 'recent-quotes';
 
 export interface HomeLayoutSection {
   id: HomeSectionId;
@@ -598,10 +568,10 @@ export interface BackupRecord {
  * ------------------------------------------------------------------ */
 
 /** What kind of row a ContentHit came from. */
-export type ContentSourceType = 'book_text' | 'metadata' | 'quote' | 'highlight' | 'note';
+export type ContentSourceType = 'book_text' | 'metadata' | 'quote' | 'highlight';
 
-/** A match against extracted book text, book metadata, a quote, a
- * highlight, or a note — as opposed to a file search hit, which only ever
+/** A match against extracted book text, book metadata, a quote, or a
+ * highlight — as opposed to a file search hit, which only ever
  * matches a filename/path. */
 export interface ContentHit {
   source_type: ContentSourceType;

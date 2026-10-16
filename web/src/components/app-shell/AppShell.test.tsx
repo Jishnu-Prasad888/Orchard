@@ -51,7 +51,6 @@ describe('AppShell', () => {
       'Favorites',
       'Bookmarks',
       'Quotes',
-      'Notes',
       'Tags',
       'Collections',
       'Shared',

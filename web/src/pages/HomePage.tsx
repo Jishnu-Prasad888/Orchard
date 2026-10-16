@@ -25,7 +25,6 @@ import {
   listFiles,
   listInProgress,
   listLibraryQuotes,
-  listNotes,
   listRecentlyOpened,
   setHomeLayout,
 } from '../api/queries';
@@ -36,7 +35,6 @@ import type {
   HomeSectionId,
   InProgressFile,
   Library,
-  Note,
   Quote,
 } from '../api/types';
 import { Dialog } from '../components/Dialog';
@@ -50,7 +48,6 @@ import { Icon } from '../components/ui/Icon';
 import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { useUploads } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
-import { extractExcerpt } from '../lib/markdown';
 import { greeting } from '../lib/dates';
 import { isIndexing, useIndexStatus } from '../components/app-shell/useIndexStatus';
 import './HomePage.css';
@@ -63,7 +60,7 @@ const PHOTO_GAP = 4;
 const HOME_EMPTY_REFRESH_MS = 3000;
 const HOME_REFRESH_MS = 15000;
 
-/** How many quotes/notes/collections to fetch for their Home sections. */
+/** How many quotes/collections to fetch for their Home sections. */
 const WRITING_LIMIT = 6;
 const PINNED_COLLECTIONS_LIMIT = 8;
 
@@ -77,7 +74,6 @@ const SECTION_LABEL: Record<HomeSectionId, string> = {
   favorites: 'Favorites',
   'pinned-collections': 'Pinned collections',
   'recent-quotes': 'Recent quotes',
-  'recent-notes': 'Recent notes',
 };
 
 const DEFAULT_LAYOUT: HomeLayoutSection[] = (Object.keys(SECTION_LABEL) as HomeSectionId[]).map(
@@ -120,7 +116,6 @@ interface HomeData {
   favorites: FileSummary[];
   pinnedCollections: Collection[];
   recentQuotes: Quote[];
-  recentNotes: Note[];
 }
 
 /** "Good evening, name" in the brand face, the same in every state. */
@@ -160,7 +155,6 @@ function Home({ library }: { library: Library }) {
         favorites,
         collections,
         recentQuotes,
-        recentNotes,
       ] = await Promise.all([
         listFiles(id, {
           recursive: true,
@@ -185,9 +179,6 @@ function Home({ library }: { library: Library }) {
         listLibraryQuotes(id, { limit: WRITING_LIMIT })
           .then((r) => r.quotes ?? [])
           .catch(() => [] as Quote[]),
-        listNotes(id, { limit: WRITING_LIMIT })
-          .then((r) => r.notes ?? [])
-          .catch(() => [] as Note[]),
       ]);
       return {
         recent,
@@ -196,7 +187,6 @@ function Home({ library }: { library: Library }) {
         favorites,
         pinnedCollections: collections.filter((c) => c.pinned).slice(0, PINNED_COLLECTIONS_LIMIT),
         recentQuotes,
-        recentNotes,
       };
     }, []),
   );
@@ -430,33 +420,6 @@ function Home({ library }: { library: Library }) {
                     <Icon name="quote" size={16} />
                     <span className="home-quote-text">{q.text}</span>
                     <span className="home-quote-source">{quoteLabels[q.file_id]?.title}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null;
-      case 'recent-notes':
-        return data.recentNotes.length > 0 ? (
-          <section key={id} className="section" aria-labelledby="home-notes-title">
-            <div className="section-head">
-              <h2 id="home-notes-title" className="section-title">
-                Recent notes
-              </h2>
-              <Link to="/notes" className="link-button">
-                All notes
-                <Icon name="chevron-right" size={16} />
-              </Link>
-            </div>
-            <ul className="home-writing-grid" data-testid="home-recent-notes">
-              {data.recentNotes.map((n) => (
-                <li key={n.id}>
-                  <Link to={`/notes?open=${n.id}`} className="home-note-card">
-                    <Icon name="notebook" size={16} />
-                    <span className="home-note-title">
-                      {n.title || extractExcerpt(n.body, 40) || 'Untitled note'}
-                    </span>
-                    <span className="home-note-excerpt">{extractExcerpt(n.body, 100)}</span>
                   </Link>
                 </li>
               ))}

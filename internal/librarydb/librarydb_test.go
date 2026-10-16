@@ -49,7 +49,7 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 	// collections).
 	for _, table := range []string{
 		"reading_status", "file_opens", "reading_progress", "collections", "collection_items",
-		"bookmarks", "highlights", "quotes", "notes", "note_tags", "note_links",
+		"bookmarks", "highlights", "quotes",
 		"fts_content", "fts_content_state", "recent_searches",
 	} {
 		q := `SELECT name FROM sqlite_master WHERE type='table' AND name='` + table + `'`
@@ -269,7 +269,7 @@ func TestOpenAddsUserScopingToExistingFavoritesAndNotes(t *testing.T) {
 	}
 	defer func() { _ = pool.Close() }()
 
-	for _, table := range []string{"favorites", "file_notes"} {
+	for _, table := range []string{"favorites"} {
 		var n int
 		if err := pool.QueryRow(
 			`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = 'user_id'`, table,
@@ -291,19 +291,19 @@ func TestOpenAddsUserScopingToExistingFavoritesAndNotes(t *testing.T) {
 	if err := pool.QueryRow(`SELECT COUNT(*) FROM file_notes`).Scan(&noteCount); err != nil {
 		t.Fatal(err)
 	}
-	if favCount != 0 || noteCount != 0 {
-		t.Errorf("expected legacy unscoped rows to be dropped, got favorites=%d file_notes=%d", favCount, noteCount)
+	if favCount != 0 {
+		t.Errorf("expected legacy unscoped favorites to be dropped, got %d", favCount)
+	}
+	// file_notes belongs to the retired file-notes feature: what's there is
+	// someone's writing, so it is left exactly as it was.
+	if noteCount != 1 {
+		t.Errorf("legacy file_notes rows = %d, want the 1 left untouched", noteCount)
 	}
 
 	if _, err := pool.Exec(
 		`INSERT INTO favorites (user_id, file_id, created_at) VALUES ('u1', 'f1', '2024-02-01T00:00:00Z')`,
 	); err != nil {
 		t.Fatalf("insert favorite under new schema: %v", err)
-	}
-	if _, err := pool.Exec(
-		`INSERT INTO file_notes (user_id, file_id, body, updated_at) VALUES ('u1', 'f1', 'new note', '2024-02-01T00:00:00Z')`,
-	); err != nil {
-		t.Fatalf("insert note under new schema: %v", err)
 	}
 
 	// Re-opening (every request opens the library db) must be a no-op, not
@@ -356,12 +356,12 @@ func TestOpenIdempotent(t *testing.T) {
 	}
 }
 
-// TestFTSContentTriggersSyncQuotesHighlightsNotes proves the AFTER INSERT/
-// UPDATE/DELETE triggers on quotes/highlights/notes keep fts_content current
+// TestFTSContentTriggersSyncQuotesHighlights proves the AFTER INSERT/
+// UPDATE/DELETE triggers on quotes/highlights keep fts_content current
 // without any Go-side sync call (unlike book_metadata/book_text, which are
 // synced explicitly by internal/bookmeta — see the schema comment on
 // fts_content).
-func TestFTSContentTriggersSyncQuotesHighlightsNotes(t *testing.T) {
+func TestFTSContentTriggersSyncQuotesHighlights(t *testing.T) {
 	orchardDir := filepath.Join(t.TempDir(), ".orchard")
 	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -388,11 +388,6 @@ func TestFTSContentTriggersSyncQuotesHighlightsNotes(t *testing.T) {
 		VALUES ('h1', 'u1', 'f1', 'page:1', 'the spice must flow', '', ?, ?)`, now, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(`INSERT INTO notes
-		(id, user_id, title, body, created_at, updated_at)
-		VALUES ('n1', 'u1', 'thoughts', 'a standalone note about dunes', ?, ?)`, now, now); err != nil {
-		t.Fatal(err)
-	}
 
 	assertMatch := func(needle, wantSourceType, wantSourceID string) {
 		t.Helper()
@@ -409,7 +404,6 @@ func TestFTSContentTriggersSyncQuotesHighlightsNotes(t *testing.T) {
 	}
 	assertMatch("mindkiller", "quote", "q1")
 	assertMatch("spice", "highlight", "h1")
-	assertMatch("dunes", "note", "n1")
 
 	// Update: the old text must no longer match, the new text must.
 	if _, err := pool.Exec(`UPDATE quotes SET text = 'updated quote text' WHERE id = 'q1'`); err != nil {
@@ -451,8 +445,9 @@ func TestFTSContentTriggersSyncQuotesHighlightsNotes(t *testing.T) {
 
 // TestOpenBackfillsFTSContent proves a library database created before
 // fts_content existed is brought forward on open: pre-existing quotes,
-// highlights, notes, book_metadata, and extracted book text (read back from
-// disk) all get indexed once, and a second Open() does not duplicate rows.
+// highlights, book_metadata, and extracted book text (read back from disk)
+// all get indexed once, and a second Open() does not duplicate rows. Notes
+// from the retired Notes feature are not indexed.
 func TestOpenBackfillsFTSContent(t *testing.T) {
 	orchardDir := filepath.Join(t.TempDir(), ".orchard")
 	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
@@ -539,8 +534,14 @@ func TestOpenBackfillsFTSContent(t *testing.T) {
 	}
 	assertMatch("mindkiller", "quote")
 	assertMatch("spice", "highlight")
-	assertMatch("dunes", "note")
 	assertMatch("Herbert", "metadata")
+	var noteHits int
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE fts_content MATCH 'dunes'`).Scan(&noteHits); err != nil {
+		t.Fatal(err)
+	}
+	if noteHits != 0 {
+		t.Errorf("a retired note was indexed for search, count = %d", noteHits)
+	}
 	assertMatch("arrakis", "book_text")
 
 	// Re-opening must not duplicate the backfilled rows.
@@ -556,5 +557,47 @@ func TestOpenBackfillsFTSContent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("backfill duplicated on re-open, count = %d, want 1", count)
+	}
+}
+
+// TestOpenTakesNotesOutOfSearch: a library database from when Orchard had a
+// Notes feature loses its note search triggers and indexed note rows on
+// open, while the notes themselves stay where they are.
+func TestOpenTakesNotesOutOfSearch(t *testing.T) {
+	orchardDir := filepath.Join(t.TempDir(), ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What the Notes feature left behind.
+	if _, err := pool.Exec(`
+		CREATE TABLE notes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, body TEXT NOT NULL DEFAULT '');
+		CREATE TRIGGER fts_content_notes_insert AFTER INSERT ON notes BEGIN
+			INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
+			VALUES ('note', new.id, '', new.user_id, new.body);
+		END;
+		INSERT INTO notes (id, user_id, body) VALUES ('n1', 'u1', 'my private thoughts');`); err != nil {
+		t.Fatal(err)
+	}
+	_ = pool.Close()
+
+	pool, err = librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pool.Close() }()
+
+	var n int
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM fts_content WHERE source_type = 'note'`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("note rows left in search = %d (%v), want 0", n, err)
+	}
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'fts_content_notes_%'`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("note triggers left = %d (%v), want 0", n, err)
+	}
+	if err := pool.QueryRow(`SELECT COUNT(*) FROM notes`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("notes rows = %d (%v), want the 1 kept", n, err)
 	}
 }

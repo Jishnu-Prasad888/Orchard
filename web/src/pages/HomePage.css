@@ -258,7 +258,7 @@
   color: var(--color-text-secondary);
 }
 
-/* ------------------------- quotes and notes cards ----------------------- */
+/* ------------------------------ quote cards ----------------------------- */
 
 .home-writing-grid {
   display: grid;
@@ -269,8 +269,7 @@
   list-style: none;
 }
 
-.home-quote-card,
-.home-note-card {
+.home-quote-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -286,15 +285,13 @@
     background-color var(--duration-fast) var(--ease-standard);
 }
 
-.home-quote-card:hover,
-.home-note-card:hover {
+.home-quote-card:hover {
   color: var(--color-text-primary);
   background: var(--color-surface-elevated);
   border-color: var(--color-border);
 }
 
-.home-quote-text,
-.home-note-excerpt {
+.home-quote-text {
   display: -webkit-box;
   overflow: hidden;
   font-size: var(--font-size-sm);
@@ -303,8 +300,7 @@
   -webkit-box-orient: vertical;
 }
 
-.home-quote-source,
-.home-note-title {
+.home-quote-source {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }

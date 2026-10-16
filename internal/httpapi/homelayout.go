@@ -26,7 +26,6 @@ var homeSectionIDs = []string{
 	"favorites",
 	"pinned-collections",
 	"recent-quotes",
-	"recent-notes",
 }
 
 func defaultHomeLayout() []HomeLayoutEntry {

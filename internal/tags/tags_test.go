@@ -10,7 +10,6 @@ import (
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
-	"github.com/Jishnu-Prasad888/Orchard/internal/notebook"
 	"github.com/Jishnu-Prasad888/Orchard/internal/tags"
 )
 
@@ -389,79 +388,5 @@ func TestDeleteTagCascades(t *testing.T) {
 	ts, _ := store.ListByFile(ctx, fileID)
 	if len(ts) != 0 {
 		t.Errorf("expected 0 tags after cascade delete, got %d", len(ts))
-	}
-}
-
-// --- note tags ---
-
-func newTestStoreWithNotes(t *testing.T) (*tags.TagStore, *notebook.Store) {
-	t.Helper()
-	root := t.TempDir()
-	orchardDir := filepath.Join(root, ".orchard")
-	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	db, err := librarydb.Open(orchardDir)
-	if err != nil {
-		t.Fatalf("open library db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return tags.NewTagStore(db), notebook.NewStore(db)
-}
-
-func TestAttachAndListByNote(t *testing.T) {
-	tagStore, noteStore := newTestStoreWithNotes(t)
-	ctx := context.Background()
-
-	note, err := noteStore.Create(ctx, "u1", notebook.Fields{Title: "My note"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tag, _ := tagStore.Create(ctx, "note-tag", "")
-
-	if err := tagStore.AttachToNote(ctx, note.ID, tag.ID); err != nil {
-		t.Fatalf("AttachToNote: %v", err)
-	}
-	list, err := tagStore.ListByNote(ctx, note.ID)
-	if err != nil {
-		t.Fatalf("ListByNote: %v", err)
-	}
-	if len(list) != 1 || list[0].ID != tag.ID {
-		t.Errorf("ListByNote = %v, want [%s]", list, tag.ID)
-	}
-}
-
-func TestDetachFromNoteNotTagged(t *testing.T) {
-	tagStore, noteStore := newTestStoreWithNotes(t)
-	ctx := context.Background()
-
-	note, _ := noteStore.Create(ctx, "u1", notebook.Fields{Title: "My note"})
-	tag, _ := tagStore.Create(ctx, "untagged", "")
-
-	err := tagStore.DetachFromNote(ctx, note.ID, tag.ID)
-	if !errors.Is(err, tags.ErrNoteNotTagged) {
-		t.Errorf("expected ErrNoteNotTagged, got %v", err)
-	}
-}
-
-func TestDeleteTagCascadesNoteTags(t *testing.T) {
-	tagStore, noteStore := newTestStoreWithNotes(t)
-	ctx := context.Background()
-
-	note, _ := noteStore.Create(ctx, "u1", notebook.Fields{Title: "My note"})
-	tag, _ := tagStore.Create(ctx, "cascade-note-tag", "")
-	if err := tagStore.AttachToNote(ctx, note.ID, tag.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := tagStore.Delete(ctx, tag.ID); err != nil {
-		t.Fatal(err)
-	}
-	list, err := tagStore.ListByNote(ctx, note.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(list) != 0 {
-		t.Errorf("expected 0 tags after cascade delete, got %d", len(list))
 	}
 }

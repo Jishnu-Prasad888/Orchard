@@ -308,126 +308,7 @@ video.viewer-media {
   transform: translateX(-50%);
 }
 
-/* ------------------------- caption and strip ------------------------- */
-
-.viewer-bottom {
-  position: absolute;
-  inset: auto 0 0 0;
-  z-index: var(--z-raised);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-8) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
-  background: var(--media-scrim-bottom);
-  pointer-events: none;
-}
-
-.viewer-bottom > * {
-  pointer-events: auto;
-}
-
-.viewer-modal.panel-open .viewer-bottom {
-  right: var(--viewer-drawer);
-}
-
-.viewer-caption {
-  width: min(720px, 100%);
-}
-
-.viewer-caption-view {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-3);
-}
-
-.viewer-caption-body {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-height: 22vh;
-  overflow-y: auto;
-  font-size: var(--font-size-md);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
-.viewer-caption-body > :first-child {
-  margin-top: 0;
-}
-
-.viewer-caption-body > :last-child {
-  margin-bottom: 0;
-}
-
-.viewer-caption-body a {
-  color: var(--viewer-ink);
-  text-decoration-color: var(--viewer-accent);
-}
-
-.viewer-caption-add,
-.viewer-caption-button {
-  flex: none;
-  min-height: 32px;
-  padding: 0 var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--viewer-ink);
-  background: var(--viewer-fill);
-  border: 1px solid var(--viewer-line);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-
-.viewer-caption-add {
-  display: block;
-  margin: 0 auto;
-  color: var(--viewer-ink-muted);
-}
-
-.viewer-caption-add:hover,
-.viewer-caption-button:hover {
-  color: var(--viewer-ink);
-  background: var(--viewer-fill-hover);
-}
-
-.viewer-caption-button.primary {
-  color: var(--viewer-background);
-  background: var(--viewer-accent);
-  border-color: var(--viewer-accent);
-}
-
-.viewer-caption-edit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--viewer-surface);
-  border: 1px solid var(--viewer-line);
-  border-radius: var(--radius-lg);
-}
-
-.viewer-caption-edit .viewer-note-input {
-  width: 100%;
-  color: var(--viewer-ink);
-  background: var(--viewer-fill);
-  border-color: var(--viewer-line);
-}
-
-.viewer-caption-edit .viewer-note-input::placeholder {
-  color: var(--viewer-ink-muted);
-}
-
-.viewer-caption-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-
-.viewer-caption-actions .note-status {
-  margin-right: auto;
-  font-size: var(--font-size-xs);
-  color: var(--viewer-ink-muted);
-}
+/* ------------------------------ filmstrip ----------------------------- */
 
 .viewer-filmstrip {
   display: flex;
@@ -816,21 +697,6 @@ video.viewer-media {
   }
 }
 
-/* ---------------------------- caption status --------------------------- */
-
-.note-status-saving,
-.note-status-saved,
-.note-status-error {
-  font-size: var(--font-size-xs);
-}
-
-.note-status-saved {
-  color: var(--color-green);
-}
-
-.note-status-error {
-  color: var(--viewer-danger);
-}
 
 .viewer-fact-name {
   font-weight: var(--font-weight-medium);
@@ -856,8 +722,7 @@ video.viewer-media {
   }
 }
 
-.viewer-modal .viewer-toolbar,
-.viewer-modal .viewer-bottom {
+.viewer-modal .viewer-toolbar {
   animation: viewer-chrome-in var(--duration-slow) var(--ease-out) backwards;
 }
 
@@ -870,7 +735,6 @@ video.viewer-media {
 /* The photo slides over as the details panel opens and closes. */
 .viewer-stage-wrap,
 .viewer-toolbar,
-.viewer-bottom,
 .viewer-nav-next {
   transition:
     margin var(--duration-slow) var(--ease-standard),
@@ -929,11 +793,10 @@ video.viewer-media {
   font-variant-numeric: tabular-nums;
 }
 
-/* A video keeps clear of the toolbar above and the caption/filmstrip strip
-   below, so its own controls are never covered. Fullscreen reclaims it all. */
+/* A video keeps clear of the toolbar above, so its own controls are never
+   covered. Fullscreen reclaims it all. */
 .viewer-stage[data-video='true'] {
   top: var(--topbar-height);
-  bottom: var(--viewer-bottom-h, 0);
 }
 
 .viewer-stage[data-video='true'] video.viewer-media {
