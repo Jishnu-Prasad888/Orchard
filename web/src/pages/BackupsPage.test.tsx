@@ -46,11 +46,23 @@ const failedBackup = {
 // GET /backups answers with a bare array, not an envelope.
 const backups = [okBackup, failedBackup];
 
+const defaultConfig = {
+  dir: '/data/orchard/backups',
+  dir_source: 'default',
+  keep: 4,
+  interval_minutes: 0,
+  encrypted: false,
+};
+
 function setup(overrides: RouteHandler[] = [], options = {}) {
   const fn = mockApi(
     [
       ...overrides,
       (url) => (url.endsWith('/api/v1/backups/b1') ? json(okBackup) : undefined),
+      (url, init) =>
+        (init?.method ?? 'GET') === 'GET' && url.endsWith('/api/v1/backups/config')
+          ? json(defaultConfig)
+          : undefined,
       (url) => (url.endsWith('/api/v1/backups') ? json(backups) : undefined),
     ],
     options,
@@ -276,5 +288,52 @@ describe('BackupsPage', () => {
 
     expect(await screen.findByTestId('backups-table')).toBeInTheDocument();
     expect(called(fetchMock, 'GET', '/api/v1/backups')).toBe(true);
+  });
+
+  it('shows where backups go and lets an administrator change it', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/backups/config')
+          ? json({ ...defaultConfig, dir: '/mnt/usb/orchard', dir_source: 'setting' })
+          : undefined,
+    ]);
+
+    expect(await screen.findByText('/data/orchard/backups')).toBeInTheDocument();
+    expect(screen.getByText(/Orchard's default/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('change-backup-dir'));
+    fireEvent.change(screen.getByTestId('backup-dir-input'), {
+      target: { value: '/mnt/usb/orchard' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('backup-dir')).toHaveTextContent('/mnt/usb/orchard'),
+    );
+    expect(called(fetchMock, 'PUT', '/api/v1/backups/config')).toBe(true);
+  });
+
+  it("keeps the form open with the server's reason when a folder is refused", async () => {
+    setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/backups/config')
+          ? new Response(
+              JSON.stringify({
+                error: {
+                  code: 'BAD_REQUEST',
+                  message: 'backup directory is not writable',
+                  request_id: 'r1',
+                },
+              }),
+              { status: 400, headers: { 'Content-Type': 'application/json' } },
+            )
+          : undefined,
+    ]);
+    fireEvent.click(await screen.findByTestId('change-backup-dir'));
+    fireEvent.change(screen.getByTestId('backup-dir-input'), { target: { value: '/root/nope' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(/not writable/)).toBeInTheDocument();
+    expect(screen.getByTestId('backup-dir-input')).toBeInTheDocument();
   });
 });

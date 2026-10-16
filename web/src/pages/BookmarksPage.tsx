@@ -20,6 +20,7 @@ import {
   NoLibrariesState,
   PageHeader,
 } from '../components/States';
+import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
 import { Icon } from '../components/ui/Icon';
 import './BookmarksPage.css';
 
@@ -46,6 +47,17 @@ export default function BookmarksPage() {
     ...(highlights.data ?? []).map((h) => h.file_id),
   ];
   const labels = useFileLabels(libraryId, fileIds);
+
+  // The top-bar search filters both lists in place (see pageSearch.ts).
+  const pageQuery = usePageQuery();
+  const shownBookmarks =
+    bookmarks.data?.filter((b) => matchesQuery(pageQuery, b.label, labels[b.file_id]?.title)) ??
+    null;
+  const shownHighlights =
+    highlights.data?.filter((h) =>
+      matchesQuery(pageQuery, h.text, h.note, labels[h.file_id]?.title),
+    ) ?? null;
+  const noMatch = <p className="muted">No matches for “{pageQuery}”.</p>;
 
   const removeBookmark = async (id: string) => {
     await deleteBookmark(libraryId, id);
@@ -104,9 +116,13 @@ export default function BookmarksPage() {
             <p>Open a book and use the bookmark button to mark a page.</p>
           </EmptyState>
         )}
-        {bookmarks.data !== null && bookmarks.data.length > 0 && (
+        {shownBookmarks !== null &&
+          bookmarks.data!.length > 0 &&
+          shownBookmarks.length === 0 &&
+          noMatch}
+        {shownBookmarks !== null && shownBookmarks.length > 0 && (
           <ul className="annotation-list" data-testid="bookmarks-list">
-            {bookmarks.data.map((b) => {
+            {shownBookmarks.map((b) => {
               const label = labels[b.file_id];
               return (
                 <li key={b.id} className="annotation-card">
@@ -142,9 +158,13 @@ export default function BookmarksPage() {
             <p>Select text while reading to save a highlight.</p>
           </EmptyState>
         )}
-        {highlights.data !== null && highlights.data.length > 0 && (
+        {shownHighlights !== null &&
+          highlights.data!.length > 0 &&
+          shownHighlights.length === 0 &&
+          noMatch}
+        {shownHighlights !== null && shownHighlights.length > 0 && (
           <ul className="annotation-list" data-testid="highlights-list">
-            {highlights.data.map((h) => {
+            {shownHighlights.map((h) => {
               const label = labels[h.file_id];
               return (
                 <li key={h.id} className="annotation-card">

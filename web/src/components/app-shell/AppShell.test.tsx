@@ -5,6 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { admin, member, mockApi, noContent, originalFetch, renderPage } from '../../test/harness';
 import Providers from '../../test/Providers';
 import AppShell from './AppShell';
+import { usePageQuery } from './pageSearch';
+
+/** Stands in for a page that filters its own list: shows the query it reads. */
+function QuotesProbe() {
+  return <p>quotes filtered by “{usePageQuery()}”</p>;
+}
 
 /** The shell renders an `Outlet`, so the routes have to be declared to render. */
 function shell(route = '/') {
@@ -16,6 +22,8 @@ function shell(route = '/') {
             <Route path="/" element={<p>home content</p>} />
             <Route path="/files" element={<p>files content</p>} />
             <Route path="/settings" element={<p>settings content</p>} />
+            <Route path="/search" element={<p>search results</p>} />
+            <Route path="/quotes" element={<QuotesProbe />} />
           </Route>
         </Routes>
       </Providers>
@@ -120,7 +128,7 @@ describe('AppShell', () => {
 
   it('sends the settings search to the matching settings section', async () => {
     mockApi();
-    shell();
+    shell('/settings');
 
     fireEvent.change(screen.getByLabelText('Search settings'), { target: { value: 'theme' } });
     fireEvent.submit(screen.getByRole('search'));
@@ -130,10 +138,32 @@ describe('AppShell', () => {
 
   it('focuses the settings search with the slash key', () => {
     mockApi();
-    shell();
+    shell('/settings');
 
     fireEvent.keyDown(window, { key: '/' });
     expect(screen.getByLabelText('Search settings')).toHaveFocus();
+  });
+
+  it('searches files from the home, files, and favorites pages', async () => {
+    mockApi();
+    shell('/files');
+
+    expect(screen.queryByLabelText('Search settings')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search Orchard'), { target: { value: 'dune' } });
+    fireEvent.submit(screen.getByRole('search'));
+
+    expect(await screen.findByText('search results')).toBeInTheDocument();
+  });
+
+  it('filters the quotes page in place from the top bar', async () => {
+    mockApi();
+    shell('/quotes');
+
+    fireEvent.change(screen.getByLabelText('Search quotes'), { target: { value: 'stoic' } });
+    expect(await screen.findByText('quotes filtered by “stoic”')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '/' });
+    expect(screen.getByLabelText('Search quotes')).toHaveFocus();
   });
 
   it('shows who is signed in and lets them sign out', async () => {

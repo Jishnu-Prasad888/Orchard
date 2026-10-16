@@ -41,12 +41,12 @@ func (s *Server) handleListDuplicates(w http.ResponseWriter, r *http.Request, u 
 	for _, g := range groups {
 		allFiles = append(allFiles, g.Files...)
 	}
-	covers := s.coverURLsFor(r.Context(), lib, allFiles)
+	extras := s.fileExtrasFor(r.Context(), lib, u.ID, allFiles)
 
 	resp := make([]duplicateGroupResponse, 0, len(groups))
 	for _, g := range groups {
 		files := toFileResponses(g.Files)
-		attachCoverURLs(files, covers)
+		attachFileExtras(files, extras)
 		resp = append(resp, duplicateGroupResponse{
 			ContentHash: g.ContentHash,
 			Files:       files,

@@ -1,9 +1,63 @@
 /* The reader is its own small theme system — light/dark/sepia are explicit
-   reading preferences, independent of the site's own theme. */
+   reading preferences, independent of the site's own theme. Light is the
+   base; dark and sepia override it below. */
 .reader-shell {
   --reader-bg: #ffffff;
   --reader-ink: #1a1a1a;
-  --reader-border: var(--color-border);
+  --reader-border: #ddd8c3;
+  --reader-border-subtle: #ece7d8;
+  --reader-surface: #f7f6f1;
+  --reader-surface-elevated: #ffffff;
+
+  color-scheme: light;
+
+  /* The reader reuses the app's shared controls (buttons, fields, chips,
+     muted text, selection), whose colors come from the semantic `--color-*`
+     tokens. Re-map those tokens onto the reading palette so every control
+     follows the reader's light/dark/sepia choice instead of whichever site
+     theme happens to be active behind it. */
+  --color-background: var(--reader-bg);
+  --color-surface: var(--reader-surface);
+  --color-surface-elevated: var(--reader-surface-elevated);
+  --color-text-primary: var(--reader-ink);
+  --color-text-secondary: color-mix(in srgb, var(--reader-ink) 72%, var(--reader-bg));
+  --color-text-muted: color-mix(in srgb, var(--reader-ink) 52%, var(--reader-bg));
+  --color-border: var(--reader-border);
+  --color-border-subtle: var(--reader-border-subtle);
+
+  --color-primary: #5f8f52;
+  --color-primary-hover: #4e7c43;
+  --color-on-primary: var(--reader-surface-elevated);
+  --color-selection: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  --color-fill-subtle: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+  --color-fill-hover: color-mix(in srgb, var(--reader-ink) 9%, transparent);
+  --color-fill-active: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  --color-primary-strong: color-mix(in srgb, var(--color-primary) 78%, var(--reader-ink));
+  --color-primary-strong-hover: color-mix(
+    in srgb,
+    var(--color-primary-hover) 78%,
+    var(--reader-ink)
+  );
+  --color-primary-ink: color-mix(in srgb, var(--color-primary) 62%, var(--reader-ink));
+  --color-primary-ink-hover: color-mix(in srgb, var(--color-primary-hover) 62%, var(--reader-ink));
+  --color-success: #6f9d63;
+  --color-success-ink: color-mix(in srgb, #6f9d63 38%, var(--reader-ink));
+  --color-warning: #caa14a;
+  --color-warning-ink: color-mix(in srgb, #caa14a 70%, var(--reader-ink));
+  --color-danger: #c1685d;
+  --color-danger-ink: color-mix(in srgb, #c1685d 80%, var(--reader-ink));
+
+  --color-sheen: color-mix(in srgb, var(--reader-surface-elevated) 70%, transparent);
+  --shadow-1: 0 1px 2px color-mix(in srgb, var(--reader-ink) 8%, transparent);
+  --shadow-2:
+    0 1px 2px color-mix(in srgb, var(--reader-ink) 6%, transparent),
+    0 4px 12px color-mix(in srgb, var(--reader-ink) 9%, transparent);
+  --shadow-3:
+    0 2px 6px color-mix(in srgb, var(--reader-ink) 8%, transparent),
+    0 12px 32px color-mix(in srgb, var(--reader-ink) 16%, transparent);
+  --shadow-clay:
+    inset 0 1px 0 var(--color-sheen),
+    0 1px 2px color-mix(in srgb, var(--reader-ink) 10%, transparent);
 
   display: flex;
   flex-direction: column;
@@ -16,12 +70,75 @@
   --reader-bg: #1a1a1a;
   --reader-ink: #e4e4e4;
   --reader-border: #3a3a3a;
+  --reader-border-subtle: #2b2b2b;
+  --reader-surface: #212121;
+  --reader-surface-elevated: #2a2a2a;
+
+  color-scheme: dark;
+
+  --color-primary: #86b374;
+  --color-primary-hover: #96c184;
+  --color-on-primary: #1a1a1a;
+  --color-fill-active: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  --color-primary-strong: var(--color-primary);
+  --color-primary-strong-hover: var(--color-primary-hover);
+  --color-primary-ink: var(--color-primary);
+  --color-primary-ink-hover: var(--color-primary-hover);
+  --color-success: #8bb178;
+  --color-success-ink: color-mix(in srgb, #8bb178 75%, var(--reader-ink));
+  --color-warning: #d9b069;
+  --color-warning-ink: var(--color-warning);
+  --color-danger: #d08077;
+  --color-danger-ink: color-mix(in srgb, #d08077 75%, var(--reader-ink));
+
+  --color-sheen: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+  --shadow-1: 0 1px 2px color-mix(in srgb, #000 60%, transparent);
+  --shadow-2: 0 4px 12px color-mix(in srgb, #000 55%, transparent);
+  --shadow-3: 0 12px 32px color-mix(in srgb, #000 70%, transparent);
+  --shadow-clay:
+    inset 0 1px 0 var(--color-sheen), 0 1px 2px color-mix(in srgb, #000 60%, transparent);
 }
 
 .reader-shell[data-theme='sepia'] {
   --reader-bg: #f4ecd8;
   --reader-ink: #3a2e1f;
   --reader-border: #d8cdb0;
+  --reader-border-subtle: #e7dfc9;
+  --reader-surface: #ece2c8;
+  --reader-surface-elevated: #f9f3e4;
+
+  color-scheme: light;
+
+  --color-primary: #6f8145;
+  --color-primary-hover: #5c6c39;
+  --color-on-primary: #f9f3e4;
+  --color-fill-active: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --color-primary-strong: color-mix(in srgb, var(--color-primary) 78%, var(--reader-ink));
+  --color-primary-strong-hover: color-mix(
+    in srgb,
+    var(--color-primary-hover) 78%,
+    var(--reader-ink)
+  );
+  --color-primary-ink: color-mix(in srgb, var(--color-primary) 62%, var(--reader-ink));
+  --color-primary-ink-hover: color-mix(in srgb, var(--color-primary-hover) 62%, var(--reader-ink));
+  --color-success: #6d8a45;
+  --color-success-ink: color-mix(in srgb, #6d8a45 38%, var(--reader-ink));
+  --color-warning: #b58a2e;
+  --color-warning-ink: color-mix(in srgb, #b58a2e 70%, var(--reader-ink));
+  --color-danger: #b0554a;
+  --color-danger-ink: color-mix(in srgb, #b0554a 80%, var(--reader-ink));
+
+  --color-sheen: color-mix(in srgb, var(--reader-surface-elevated) 70%, transparent);
+  --shadow-1: 0 1px 2px color-mix(in srgb, var(--reader-ink) 8%, transparent);
+  --shadow-2:
+    0 1px 2px color-mix(in srgb, var(--reader-ink) 6%, transparent),
+    0 4px 12px color-mix(in srgb, var(--reader-ink) 9%, transparent);
+  --shadow-3:
+    0 2px 6px color-mix(in srgb, var(--reader-ink) 8%, transparent),
+    0 12px 32px color-mix(in srgb, var(--reader-ink) 16%, transparent);
+  --shadow-clay:
+    inset 0 1px 0 var(--color-sheen),
+    0 1px 2px color-mix(in srgb, var(--reader-ink) 10%, transparent);
 }
 
 .reader-topbar {
@@ -225,70 +342,459 @@
   border-radius: var(--radius-sm);
 }
 
+.reader-pdf-pagebar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--reader-border);
+}
+
+.reader-pdf-zoom-level {
+  min-width: 4.5ch;
+  padding-inline: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The page area. It is the offset parent of every view, which is what lets
+   the reader find a page's scroll position, and its scrollbar gutters are
+   reserved so a scrollbar coming or going never changes the width the
+   pages are fitted to. */
 .reader-pdf-scroll {
+  position: relative;
   flex: 1;
+  min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable both-edges;
   background: color-mix(in srgb, var(--reader-ink) 4%, transparent);
+}
+
+/* The 16px here and between pages is PAGE_GAP in PdfReader.tsx. At least as
+   wide as the page area, and as wide as its content when zoomed past it,
+   so a zoomed page scrolls from its left edge instead of being cut off. */
+.reader-pdf-views {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: max-content;
+  min-width: 100%;
+  padding: 16px;
+}
+
+/* One step of reading: a page, or two facing pages. */
+.reader-pdf-view {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Turning pages, the view sits in the middle of the window like an open book. */
+.reader-pdf[data-direction='horizontal'] .reader-pdf-views {
+  justify-content: center;
+  min-height: 100%;
 }
 
 .reader-pdf-page {
   position: relative;
-  width: fit-content;
-  margin: var(--space-5) auto;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #fff;
   box-shadow: var(--shadow-2);
 }
 
 .reader-pdf-page canvas {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
-/* --- Bookmarks / highlights panel --- */
+/* The selectable text over the canvas. These are the text-layer rules from
+   pdfjs-dist/web/pdf_viewer.css, and only those: that stylesheet is the whole
+   pdf.js viewer's and styles global class names (.sidebar, .toolbar, :root),
+   so importing it restyles the app shell once a PDF has been opened. */
+.reader-pdf-page .textLayer {
+  --total-scale-factor: var(--scale-factor, 1);
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
 
-.reader-panel-section-header {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: initial;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  color-scheme: only light;
+}
+
+.reader-pdf-page .textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.reader-pdf-page .textLayer > :not(.markedContent),
+.reader-pdf-page .textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.reader-pdf-page .textLayer .markedContent {
+  display: contents;
+}
+
+.reader-pdf-page .textLayer span[role='img'] {
+  cursor: default;
+  user-select: none;
+}
+
+.reader-pdf-page .textLayer ::selection {
+  color: transparent;
+  background: color-mix(in srgb, AccentColor, transparent 50%);
+}
+
+.reader-pdf-page .textLayer br::selection {
+  background: transparent;
+}
+
+.reader-pdf-page .textLayer .endOfContent {
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  display: block;
+  cursor: default;
+  user-select: none;
+}
+
+.reader-pdf-page .textLayer.selecting .endOfContent {
+  top: 0;
+}
+
+/* --- Bookmarks / highlights and quotes panels --- */
+
+.reader-annot-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reader-annot-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
 }
 
-.reader-panel-section-header h3,
-.reader-panel section h3 {
-  margin: var(--space-4) 0 var(--space-2);
+.reader-annot-header h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.reader-annot-count,
+.reader-annot-tab-count {
+  min-width: 20px;
+  padding: 0 6px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-pill);
+}
+
+/* Bookmarks | Highlights, as a segmented control. */
+.reader-annot-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-md);
+}
+
+.reader-annot-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
 }
 
-.reader-annotation-list {
-  margin: 0 0 var(--space-3);
+.reader-annot-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.reader-annot-tab.active {
+  color: var(--color-text-primary);
+  background: var(--reader-surface-elevated);
+  box-shadow: var(--shadow-1);
+}
+
+.reader-annot-tab.active .reader-annot-tab-count {
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+}
+
+.reader-annot-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-ink);
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 55%, var(--reader-border));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.reader-annot-add:hover {
+  background: var(--color-fill-active);
+}
+
+.reader-annot-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-3);
+  text-align: center;
+}
+
+.reader-annot-empty p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.reader-annot-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--space-2);
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+  border-radius: 50%;
+}
+
+.reader-annot-empty-title {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+/* A card per mark: the whole card jumps to it; its actions sit top-right,
+   quiet until the card is hovered or focused (always shown on touch). */
+.reader-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.reader-annotation-item {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-1);
+.reader-card {
+  position: relative;
+  background: var(--reader-surface-elevated);
+  border: 1px solid var(--reader-border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.reader-annotation-jump {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  padding: var(--space-2);
+.reader-card:hover,
+.reader-card:focus-within {
+  border-color: var(--reader-border);
+  box-shadow: var(--shadow-1);
+}
+
+.reader-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  /* Room for the action buttons over the top-right corner. */
+  padding-right: var(--space-6);
+  font: inherit;
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: inherit;
   background: none;
   border: none;
-  border-left: 3px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: inherit;
+}
+
+button.reader-card-main {
   cursor: pointer;
 }
 
-.reader-annotation-jump:hover {
-  background: color-mix(in srgb, currentColor 8%, transparent);
+.reader-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.reader-card-title {
+  overflow: hidden;
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-card-excerpt,
+.reader-quote-text {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.5;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+}
+
+.reader-card-note {
+  padding-left: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-left: 2px solid var(--reader-border);
+}
+
+.reader-card-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.reader-card-actions {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--reader-surface-elevated);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.reader-card-actions .icon-button {
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.reader-card:hover .reader-card-actions,
+.reader-card:focus-within .reader-card-actions,
+.reader-card-actions .icon-button.active {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .reader-card-actions {
+    opacity: 1;
+  }
+}
+
+.reader-card-actions .icon-button.active {
+  color: var(--color-warning);
+}
+
+.reader-card-rename {
+  padding: var(--space-2);
+}
+
+.reader-card-rename .reader-selection-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.reader-bookmark-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-primary-ink);
+  background: var(--color-fill-active);
+  border-radius: var(--radius-sm);
+}
+
+/* A highlight card carries its color as a stripe and a faint wash. */
+.reader-highlight-card {
+  --hl: var(--highlight-yellow);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--hl) 12%, var(--reader-surface-elevated));
+  border-left: 4px solid var(--hl);
+}
+.reader-highlight-green {
+  --hl: var(--highlight-green);
+}
+.reader-highlight-blue {
+  --hl: var(--highlight-blue);
+}
+.reader-highlight-pink {
+  --hl: var(--highlight-pink);
+}
+.reader-highlight-orange {
+  --hl: var(--highlight-orange);
+}
+
+.reader-highlight-card .reader-card-actions {
+  background: color-mix(in srgb, var(--hl) 12%, var(--reader-surface-elevated));
+}
+
+/* A quote card reads like a pull quote: serif, with an opening mark. */
+.reader-quote-card .reader-card-main {
+  padding-left: var(--space-6);
+}
+
+.reader-quote-card::before {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-2);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 34px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  content: '“';
+  pointer-events: none;
+}
+
+.reader-quote-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: var(--font-size-md);
+  font-style: italic;
 }
 
 /* --- Selection action bar (appears over the reader when text is selected) --- */
@@ -354,6 +860,102 @@
   border-color: var(--reader-ink);
 }
 
+/* The highlight palette. Swatches show it solid; painted highlights use it
+   translucent so the text stays readable on every reading theme. Painting
+   is the CSS Custom Highlight API (see components/reader/highlightPaint.ts);
+   EPUB highlights are drawn by epub.js with the same colors. */
+.reader-shell {
+  --highlight-yellow: #ffd43b;
+  --highlight-green: #69db7c;
+  --highlight-blue: #74c0fc;
+  --highlight-pink: #f783ac;
+  --highlight-orange: #ffa94d;
+}
+
+.reader-color-yellow {
+  background: var(--highlight-yellow);
+}
+.reader-color-green {
+  background: var(--highlight-green);
+}
+.reader-color-blue {
+  background: var(--highlight-blue);
+}
+.reader-color-pink {
+  background: var(--highlight-pink);
+}
+.reader-color-orange {
+  background: var(--highlight-orange);
+}
+
+.reader-color-swatch:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+::highlight(orchard-hl-yellow) {
+  background-color: rgb(255 212 59 / 45%);
+}
+::highlight(orchard-hl-green) {
+  background-color: rgb(105 219 124 / 45%);
+}
+::highlight(orchard-hl-blue) {
+  background-color: rgb(116 192 252 / 45%);
+}
+::highlight(orchard-hl-pink) {
+  background-color: rgb(247 131 172 / 45%);
+}
+::highlight(orchard-hl-orange) {
+  background-color: rgb(255 169 77 / 45%);
+}
+
+.reader-selection-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* "Quoted!" / "Bookmarked!": a small pill that is gone almost at once.
+   It lives inside the reader (not the app's toast region) so it still shows
+   in full screen, where only the reader is on screen. */
+.reader-flash {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 50%;
+  z-index: 6;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--reader-bg);
+  background: var(--reader-ink);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: reader-flash 1200ms var(--ease-standard) forwards;
+}
+
+@keyframes reader-flash {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  12%,
+  75% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-flash {
+    animation: none;
+  }
+}
+
 /* --- EPUB reader --- */
 
 .reader-epub {
@@ -363,4 +965,52 @@
 
 .reader-epub-viewport {
   height: 100%;
+}
+
+/* "Page 12 of 340" under a book read page by page: each turn shows where
+   the last page ended. */
+.reader-epub-pagenum {
+  position: absolute;
+  bottom: var(--space-2);
+  left: 50%;
+  z-index: var(--z-raised);
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Page-turn buttons at the edges of a paginated book: quiet until wanted. */
+.reader-epub-turn {
+  position: absolute;
+  top: 50%;
+  z-index: var(--z-raised);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 64px;
+  padding: 0;
+  color: var(--reader-ink);
+  background: color-mix(in srgb, var(--reader-bg) 85%, var(--reader-ink) 15%);
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  opacity: 0.35;
+  transform: translateY(-50%);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.reader-epub-turn:hover,
+.reader-epub-turn:focus-visible {
+  opacity: 1;
+}
+
+.reader-epub-turn-prev {
+  left: var(--space-2);
+}
+
+.reader-epub-turn-next {
+  right: var(--space-2);
 }

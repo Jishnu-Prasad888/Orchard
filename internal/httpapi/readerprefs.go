@@ -18,7 +18,15 @@ type ReaderPreferences struct {
 	LineSpacing  float64 `json:"line_spacing"`
 	Margin       int     `json:"margin"`
 	ReadingWidth int     `json:"reading_width"`
-	Theme        string  `json:"theme"`
+	// Theme is "light", "dark", or "sepia", or "auto" to follow the app's
+	// own light/dark appearance.
+	Theme string `json:"theme"`
+	// ReadingDirection is which way the book advances: "horizontal" turns
+	// pages side to side, "vertical" scrolls them top to bottom.
+	ReadingDirection string `json:"reading_direction"`
+	// PagesPerView is how many pages are shown next to each other: 1, or 2
+	// for a facing-pages spread.
+	PagesPerView int `json:"pages_per_view"`
 }
 
 // defaultReaderPreferences is returned when a user has never saved any.
@@ -27,21 +35,33 @@ var defaultReaderPreferences = ReaderPreferences{
 	LineSpacing:  1.5,
 	Margin:       24,
 	ReadingWidth: 720,
-	Theme:        "light",
+	Theme:        "auto",
+
+	ReadingDirection: "horizontal",
+	PagesPerView:     1,
 }
 
 func validReaderTheme(theme string) bool {
 	switch theme {
-	case "light", "dark", "sepia":
+	case "auto", "light", "dark", "sepia":
 		return true
 	default:
 		return false
 	}
 }
 
-// handleGetReaderPreferences — GET /api/v1/settings/reader
+// handleGetReaderPreferences — GET /api/v1/settings/reader[?library=<id>]
+//
+// With a library, the copy kept in that library wins (so preferences come
+// back with the library on a fresh install); the account's copy stands in
+// for a library that has none yet.
 func (s *Server) handleGetReaderPreferences(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	prefs := defaultReaderPreferences
+	if lib := s.memberSettingsLibrary(r, u); lib != nil &&
+		s.getMemberSetting(r.Context(), lib, u.ID, readerPreferencesKey, &prefs) {
+		writeJSON(w, s.logger, http.StatusOK, map[string]any{"preferences": prefs})
+		return
+	}
 	if s.userSettings != nil {
 		if _, err := s.userSettings.GetJSON(r.Context(), u.ID, readerPreferencesKey, &prefs); err != nil {
 			s.logger.Error("get reader preferences", "error", err)
@@ -53,12 +73,22 @@ func (s *Server) handleGetReaderPreferences(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"preferences": prefs})
 }
 
-// handleSetReaderPreferences — PUT /api/v1/settings/reader
+// handleSetReaderPreferences — PUT /api/v1/settings/reader[?library=<id>]
+//
+// Saved to the account and, when a library is named, into that library too.
 func (s *Server) handleSetReaderPreferences(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	var body ReaderPreferences
 	if err := readJSON(w, r, &body); err != nil {
 		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
 		return
+	}
+	// A client that predates the layout preferences does not send them;
+	// that means "as before", not an invalid request.
+	if body.ReadingDirection == "" {
+		body.ReadingDirection = defaultReaderPreferences.ReadingDirection
+	}
+	if body.PagesPerView == 0 {
+		body.PagesPerView = defaultReaderPreferences.PagesPerView
 	}
 	switch {
 	case body.FontSize < 10 || body.FontSize > 48:
@@ -79,7 +109,15 @@ func (s *Server) handleSetReaderPreferences(w http.ResponseWriter, r *http.Reque
 		return
 	case !validReaderTheme(body.Theme):
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest,
-			`theme must be one of "light", "dark", "sepia".`)
+			`theme must be one of "auto", "light", "dark", "sepia".`)
+		return
+	case body.ReadingDirection != "horizontal" && body.ReadingDirection != "vertical":
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest,
+			`reading_direction must be "horizontal" or "vertical".`)
+		return
+	case body.PagesPerView != 1 && body.PagesPerView != 2:
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest,
+			"pages_per_view must be 1 or 2.")
 		return
 	}
 
@@ -93,6 +131,14 @@ func (s *Server) handleSetReaderPreferences(w http.ResponseWriter, r *http.Reque
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Internal server error.")
 		return
+	}
+	if lib := s.memberSettingsLibrary(r, u); lib != nil {
+		if err := s.setMemberSetting(r.Context(), lib, u.ID, readerPreferencesKey, body); err != nil {
+			s.logger.Error("set reader preferences in library", "library_id", lib.ID, "error", err)
+			writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+				CodeInternal, "Internal server error.")
+			return
+		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"preferences": body})
 }

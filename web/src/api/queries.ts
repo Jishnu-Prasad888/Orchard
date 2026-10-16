@@ -23,6 +23,7 @@ import {
 } from './client';
 import type { UploadProgress } from './client';
 import type {
+  BackupConfig,
   BackupRecord,
   BookMetadata,
   BookMetadataEnvelope,
@@ -306,20 +307,29 @@ export const listInProgress = (libraryId: string, limit?: number) =>
 
 /* ----------------------------- home layout ----------------------------- */
 
-/** Home's section order/visibility — a server-level preference, like reader
- * preferences, not scoped to any one library. */
-export const getHomeLayout = () => apiGet<HomeLayoutResponse>('/settings/home-layout');
+/** Home's section order/visibility. Kept on the account and, when a
+ * library is given, inside that library too — so it comes back with the
+ * library on a fresh install. The library's copy wins when reading. */
+export const getHomeLayout = (libraryId?: string) =>
+  apiGet<HomeLayoutResponse>(`/settings/home-layout${query({ library: libraryId })}`);
 
-export const setHomeLayout = (sections: HomeLayoutSection[]) =>
-  apiPut<HomeLayoutResponse>('/settings/home-layout', { sections });
+export const setHomeLayout = (sections: HomeLayoutSection[], libraryId?: string) =>
+  apiPut<HomeLayoutResponse>(`/settings/home-layout${query({ library: libraryId })}`, {
+    sections,
+  });
 
 /* ------------------------- reader preferences --------------------------- */
 
-export const getReaderPreferences = () =>
-  apiGet<ReaderPreferencesResponse>('/settings/reader');
+/** Reading preferences, stored like the Home layout: on the account and in
+ * the given library, whose copy wins when reading. */
+export const getReaderPreferences = (libraryId?: string) =>
+  apiGet<ReaderPreferencesResponse>(`/settings/reader${query({ library: libraryId })}`);
 
-export const setReaderPreferences = (preferences: ReaderPreferences) =>
-  apiPut<ReaderPreferencesResponse>('/settings/reader', preferences);
+export const setReaderPreferences = (preferences: ReaderPreferences, libraryId?: string) =>
+  apiPut<ReaderPreferencesResponse>(
+    `/settings/reader${query({ library: libraryId })}`,
+    preferences,
+  );
 
 /* ------------------------------ recents -------------------------------- */
 
@@ -626,6 +636,12 @@ export const listBackups = () => apiGet<BackupRecord[]>('/backups');
 export const getBackup = (id: string) => apiGet<BackupRecord>(`/backups/${id}`);
 
 export const runBackup = () => apiPost<BackupRecord>('/backups', {});
+
+export const getBackupConfig = () => apiGet<BackupConfig>('/backups/config');
+
+/** Changes the backup directory; the server creates it and checks it is
+ * writable before accepting it. */
+export const setBackupDir = (dir: string) => apiPut<BackupConfig>('/backups/config', { dir });
 
 export const verifyBackup = (id: string) => apiPost<BackupRecord>(`/backups/${id}/verify`);
 

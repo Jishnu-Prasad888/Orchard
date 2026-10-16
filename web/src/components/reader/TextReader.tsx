@@ -15,6 +15,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import type { CSSProperties } from 'react';
 
 import { renderMarkdown } from '../../lib/markdown';
+import { clearHighlights, findTextRange, paintHighlights } from './highlightPaint';
 import type { ReaderHandle, ReaderProps, SearchMatch, TocEntry } from './types';
 
 const SCROLL_SAVE_DEBOUNCE_MS = 1500;
@@ -50,7 +51,17 @@ function flashHighlight(el: HTMLElement) {
 }
 
 export const TextReader = forwardRef<ReaderHandle, ReaderProps>(function TextReader(
-  { fileName, contentUrl, initialLocation, preferences, onProgress, onToc, onError, onSelectionChange },
+  {
+    fileName,
+    contentUrl,
+    initialLocation,
+    preferences,
+    onProgress,
+    onToc,
+    onError,
+    onSelectionChange,
+    highlights,
+  },
   ref,
 ) {
   const [html, setHtml] = useState<string | null>(null);
@@ -115,6 +126,20 @@ export const TextReader = forwardRef<ReaderHandle, ReaderProps>(function TextRea
     // Re-runs only when the rendered content itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, plainText]);
+
+  // Paint saved highlights once the content is in the DOM, and again
+  // whenever they change. Each is searched for from its own block onward.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || (html === null && plainText === null)) return;
+    const entries = [];
+    for (const h of highlights) {
+      const range = findTextRange(root, h.text, blocksRef.current.get(h.location));
+      if (range) entries.push({ range, color: h.color });
+    }
+    paintHighlights('text', entries);
+  }, [highlights, html, plainText]);
+  useEffect(() => () => clearHighlights('text'), []);
 
   // Plain DOM, so native selection works; report it whenever it changes so
   // ReaderPage can offer "highlight"/"save as quote". The location anchor

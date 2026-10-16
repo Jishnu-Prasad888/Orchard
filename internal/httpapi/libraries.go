@@ -97,6 +97,9 @@ func (s *Server) handleCreateLibrary(w http.ResponseWriter, r *http.Request, u *
 		s.writeLibraryError(w, r, err)
 		return
 	}
+	// An adopted library may hold this person's reading data from another
+	// install; reconnect it before anything reads it.
+	s.reconnectMember(r.Context(), u, lib)
 
 	indexing := false
 	if s.indexer != nil {
@@ -135,6 +138,9 @@ func (s *Server) handleListLibraries(w http.ResponseWriter, r *http.Request, u *
 		if !isAdmin && !s.canReadLibrary(r, u, libs[i].ID) {
 			continue
 		}
+		// Every session lists libraries before using one, which makes this
+		// the place a returning member's data is reconnected (members.go).
+		s.reconnectMember(r.Context(), u, &libs[i])
 		resp = append(resp, toLibraryResponse(&libs[i]))
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"libraries": resp})

@@ -6,8 +6,8 @@
   min-width: 200px;
   max-width: min(320px, calc(100vw - 16px));
   padding: var(--space-1);
-  background: var(--surface-elevated);
-  border: 1px solid var(--border);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-3);
   font-size: 0.92rem;
@@ -28,19 +28,19 @@
   gap: var(--space-4);
   padding: 7px var(--space-3);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   cursor: pointer;
   user-select: none;
 }
 
 .ctx-item:hover,
 .ctx-item:focus {
-  background: var(--selection);
+  background: var(--color-fill-hover);
   outline: none;
 }
 
 .ctx-item[aria-disabled='true'] {
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   cursor: default;
 }
 
@@ -49,18 +49,18 @@
 }
 
 .ctx-danger {
-  color: var(--danger);
+  color: var(--color-danger-ink);
 }
 
 .ctx-hint {
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
 .ctx-separator {
   height: 1px;
   margin: var(--space-1) var(--space-2);
-  background: var(--border-subtle);
+  background: var(--color-border-subtle);
 }
 
 .ctx-scrim {
@@ -97,7 +97,7 @@
 
 .ctx-sheet-title {
   padding: var(--space-1) var(--space-3) var(--space-2);
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   font-weight: 600;
 }
@@ -111,9 +111,9 @@
   width: 100%;
   min-height: 48px;
   margin-top: var(--space-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--text-primary);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
   font-size: 1rem;
 }

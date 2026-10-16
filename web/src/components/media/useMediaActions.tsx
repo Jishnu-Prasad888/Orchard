@@ -252,6 +252,15 @@ export function useMediaActions({
       );
     }
     items.push(...(extraMenu?.(file) ?? []));
+    if (ops) {
+      items.push({
+        id: 'properties',
+        label: 'Properties',
+        icon: 'settings',
+        onSelect: () => ops.openProperties(file),
+        testId: 'menu-properties',
+      });
+    }
     if (can.trash) {
       items.push({
         id: 'trash',

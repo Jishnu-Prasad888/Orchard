@@ -28,6 +28,7 @@ import {
   NoLibrariesState,
   PageHeader,
 } from '../components/States';
+import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
 import { Icon } from '../components/ui/Icon';
 import './QuotesPage.css';
 
@@ -218,6 +219,13 @@ export default function QuotesPage() {
   const fileIds = (quotes.data ?? []).map((q) => q.file_id);
   const labels = useFileLabels(libraryId, fileIds);
 
+  // The top-bar search filters this list in place (see pageSearch.ts).
+  const pageQuery = usePageQuery();
+  const shown =
+    quotes.data?.filter((q) =>
+      matchesQuery(pageQuery, q.text, q.commentary, q.author, q.chapter, labels[q.file_id]?.title),
+    ) ?? null;
+
   const toggleFavorite = async (q: Quote) => {
     try {
       await updateQuote(libraryId, q.id, { favorite: !q.favorite });
@@ -325,9 +333,15 @@ export default function QuotesPage() {
         </EmptyState>
       )}
 
-      {quotes.data !== null && quotes.data.length > 0 && (
+      {shown !== null && quotes.data!.length > 0 && shown.length === 0 && (
+        <p className="muted" data-testid="quotes-no-match">
+          No quotes match “{pageQuery}”.
+        </p>
+      )}
+
+      {shown !== null && shown.length > 0 && (
         <ul className="quote-list" data-testid="quotes-list">
-          {quotes.data.map((q) => {
+          {shown.map((q) => {
             const label = labels[q.file_id];
             return (
               <li key={q.id} className="quote-card">

@@ -203,3 +203,56 @@ func TestBackupRunConflictsWhenRunning(t *testing.T) {
 		t.Fatalf("second run status = %d, want 200 or 409", second.Code)
 	}
 }
+
+func TestBackupConfig_ChangesWhereBackupsGo(t *testing.T) {
+	_, client, pool := newBackupTestServer(t)
+
+	rec := client.roundTrip(t, http.MethodGet, "/api/v1/backups/config", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get config status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	// A folder that doesn't exist yet is created.
+	target := filepath.Join(t.TempDir(), "elsewhere", "orchard-backups")
+	rec = client.do(t, http.MethodPut, "/api/v1/backups/config", map[string]string{"dir": target})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set config status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var cfg backupConfigResponse
+	jsonUnmarshalRec(t, rec, &cfg)
+	if cfg.Dir != target || cfg.DirSource != backups.DirFromSetting {
+		t.Errorf("config = %+v, want dir %q from setting", cfg, target)
+	}
+	if info, err := os.Stat(target); err != nil || !info.IsDir() {
+		t.Fatalf("backup directory not created: %v", err)
+	}
+
+	// Saved, so the next start picks it up.
+	var saved string
+	if err := pool.QueryRow(`SELECT value FROM server_settings WHERE key = ?`, backups.DirSettingKey).Scan(&saved); err != nil || saved != target {
+		t.Errorf("saved dir = %q (%v), want %q", saved, err, target)
+	}
+
+	// And the next backup is written there.
+	rec = client.roundTrip(t, http.MethodPost, "/api/v1/backups", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("run backup status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := decodeBackupResponse(t, rec).Destination; filepath.Dir(got) != target {
+		t.Errorf("backup written to %q, want inside %q", got, target)
+	}
+}
+
+func TestBackupConfig_RejectsARelativeOrUnwritableDir(t *testing.T) {
+	_, client, _ := newBackupTestServer(t)
+	rec := client.do(t, http.MethodPut, "/api/v1/backups/config", map[string]string{"dir": "relative/path"})
+	assertErrorEnvelope(t, rec, http.StatusBadRequest, CodeBadRequest)
+
+	// A path under a regular file can never be a directory.
+	file := filepath.Join(t.TempDir(), "a-file")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rec = client.do(t, http.MethodPut, "/api/v1/backups/config", map[string]string{"dir": filepath.Join(file, "sub")})
+	assertErrorEnvelope(t, rec, http.StatusBadRequest, CodeBadRequest)
+}

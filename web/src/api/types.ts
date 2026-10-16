@@ -180,6 +180,9 @@ export interface FileSummary {
   /** Set only for a document file with an extracted or uploaded cover —
    * absent otherwise, including for non-document media types. */
   cover_url?: string;
+  /** How far the signed-in user has read this book, 0-100. Set by file
+   * listings only, and absent for a book they have not started. */
+  progress_percent?: number;
 }
 
 export interface FileEnvelope {
@@ -297,7 +300,8 @@ export interface ReadingProgressResponse {
   progress: ReadingProgress | null;
 }
 
-export type ReaderTheme = 'light' | 'dark' | 'sepia';
+/** `auto` follows the app's own light/dark appearance. */
+export type ReaderTheme = 'auto' | 'light' | 'dark' | 'sepia';
 
 /** A user's reading preferences, applied across every book (no per-book
  * override yet). */
@@ -307,14 +311,24 @@ export interface ReaderPreferences {
   margin: number;
   reading_width: number;
   theme: ReaderTheme;
+  /** Which way the book advances: `horizontal` turns pages side to side,
+   * `vertical` scrolls them top to bottom. */
+  reading_direction: ReadingDirection;
+  /** Pages shown next to each other: one, or a two-page spread. */
+  pages_per_view: PagesPerView;
 }
+
+export type ReadingDirection = 'horizontal' | 'vertical';
+export type PagesPerView = 1 | 2;
 
 export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
   font_size: 18,
   line_spacing: 1.5,
   margin: 24,
   reading_width: 720,
-  theme: 'light',
+  theme: 'auto',
+  reading_direction: 'horizontal',
+  pages_per_view: 1,
 };
 
 export interface ReaderPreferencesResponse {
@@ -546,6 +560,17 @@ export interface PublicShareInfoResponse {
  * ------------------------------------------------------------------ */
 
 export type BackupStatus = 'running' | 'ok' | 'failed' | string;
+
+/** Where backups are written, and how they're kept. */
+export interface BackupConfig {
+  dir: string;
+  /** `setting` (chosen in the app), `env` (ORCHARD_BACKUP_DIR), or
+   * `default` (inside Orchard's data directory). */
+  dir_source: 'setting' | 'env' | 'default' | '';
+  keep: number;
+  interval_minutes: number;
+  encrypted: boolean;
+}
 
 export interface BackupRecord {
   id: string;

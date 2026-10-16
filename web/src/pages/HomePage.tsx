@@ -45,7 +45,9 @@ import { LibraryGatePage } from '../components/LibraryGatePage';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { gridMetrics } from '../components/media/layout';
 import { EmptyState, ErrorState, LibraryOfflineNotice } from '../components/States';
+import { downloadUrl } from '../components/media';
 import { Icon } from '../components/ui/Icon';
+import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { useUploads } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
 import { extractExcerpt } from '../lib/markdown';
@@ -78,9 +80,9 @@ const SECTION_LABEL: Record<HomeSectionId, string> = {
   'recent-notes': 'Recent notes',
 };
 
-const DEFAULT_LAYOUT: HomeLayoutSection[] = (
-  Object.keys(SECTION_LABEL) as HomeSectionId[]
-).map((id) => ({ id, visible: true }));
+const DEFAULT_LAYOUT: HomeLayoutSection[] = (Object.keys(SECTION_LABEL) as HomeSectionId[]).map(
+  (id) => ({ id, visible: true }),
+);
 
 /**
  * Track an element's width so the grid can know how many columns it has. A
@@ -151,35 +153,42 @@ function Home({ library }: { library: Library }) {
 
   const home = useLibraryResource<HomeData>(
     useCallback(async (id: string) => {
-      const [recent, recentlyOpened, inProgress, favorites, collections, recentQuotes, recentNotes] =
-        await Promise.all([
-          listFiles(id, {
-            recursive: true,
-            sort: 'mod_time',
-            order: 'desc',
-            limit: RECENT_LIMIT,
-          })
-            .then((r) => r.files ?? [])
-            .catch(() => [] as FileSummary[]),
-          listRecentlyOpened(id, RECENT_LIMIT)
-            .then((r) => r.files ?? [])
-            .catch(() => [] as FileSummary[]),
-          listInProgress(id)
-            .then((r) => r.files ?? [])
-            .catch(() => [] as InProgressFile[]),
-          listFavorites(id)
-            .then((r) => r.files ?? [])
-            .catch(() => [] as FileSummary[]),
-          listCollections(id)
-            .then((r) => r.collections ?? [])
-            .catch(() => [] as Collection[]),
-          listLibraryQuotes(id, { limit: WRITING_LIMIT })
-            .then((r) => r.quotes ?? [])
-            .catch(() => [] as Quote[]),
-          listNotes(id, { limit: WRITING_LIMIT })
-            .then((r) => r.notes ?? [])
-            .catch(() => [] as Note[]),
-        ]);
+      const [
+        recent,
+        recentlyOpened,
+        inProgress,
+        favorites,
+        collections,
+        recentQuotes,
+        recentNotes,
+      ] = await Promise.all([
+        listFiles(id, {
+          recursive: true,
+          sort: 'mod_time',
+          order: 'desc',
+          limit: RECENT_LIMIT,
+        })
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+        listRecentlyOpened(id, RECENT_LIMIT)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+        listInProgress(id)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as InProgressFile[]),
+        listFavorites(id)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+        listCollections(id)
+          .then((r) => r.collections ?? [])
+          .catch(() => [] as Collection[]),
+        listLibraryQuotes(id, { limit: WRITING_LIMIT })
+          .then((r) => r.quotes ?? [])
+          .catch(() => [] as Quote[]),
+        listNotes(id, { limit: WRITING_LIMIT })
+          .then((r) => r.notes ?? [])
+          .catch(() => [] as Note[]),
+      ]);
       return {
         recent,
         recentlyOpened,
@@ -193,11 +202,37 @@ function Home({ library }: { library: Library }) {
   );
 
   const layout = useLibraryResource<HomeLayoutSection[]>(
-    useCallback(async () => (await getHomeLayout()).sections ?? DEFAULT_LAYOUT, []),
+    useCallback(async (id: string) => (await getHomeLayout(id)).sections ?? DEFAULT_LAYOUT, []),
   );
   const [customizing, setCustomizing] = useState(false);
 
   const ops = useFileOperations(libraryId, home.reload);
+  // Right-click on any tile: the same short menu in every section.
+  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
+  const { openViewer, openProperties } = ops;
+  const openMenu = useCallback(
+    (file: FileSummary, x: number, y: number) =>
+      setMenu({
+        anchor: { x, y },
+        items: [
+          { id: 'open', label: 'Open', icon: 'file', onSelect: () => openViewer(file) },
+          {
+            id: 'download',
+            label: 'Download',
+            icon: 'download',
+            href: downloadUrl(libraryId, file),
+          },
+          {
+            id: 'properties',
+            label: 'Properties',
+            icon: 'settings',
+            onSelect: () => openProperties(file),
+            testId: 'menu-properties',
+          },
+        ],
+      }),
+    [libraryId, openViewer, openProperties],
+  );
   const data = home.data;
 
   // A freshly added library is empty until its first scan has run. The shell
@@ -274,6 +309,7 @@ function Home({ library }: { library: Library }) {
                 files={inProgressFiles}
                 progress={inProgressMap}
                 onOpen={ops.openViewer}
+                onContextMenu={openMenu}
                 label="Books in progress"
                 testId="home-in-progress-grid"
               />
@@ -293,6 +329,7 @@ function Home({ library }: { library: Library }) {
                 libraryId={libraryId}
                 files={recentlyOpened}
                 onOpen={ops.openViewer}
+                onContextMenu={openMenu}
                 label="Recently opened files"
                 testId="home-recently-opened-grid"
               />
@@ -316,6 +353,7 @@ function Home({ library }: { library: Library }) {
                 libraryId={libraryId}
                 files={recent}
                 onOpen={ops.openViewer}
+                onContextMenu={openMenu}
                 label="Recently added files"
                 testId="home-recent-grid"
               />
@@ -339,6 +377,7 @@ function Home({ library }: { library: Library }) {
                 libraryId={libraryId}
                 files={favoriteFiles}
                 onOpen={ops.openViewer}
+                onContextMenu={openMenu}
                 label="Favorite files"
                 testId="home-favorites-grid"
               />
@@ -500,6 +539,14 @@ function Home({ library }: { library: Library }) {
           onClose={ops.closeViewer}
         />
       )}
+      {menu && (
+        <Menu
+          anchor={menu.anchor}
+          items={menu.items}
+          onClose={() => setMenu(null)}
+          label="File actions"
+        />
+      )}
       {ops.dialogs}
 
       {customizing && (
@@ -507,7 +554,7 @@ function Home({ library }: { library: Library }) {
           sections={sectionOrder}
           onCancel={() => setCustomizing(false)}
           onSave={async (next) => {
-            await setHomeLayout(next);
+            await setHomeLayout(next, libraryId);
             layout.reload();
             setCustomizing(false);
           }}
@@ -571,15 +618,16 @@ function CustomizeHomeDialog({
       const next = prev.slice();
       const target = index + dir;
       if (target < 0 || target >= next.length) return prev;
-      [next[index], next[target]] = [next[target] as HomeLayoutSection, next[index] as HomeLayoutSection];
+      [next[index], next[target]] = [
+        next[target] as HomeLayoutSection,
+        next[index] as HomeLayoutSection,
+      ];
       return next;
     });
   };
 
   const toggle = (index: number) => {
-    setDraft((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, visible: !s.visible } : s)),
-    );
+    setDraft((prev) => prev.map((s, i) => (i === index ? { ...s, visible: !s.visible } : s)));
   };
 
   return (

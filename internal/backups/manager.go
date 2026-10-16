@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,10 +25,27 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/sanitize"
 )
 
+// DirSettingKey is the server setting holding the backup directory an
+// administrator chose in the app; it takes precedence over the environment.
+const DirSettingKey = "backups.dir"
+
+// Where Config.Dir came from.
+const (
+	DirFromSetting = "setting"
+	DirFromEnv     = "env"
+	DirFromDefault = "default"
+)
+
 // Config drives the backup subsystem.
 type Config struct {
-	// Dir is the destination directory for backups. Empty disables backups.
+	// Dir is the destination directory for backups. Empty disables backups
+	// until one is set with SetDir.
 	Dir string
+
+	// DirSource says where Dir came from, for display: "setting" (chosen in
+	// the app), "env" (ORCHARD_BACKUP_DIR), or "default" (inside the data
+	// directory).
+	DirSource string
 
 	// Keep is how many completed backups to retain; older ones are pruned.
 	Keep int
@@ -48,8 +66,12 @@ type Manager struct {
 	logger *slog.Logger
 	libs   *library.Manager
 	store  *Store
-	cfg    Config
 	server string // absolute path of the server-level orchard.db
+
+	// cfg.Dir and cfg.DirSource change at runtime (SetDir); read them, and
+	// cfg as a whole, through dir() and BackupConfig().
+	mu  sync.RWMutex
+	cfg Config
 
 	busy    atomic.Bool
 	skipped atomic.Int64
@@ -87,7 +109,55 @@ func (m *Manager) Get(ctx context.Context, id string) (Record, error) {
 }
 
 // BackupConfig exposes the effective configuration (for the API response).
-func (m *Manager) BackupConfig() Config { return m.cfg }
+func (m *Manager) BackupConfig() Config {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cfg
+}
+
+func (m *Manager) dir() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cfg.Dir
+}
+
+// SetDir changes where backups are written, creating the directory if it
+// does not exist and checking it is writable first. source is recorded as
+// the new DirSource. Backups already written elsewhere are left alone (and
+// are never pruned from the new location's retention count).
+func (m *Manager) SetDir(dir, source string) error {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return errors.New("backup directory is required")
+	}
+	if !filepath.IsAbs(dir) {
+		return errors.New("backup directory must be an absolute path")
+	}
+	dir = filepath.Clean(dir)
+	if err := CheckDir(dir); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.cfg.Dir = dir
+	m.cfg.DirSource = source
+	m.mu.Unlock()
+	return nil
+}
+
+// CheckDir creates dir if needed and confirms backups can be written there.
+func CheckDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("cannot create backup directory: %w", err)
+	}
+	probe, err := os.CreateTemp(dir, ".orchard-write-test-*")
+	if err != nil {
+		return fmt.Errorf("backup directory is not writable: %w", err)
+	}
+	name := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(name)
+	return nil
+}
 
 // Trigger requests a backup run from the scheduler (non-blocking).
 func (m *Manager) Trigger() {
@@ -100,9 +170,9 @@ func (m *Manager) Trigger() {
 
 // Start launches the scheduler goroutine. Call it exactly once.
 func (m *Manager) Start(ctx context.Context) {
-	if m.cfg.Dir == "" {
-		m.logger.Info("backups disabled: no backup directory configured")
-		return
+	if m.dir() == "" {
+		// Scheduled runs skip themselves until a directory is set.
+		m.logger.Info("backups paused: no backup directory configured")
 	}
 	go func() {
 		var tick <-chan time.Time
@@ -112,7 +182,7 @@ func (m *Manager) Start(ctx context.Context) {
 			tick = t.C
 			m.logger.Info("backup scheduler started",
 				"interval", m.cfg.Interval.String(),
-				"dir", m.cfg.Dir, "keep", m.cfg.Keep,
+				"dir", m.dir(), "keep", m.cfg.Keep,
 				"encrypted", m.cfg.Passphrase != "")
 		}
 		for {
@@ -201,8 +271,9 @@ func (m *Manager) Verify(ctx context.Context, id string) (*Record, error) {
 // RunBackup performs one full backup synchronously. Callers should normally
 // use Run; this is exposed for tests.
 func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
-	if m.cfg.Dir == "" {
-		return nil, errors.New("backup directory not configured")
+	dir := m.dir()
+	if dir == "" {
+		return nil, errors.New("backup directory not configured — set one on the Backups page")
 	}
 	now := time.Now().UTC()
 	m.skipped.Store(0)
@@ -218,7 +289,7 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 	}
 	m.logger.Info("backup starting", "backup_id", rec.ID)
 
-	destBase := filepath.Join(m.cfg.Dir, "orchard-backup-"+now.Format("20060102-150405"))
+	destBase := filepath.Join(dir, "orchard-backup-"+now.Format("20060102-150405"))
 	dest := destBase
 	for i := 1; ; i++ {
 		if _, err := os.Stat(dest); os.IsNotExist(err) {
@@ -654,7 +725,7 @@ func (m *Manager) prune(ctx context.Context, current *Record) {
 		if r.ID == current.ID || r.Status != StatusCompleted || r.Destination == "" {
 			continue
 		}
-		if !strings.HasPrefix(r.Destination, m.cfg.Dir+string(filepath.Separator)) {
+		if !strings.HasPrefix(r.Destination, m.dir()+string(filepath.Separator)) {
 			continue
 		}
 		kept++

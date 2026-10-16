@@ -64,9 +64,16 @@ func sanitizeHomeLayout(entries []HomeLayoutEntry) []HomeLayoutEntry {
 	return out
 }
 
-// handleGetHomeLayout — GET /api/v1/settings/home-layout
+// handleGetHomeLayout — GET /api/v1/settings/home-layout[?library=<id>]
+//
+// Like reader preferences: the library's copy wins, the account's stands in.
 func (s *Server) handleGetHomeLayout(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	entries := defaultHomeLayout()
+	if lib := s.memberSettingsLibrary(r, u); lib != nil &&
+		s.getMemberSetting(r.Context(), lib, u.ID, homeLayoutKey, &entries) {
+		writeJSON(w, s.logger, http.StatusOK, map[string]any{"sections": sanitizeHomeLayout(entries)})
+		return
+	}
 	if s.userSettings != nil {
 		if _, err := s.userSettings.GetJSON(r.Context(), u.ID, homeLayoutKey, &entries); err != nil {
 			s.logger.Error("get home layout", "error", err)
@@ -78,7 +85,7 @@ func (s *Server) handleGetHomeLayout(w http.ResponseWriter, r *http.Request, u *
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"sections": sanitizeHomeLayout(entries)})
 }
 
-// handleSetHomeLayout — PUT /api/v1/settings/home-layout
+// handleSetHomeLayout — PUT /api/v1/settings/home-layout[?library=<id>]
 func (s *Server) handleSetHomeLayout(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	var body struct {
 		Sections []HomeLayoutEntry `json:"sections"`
@@ -99,6 +106,14 @@ func (s *Server) handleSetHomeLayout(w http.ResponseWriter, r *http.Request, u *
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Internal server error.")
 		return
+	}
+	if lib := s.memberSettingsLibrary(r, u); lib != nil {
+		if err := s.setMemberSetting(r.Context(), lib, u.ID, homeLayoutKey, clean); err != nil {
+			s.logger.Error("set home layout in library", "library_id", lib.ID, "error", err)
+			writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+				CodeInternal, "Internal server error.")
+			return
+		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"sections": clean})
 }

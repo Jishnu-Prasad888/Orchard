@@ -223,3 +223,31 @@ func TestListInProgress_RespectsLimit(t *testing.T) {
 		t.Fatalf("got %d entries, want 1", len(got))
 	}
 }
+
+func TestPercents_ReturnsOnlyTheUsersStartedBooks(t *testing.T) {
+	store, seed := newTestStore(t)
+	seed("f1", "reading.pdf")
+	seed("f2", "untouched.pdf")
+	seed("f3", "someone-elses.pdf")
+	ctx := context.Background()
+
+	if err := store.Set(ctx, "u1", "f1", "page:12", 42.5); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := store.Set(ctx, "u2", "f3", "page:3", 10); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	got, err := store.Percents(ctx, "u1", []string{"f1", "f2", "f3"})
+	if err != nil {
+		t.Fatalf("Percents: %v", err)
+	}
+	if len(got) != 1 || got["f1"] != 42.5 {
+		t.Errorf("got %v, want only f1 at 42.5", got)
+	}
+
+	empty, err := store.Percents(ctx, "u1", nil)
+	if err != nil || len(empty) != 0 {
+		t.Errorf("Percents(nil) = %v, %v; want empty, nil", empty, err)
+	}
+}

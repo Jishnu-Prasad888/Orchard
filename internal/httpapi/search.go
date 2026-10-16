@@ -101,7 +101,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, u *auth.Us
 		files = append(files, res.File)
 		results = append(results, toFileResponse(res.File))
 	}
-	attachCoverURLs(results, s.coverURLsFor(r.Context(), lib, files))
+	attachFileExtras(results, s.fileExtrasFor(r.Context(), lib, u.ID, files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
 		"files":       results,
 		"next_cursor": page.NextCursor,

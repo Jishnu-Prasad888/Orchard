@@ -131,7 +131,10 @@ func TestReaderPreferences_DefaultsThenRoundTrip(t *testing.T) {
 		t.Errorf("defaults = %+v, want %+v", body.Preferences, defaultReaderPreferences)
 	}
 
-	want := ReaderPreferences{FontSize: 22, LineSpacing: 1.8, Margin: 40, ReadingWidth: 800, Theme: "sepia"}
+	want := ReaderPreferences{
+		FontSize: 22, LineSpacing: 1.8, Margin: 40, ReadingWidth: 800, Theme: "sepia",
+		ReadingDirection: "vertical", PagesPerView: 2,
+	}
 	rec = client.do(t, http.MethodPut, "/api/v1/settings/reader", want)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("set preferences status = %d, body=%s", rec.Code, rec.Body.String())
@@ -149,6 +152,18 @@ func TestReaderPreferences_RejectsInvalidTheme(t *testing.T) {
 	rec := client.do(t, http.MethodPut, "/api/v1/settings/reader",
 		ReaderPreferences{FontSize: 18, LineSpacing: 1.5, Margin: 24, ReadingWidth: 720, Theme: "neon"})
 	assertErrorEnvelope(t, rec, http.StatusBadRequest, CodeBadRequest)
+}
+
+func TestReaderPreferences_DefaultThemeFollowsTheApp(t *testing.T) {
+	if defaultReaderPreferences.Theme != "auto" {
+		t.Errorf("default theme = %q, want auto", defaultReaderPreferences.Theme)
+	}
+	_, client, _, _ := newSearchTestServer(t)
+	rec := client.do(t, http.MethodPut, "/api/v1/settings/reader",
+		ReaderPreferences{FontSize: 18, LineSpacing: 1.5, Margin: 24, ReadingWidth: 720, Theme: "auto"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set auto theme status = %d, body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestReaderPreferences_RejectsOutOfRangeFontSize(t *testing.T) {

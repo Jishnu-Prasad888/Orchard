@@ -38,6 +38,9 @@ interface Props {
   entries: MenuEntry[];
   label: string;
   onClose: () => void;
+  /** Where to mount the menu; the document body by default. A full-screen
+   * element must hold its own menus, or they open out of sight behind it. */
+  container?: Element | null | undefined;
 }
 
 function useSheet(): boolean {
@@ -57,7 +60,7 @@ function useSheet(): boolean {
   return sheet;
 }
 
-export function ContextMenu({ open, position, entries, label, onClose }: Props) {
+export function ContextMenu({ open, position, entries, label, onClose, container }: Props) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null);
@@ -205,6 +208,6 @@ export function ContextMenu({ open, position, entries, label, onClose }: Props) 
     ) : (
       menu
     ),
-    document.body,
+    container ?? document.body,
   );
 }

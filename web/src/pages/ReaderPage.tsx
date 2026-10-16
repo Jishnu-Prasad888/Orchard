@@ -11,6 +11,11 @@
  * page — it only round-trips `location` between the active reader and the
  * progress API — and is saved debounced so turning pages doesn't fire a
  * request per page.
+ *
+ * Selected text can be highlighted or saved as a quote from the bar that
+ * appears over the book, or from a right-click menu. Either takes a snapshot
+ * of the selection first: typing a note moves focus out of the book, which
+ * clears the live selection, and the note must still know what it is about.
  */
 
 import { Maximize, Minimize } from 'lucide-react';
@@ -23,33 +28,57 @@ import {
   createQuote,
   deleteBookmark,
   deleteHighlight,
+  deleteQuote,
   getBookMetadata,
   getFile,
   getReaderPreferences,
   getReadingProgress,
   listFileBookmarks,
   listFileHighlights,
+  listFileQuotes,
   markFileOpened,
   searchFileContent,
   setReaderPreferences as saveReaderPreferences,
   setReadingProgress,
+  updateBookmark,
+  updateQuote,
 } from '../api/queries';
-import type { BookMetadata, Bookmark, ContentHit, FileSummary, Highlight, ReaderPreferences } from '../api/types';
+import type {
+  BookMetadata,
+  Bookmark,
+  ContentHit,
+  FileSummary,
+  Highlight,
+  Quote,
+  ReaderPreferences,
+} from '../api/types';
 import { DEFAULT_READER_PREFERENCES, HIGHLIGHT_COLORS } from '../api/types';
+import { ContextMenu, type MenuEntry, type MenuPosition } from '../components/ContextMenu';
 import { downloadUrl, fileExtension } from '../components/media';
+import { BookmarksPanel, QuotesPanel } from '../components/reader/AnnotationPanels';
 import { EpubReader } from '../components/reader/EpubReader';
 import { PdfReader } from '../components/reader/PdfReader';
 import { ReaderSettingsPanel } from '../components/reader/ReaderSettingsPanel';
 import { TextReader } from '../components/reader/TextReader';
-import type { ReaderHandle, ReaderSelection, SearchMatch, TocEntry } from '../components/reader/types';
+import type {
+  ReaderHandle,
+  ReaderHighlight,
+  ReaderPoint,
+  ReaderSelection,
+  SearchMatch,
+  TocEntry,
+} from '../components/reader/types';
 import { BookPanel } from '../components/viewer/BookPanel';
 import { ErrorState, LoadingState } from '../components/States';
 import { Icon } from '../components/ui/Icon';
+import { useAppTheme } from '../lib/useAppTheme';
 import './ReaderPage.css';
 
 const PROGRESS_SAVE_DEBOUNCE_MS = 2500;
+/** How long a "Quoted!" / "Bookmarked!" confirmation stays up. */
+const FLASH_MS = 1200;
 
-type PanelTab = 'toc' | 'search' | 'book' | 'settings' | 'annotations';
+type PanelTab = 'toc' | 'search' | 'book' | 'settings' | 'annotations' | 'quotes';
 
 function readerKind(fileName: string): 'pdf' | 'epub' | 'text' {
   switch (fileExtension(fileName).toLowerCase()) {
@@ -91,18 +120,51 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
 
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  // The live selection in the book, and the snapshot an action works on.
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const [pending, setPending] = useState<ReaderSelection | null>(null);
   const [selectionAction, setSelectionAction] = useState<'highlight' | 'quote' | null>(null);
+  const [menuAt, setMenuAt] = useState<MenuPosition | null>(null);
+  const [flash, setFlash] = useState<{ id: number; message: string } | null>(null);
   const [highlightColor, setHighlightColor] = useState<string>(HIGHLIGHT_COLORS[0]);
   const [highlightNote, setHighlightNote] = useState('');
   const [quoteCommentary, setQuoteCommentary] = useState('');
   const [savingAnnotation, setSavingAnnotation] = useState(false);
   const [annotationError, setAnnotationError] = useState<string | null>(null);
 
+  // "Match app" resolves to the app's light/dark palette, live; the readers
+  // only ever see a concrete theme.
+  const appTheme = useAppTheme();
+  const readerPreferences = useMemo<ReaderPreferences>(
+    () => (preferences.theme === 'auto' ? { ...preferences, theme: appTheme } : preferences),
+    [preferences, appTheme],
+  );
+
   const readerRef = useRef<ReaderHandle | null>(null);
   const pageRootRef = useRef<HTMLDivElement | null>(null);
+  // The same element as state, for rendering the selection menu inside it.
+  const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestProgress = useRef<{ location: string; percent: number } | null>(null);
+  const selectionRef = useRef<ReaderSelection | null>(null);
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** A small confirmation that disappears on its own almost at once. */
+  const showFlash = useCallback((message: string) => {
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    setFlash({ id: Date.now(), message });
+    flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
 
   // Load the file, its book metadata, saved progress, and reader
   // preferences once. A `?loc=` in the URL (a future bookmark/search deep
@@ -113,13 +175,14 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       getFile(libraryId, fileId),
       getBookMetadata(libraryId, fileId),
       getReadingProgress(libraryId, fileId),
-      getReaderPreferences(),
+      getReaderPreferences(libraryId),
     ])
       .then(([fileResp, bookResp, progressResp, prefsResp]) => {
         if (cancelled) return;
         setFile(fileResp.file);
         setBook(bookResp.book);
-        setPreferences(prefsResp.preferences);
+        // Older saved preferences predate some fields; defaults fill them in.
+        setPreferences({ ...DEFAULT_READER_PREFERENCES, ...prefsResp.preferences });
         const fromUrl = params.get('loc');
         setInitialLocation(fromUrl ?? progressResp.progress?.location ?? '');
         markFileOpened(libraryId, fileId).catch(() => {});
@@ -158,16 +221,19 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
   // Save whatever is pending when leaving the page.
   useEffect(() => () => flushProgress(), [flushProgress]);
 
-  // This file's bookmarks and highlights, independent of the main load —
-  // a slow fetch here shouldn't block opening the book.
+  // This file's bookmarks, highlights, and quotes, independent of the main
+  // load — a slow fetch here shouldn't block opening the book.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listFileBookmarks(libraryId, fileId), listFileHighlights(libraryId, fileId)])
-      .then(([b, h]) => {
-        if (cancelled) return;
-        setBookmarks(b.bookmarks);
-        setHighlights(h.highlights);
-      })
+    // Each list stands alone: one failing to load mustn't hide the others.
+    listFileBookmarks(libraryId, fileId)
+      .then((r) => !cancelled && setBookmarks(r.bookmarks ?? []))
+      .catch(() => {});
+    listFileHighlights(libraryId, fileId)
+      .then((r) => !cancelled && setHighlights(r.highlights ?? []))
+      .catch(() => {});
+    listFileQuotes(libraryId, fileId)
+      .then((r) => !cancelled && setQuotes(r.quotes ?? []))
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -180,11 +246,11 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
     try {
       const { bookmark } = await createBookmark(libraryId, fileId, location);
       setBookmarks((prev) => [bookmark, ...prev]);
-      setPanel('annotations');
+      showFlash('Bookmarked!');
     } catch (e) {
       setAnnotationError(e instanceof Error ? e.message : String(e));
     }
-  }, [libraryId, fileId, initialLocation]);
+  }, [libraryId, fileId, initialLocation, showFlash]);
 
   const removeBookmark = useCallback(
     async (id: string) => {
@@ -210,57 +276,205 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
     [libraryId],
   );
 
-  const cancelSelectionAction = useCallback(() => {
+  const removeQuote = useCallback(
+    async (id: string) => {
+      setQuotes((prev) => prev.filter((q) => q.id !== id));
+      try {
+        await deleteQuote(libraryId, id);
+      } catch (e) {
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [libraryId],
+  );
+
+  const renameBookmark = useCallback(
+    async (id: string, label: string) => {
+      setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, label } : b)));
+      try {
+        const { bookmark } = await updateBookmark(libraryId, id, label);
+        setBookmarks((prev) => prev.map((b) => (b.id === id ? bookmark : b)));
+      } catch (e) {
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [libraryId],
+  );
+
+  const toggleQuoteFavorite = useCallback(
+    async (quote: Quote) => {
+      const favorite = !quote.favorite;
+      setQuotes((prev) => prev.map((q) => (q.id === quote.id ? { ...q, favorite } : q)));
+      try {
+        await updateQuote(libraryId, quote.id, { favorite });
+      } catch (e) {
+        setQuotes((prev) =>
+          prev.map((q) => (q.id === quote.id ? { ...q, favorite: !favorite } : q)),
+        );
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [libraryId],
+  );
+
+  /** Ends whatever selection action is under way, and the selection itself:
+   * once saved, the passage shows as a highlight, not as selected text. */
+  const finishSelection = useCallback(() => {
     setSelectionAction(null);
+    setPending(null);
     setSelection(null);
     setHighlightNote('');
     setQuoteCommentary('');
+    window.getSelection()?.removeAllRanges();
   }, []);
 
-  const saveHighlightFromSelection = useCallback(async () => {
-    if (!selection) return;
-    setSavingAnnotation(true);
-    try {
-      const { highlight } = await createHighlight(
-        libraryId,
-        fileId,
-        selection.location,
-        selection.text,
-        highlightColor,
-        highlightNote,
-      );
-      setHighlights((prev) => [highlight, ...prev]);
-      cancelSelectionAction();
-    } catch (e) {
-      setAnnotationError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSavingAnnotation(false);
-    }
-  }, [libraryId, fileId, selection, highlightColor, highlightNote, cancelSelectionAction]);
+  /** Opens the note/thought form for the current selection. */
+  const beginSelectionAction = useCallback(
+    (action: 'highlight' | 'quote', target: ReaderSelection) => {
+      setPending(target);
+      setSelectionAction(action);
+    },
+    [],
+  );
 
-  const saveQuoteFromSelection = useCallback(async () => {
-    if (!selection) return;
-    setSavingAnnotation(true);
-    try {
-      await createQuote(libraryId, fileId, {
-        text: selection.text,
-        location: selection.location,
-        commentary: quoteCommentary,
-      });
-      cancelSelectionAction();
-    } catch (e) {
-      setAnnotationError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSavingAnnotation(false);
-    }
-  }, [libraryId, fileId, selection, quoteCommentary, cancelSelectionAction]);
+  const saveHighlight = useCallback(
+    async (target: ReaderSelection, color: string, note = '') => {
+      setSavingAnnotation(true);
+      setAnnotationError(null);
+      try {
+        const { highlight } = await createHighlight(
+          libraryId,
+          fileId,
+          target.location,
+          target.text,
+          color,
+          note,
+        );
+        setHighlights((prev) => [highlight, ...prev]);
+        finishSelection();
+        showFlash('Highlighted!');
+      } catch (e) {
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSavingAnnotation(false);
+      }
+    },
+    [libraryId, fileId, finishSelection, showFlash],
+  );
+
+  const saveQuote = useCallback(
+    async (target: ReaderSelection, commentary = '') => {
+      setSavingAnnotation(true);
+      setAnnotationError(null);
+      try {
+        const { quote } = await createQuote(libraryId, fileId, {
+          text: target.text,
+          location: target.location,
+          commentary,
+        });
+        setQuotes((prev) => [quote, ...prev]);
+        finishSelection();
+        showFlash('Quoted!');
+      } catch (e) {
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSavingAnnotation(false);
+      }
+    },
+    [libraryId, fileId, finishSelection, showFlash],
+  );
+
+  /** Right-click over selected text: the page's own menu, on a snapshot of
+   * the selection (opening the menu moves focus out of the book). */
+  const openSelectionMenu = useCallback((point: ReaderPoint) => {
+    const current = selectionRef.current;
+    if (!current) return;
+    setPending(current);
+    setSelectionAction(null);
+    setMenuAt(point);
+  }, []);
+
+  const onSurfaceContextMenu = (event: React.MouseEvent) => {
+    // Only over the book's own text, and only with something selected; the
+    // browser's menu stays everywhere else.
+    if (!selectionRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('.reader-selection-bar, .reader-pdf-pagebar')) return;
+    event.preventDefault();
+    openSelectionMenu({ x: event.clientX, y: event.clientY });
+  };
+
+  const menuEntries: MenuEntry[] = pending
+    ? [
+        { id: 'quote', label: 'Save quote', onSelect: () => void saveQuote(pending) },
+        {
+          id: 'quote-thought',
+          label: 'Save quote with a thought…',
+          onSelect: () => beginSelectionAction('quote', pending),
+        },
+        'separator',
+        {
+          id: 'highlight',
+          label: 'Highlight',
+          onSelect: () => void saveHighlight(pending, highlightColor),
+        },
+        {
+          id: 'highlight-note',
+          label: 'Highlight with a note…',
+          onSelect: () => beginSelectionAction('highlight', pending),
+        },
+        'separator',
+        {
+          id: 'copy',
+          label: 'Copy',
+          onSelect: () => {
+            void navigator.clipboard?.writeText(pending.text).then(
+              () => showFlash('Copied!'),
+              () => undefined,
+            );
+          },
+        },
+      ]
+    : [];
+
+  /** Where a saved location is, in words: a page, the chapter (a heading
+   * in a Markdown book) it falls under, or how far through a text it is.
+   * EPUB positions have no cheap human form, so they go undescribed. */
+  const describeLocation = useCallback(
+    (location: string): string | null => {
+      const page = /^page:(\d+)$/.exec(location);
+      if (page) return `Page ${page[1]}`;
+      const block = /^block-(\d+)$/.exec(location);
+      if (block) {
+        const at = Number(block[1]);
+        let chapter: string | null = null;
+        for (const entry of toc) {
+          const m = /^block-(\d+)$/.exec(entry.location);
+          if (m && Number(m[1]) <= at) chapter = entry.label;
+        }
+        return chapter;
+      }
+      const fraction = Number(location);
+      if (location && Number.isFinite(fraction)) return `${Math.round(fraction * 100)}% through`;
+      return null;
+    },
+    [toc],
+  );
+
+  const jumpTo = useCallback((location: string) => readerRef.current?.goTo(location), []);
+
+  // What the reader paints: the saved highlights, in the shape it takes.
+  const readerHighlights = useMemo<ReaderHighlight[]>(
+    () => highlights.map((h) => ({ id: h.id, location: h.location, text: h.text, color: h.color })),
+    [highlights],
+  );
 
   const onSavePreferences = useCallback(
     (next: ReaderPreferences) => {
       setPreferences(next);
-      saveReaderPreferences(next).catch(() => {});
+      saveReaderPreferences(next, libraryId).catch(() => {});
     },
-    [],
+    [libraryId],
   );
 
   const runSearch = useCallback(
@@ -334,7 +548,14 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
   const author = book?.author;
 
   return (
-    <div className="reader-shell" ref={pageRootRef} data-theme={preferences.theme}>
+    <div
+      className="reader-shell"
+      ref={(el) => {
+        pageRootRef.current = el;
+        setShellEl(el);
+      }}
+      data-theme={readerPreferences.theme}
+    >
       <header className="reader-topbar">
         <button
           type="button"
@@ -384,6 +605,14 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           </button>
           <button
             type="button"
+            className={panel === 'quotes' ? 'icon-button active' : 'icon-button'}
+            onClick={() => togglePanel('quotes')}
+            aria-label="Quotes from this book"
+          >
+            <Icon name="quote" />
+          </button>
+          <button
+            type="button"
             className={panel === 'settings' ? 'icon-button active' : 'icon-button'}
             onClick={() => togglePanel('settings')}
             aria-label="Reading settings"
@@ -402,7 +631,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       </header>
 
       <div className="reader-body">
-        <div className="reader-surface">
+        <div className="reader-surface" onContextMenu={onSurfaceContextMenu}>
           {readerError && <ErrorState message={readerError} title="Couldn't display this page" />}
           {!readerError && kind === 'pdf' && (
             <PdfReader
@@ -412,11 +641,13 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
               fileName={file.name}
               contentUrl={contentUrl}
               initialLocation={initialLocation}
-              preferences={preferences}
+              preferences={readerPreferences}
               onProgress={onProgress}
               onToc={setToc}
               onError={setReaderError}
               onSelectionChange={setSelection}
+              highlights={readerHighlights}
+              onSelectionContextMenu={openSelectionMenu}
             />
           )}
           {!readerError && kind === 'epub' && (
@@ -427,11 +658,13 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
               fileName={file.name}
               contentUrl={contentUrl}
               initialLocation={initialLocation}
-              preferences={preferences}
+              preferences={readerPreferences}
               onProgress={onProgress}
               onToc={setToc}
               onError={setReaderError}
               onSelectionChange={setSelection}
+              highlights={readerHighlights}
+              onSelectionContextMenu={openSelectionMenu}
             />
           )}
           {!readerError && kind === 'text' && (
@@ -442,17 +675,25 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
               fileName={file.name}
               contentUrl={contentUrl}
               initialLocation={initialLocation}
-              preferences={preferences}
+              preferences={readerPreferences}
               onProgress={onProgress}
               onToc={setToc}
               onError={setReaderError}
               onSelectionChange={setSelection}
+              highlights={readerHighlights}
+              onSelectionContextMenu={openSelectionMenu}
             />
           )}
 
-          {selection && (
-            <div className="reader-selection-bar">
-              {!selectionAction && (
+          {(selection || selectionAction) && (
+            <div
+              className="reader-selection-bar"
+              // Pressing a button here mustn't clear the selection it acts on.
+              onMouseDown={(e) => {
+                if (!(e.target as HTMLElement).closest('input')) e.preventDefault();
+              }}
+            >
+              {!selectionAction && selection && (
                 <>
                   <span className="reader-selection-preview">
                     “
@@ -461,36 +702,53 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                       : selection.text}
                     ”
                   </span>
+                  <div className="reader-highlight-colors" role="group" aria-label="Highlight">
+                    {HIGHLIGHT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Highlight ${c}`}
+                        title={`Highlight ${c}`}
+                        className={`reader-color-swatch reader-color-${c}`}
+                        disabled={savingAnnotation}
+                        onClick={() => {
+                          setHighlightColor(c);
+                          void saveHighlight(selection, c);
+                        }}
+                      />
+                    ))}
+                  </div>
                   <button
                     type="button"
                     className="button ghost-button"
-                    onClick={() => setSelectionAction('highlight')}
+                    disabled={savingAnnotation}
+                    onClick={() => void saveQuote(selection)}
                   >
-                    <Icon name="highlighter" /> Highlight
+                    <Icon name="quote" /> Quote
                   </button>
                   <button
                     type="button"
                     className="button ghost-button"
-                    onClick={() => setSelectionAction('quote')}
+                    onClick={() => beginSelectionAction('highlight', selection)}
                   >
-                    <Icon name="quote" /> Save quote
+                    <Icon name="highlighter" /> Note…
                   </button>
                   <button
                     type="button"
                     className="icon-button"
                     aria-label="Dismiss selection"
-                    onClick={() => setSelection(null)}
+                    onClick={finishSelection}
                   >
                     <Icon name="close" />
                   </button>
                 </>
               )}
-              {selectionAction === 'highlight' && (
+              {selectionAction === 'highlight' && pending && (
                 <form
                   className="reader-selection-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void saveHighlightFromSelection();
+                    void saveHighlight(pending, highlightColor, highlightNote);
                   }}
                 >
                   <div className="reader-highlight-colors">
@@ -499,12 +757,8 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                         key={c}
                         type="button"
                         aria-label={`Color ${c}`}
-                        className={
-                          highlightColor === c
-                            ? 'reader-color-swatch active'
-                            : 'reader-color-swatch'
-                        }
-                        style={{ background: c }}
+                        aria-pressed={highlightColor === c}
+                        className={`reader-color-swatch reader-color-${c}${highlightColor === c ? ' active' : ''}`}
                         onClick={() => setHighlightColor(c)}
                       />
                     ))}
@@ -514,25 +768,22 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                     placeholder="Add a note (optional)"
                     value={highlightNote}
                     onChange={(e) => setHighlightNote(e.target.value)}
+                    autoFocus
                   />
                   <button type="submit" className="button" disabled={savingAnnotation}>
                     Save
                   </button>
-                  <button
-                    type="button"
-                    className="button ghost-button"
-                    onClick={cancelSelectionAction}
-                  >
+                  <button type="button" className="button ghost-button" onClick={finishSelection}>
                     Cancel
                   </button>
                 </form>
               )}
-              {selectionAction === 'quote' && (
+              {selectionAction === 'quote' && pending && (
                 <form
                   className="reader-selection-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void saveQuoteFromSelection();
+                    void saveQuote(pending, quoteCommentary);
                   }}
                 >
                   <input
@@ -540,19 +791,27 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                     placeholder="Add a thought (optional)"
                     value={quoteCommentary}
                     onChange={(e) => setQuoteCommentary(e.target.value)}
+                    autoFocus
                   />
                   <button type="submit" className="button" disabled={savingAnnotation}>
                     Save quote
                   </button>
-                  <button
-                    type="button"
-                    className="button ghost-button"
-                    onClick={cancelSelectionAction}
-                  >
+                  <button type="button" className="button ghost-button" onClick={finishSelection}>
                     Cancel
                   </button>
                 </form>
               )}
+              {annotationError && !panel && (
+                <p className="error-text reader-selection-error" role="alert">
+                  {annotationError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {flash && (
+            <div key={flash.id} className="reader-flash" role="status" data-testid="reader-flash">
+              {flash.message}
             </div>
           )}
         </div>
@@ -618,7 +877,9 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
 
                 {contentHits !== null && contentHits.length > 0 && (
                   <>
-                    <h3 className="reader-search-section-heading">Your notes &amp; quotes about this book</h3>
+                    <h3 className="reader-search-section-heading">
+                      Your notes &amp; quotes about this book
+                    </h3>
                     <ul className="reader-search-results" data-testid="reader-content-hits">
                       {contentHits.map((h, i) =>
                         h.location ? (
@@ -632,7 +893,10 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                             </button>
                           </li>
                         ) : (
-                          <li key={`${h.source_type}-${h.source_id}-${i}`} className="reader-search-result-static">
+                          <li
+                            key={`${h.source_type}-${h.source_id}-${i}`}
+                            className="reader-search-result-static"
+                          >
                             {h.excerpt}
                           </li>
                         ),
@@ -644,78 +908,58 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
             )}
 
             {panel === 'annotations' && (
-              <div data-testid="reader-annotations">
-                {annotationError && <p className="error-text">{annotationError}</p>}
-                <section>
-                  <div className="reader-panel-section-header">
-                    <h3>Bookmarks</h3>
-                    <button type="button" className="button ghost-button" onClick={addBookmarkHere}>
-                      <Icon name="plus" /> Add here
-                    </button>
-                  </div>
-                  {bookmarks.length === 0 && <p className="muted">No bookmarks yet.</p>}
-                  <ul className="reader-annotation-list">
-                    {bookmarks.map((b) => (
-                      <li key={b.id} className="reader-annotation-item">
-                        <button
-                          type="button"
-                          className="reader-annotation-jump"
-                          onClick={() => readerRef.current?.goTo(b.location)}
-                        >
-                          {b.label || 'Bookmark'}
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label="Remove bookmark"
-                          onClick={() => void removeBookmark(b.id)}
-                        >
-                          <Icon name="close" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h3>Highlights</h3>
-                  {highlights.length === 0 && (
-                    <p className="muted">No highlights yet. Select text to add one.</p>
-                  )}
-                  <ul className="reader-annotation-list">
-                    {highlights.map((h) => (
-                      <li key={h.id} className="reader-annotation-item">
-                        <button
-                          type="button"
-                          className="reader-annotation-jump"
-                          style={{ borderLeftColor: h.color }}
-                          onClick={() => readerRef.current?.goTo(h.location)}
-                        >
-                          “{h.text}”
-                          {h.note && <span className="muted"> — {h.note}</span>}
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label="Remove highlight"
-                          onClick={() => void removeHighlight(h.id)}
-                        >
-                          <Icon name="close" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              </div>
+              <BookmarksPanel
+                bookmarks={bookmarks}
+                highlights={highlights}
+                describe={describeLocation}
+                onJump={jumpTo}
+                error={annotationError}
+                onAddBookmark={() => void addBookmarkHere()}
+                onRenameBookmark={(id, label) => void renameBookmark(id, label)}
+                onRemoveBookmark={(id) => void removeBookmark(id)}
+                onRemoveHighlight={(id) => void removeHighlight(id)}
+              />
+            )}
+
+            {panel === 'quotes' && (
+              <QuotesPanel
+                quotes={quotes}
+                describe={describeLocation}
+                onJump={jumpTo}
+                error={annotationError}
+                onRemove={(id) => void removeQuote(id)}
+                onToggleFavorite={(q) => void toggleQuoteFavorite(q)}
+                onCopy={(q) => {
+                  void navigator.clipboard?.writeText(q.text).then(
+                    () => showFlash('Copied!'),
+                    () => undefined,
+                  );
+                }}
+              />
             )}
 
             {panel === 'book' && <BookPanel libraryId={libraryId} file={file} />}
 
             {panel === 'settings' && (
-              <ReaderSettingsPanel preferences={preferences} onChange={onSavePreferences} />
+              <ReaderSettingsPanel
+                preferences={preferences}
+                onChange={onSavePreferences}
+                typography={kind !== 'pdf'}
+                layout={kind !== 'text'}
+              />
             )}
           </aside>
         )}
       </div>
+
+      <ContextMenu
+        open={menuAt !== null && pending !== null}
+        position={menuAt}
+        entries={menuEntries}
+        label="Selected text"
+        onClose={() => setMenuAt(null)}
+        container={shellEl}
+      />
     </div>
   );
 }

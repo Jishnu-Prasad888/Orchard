@@ -26,6 +26,7 @@ import type { FileSummary } from '../api/types';
 import { ConfirmDialog, PromptDialog } from './Dialog';
 import { FolderPicker } from './FolderPicker';
 import { isReadableDocument } from './media';
+import { PropertiesDialog } from './PropertiesDialog';
 import type { ViewerAction } from './ViewerModal';
 
 export type FileDialogKind = ViewerAction | 'permanent';
@@ -42,6 +43,8 @@ export interface FileOperations {
   closeViewer: () => void;
   /** Let the viewer (or a page) route a file operation into the dialogs. */
   requestAction: (action: FileDialogKind, file: FileSummary) => void;
+  /** Open the Properties dialog for a file. */
+  openProperties: (file: FileSummary) => void;
   /** Dialog and error state to render. Renders nothing when idle. */
   dialogs: ReactElement;
   /** True while a dialog action is in flight. */
@@ -66,6 +69,7 @@ export function useFileOperations(
   const [pending, setPending] = useState<PendingState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [properties, setProperties] = useState<FileSummary | null>(null);
 
   const closeDialog = useCallback(() => {
     setPending(null);
@@ -216,6 +220,13 @@ export function useFileOperations(
         }}
         testId="copy-dialog"
       />
+
+      <PropertiesDialog
+        libraryId={libraryId}
+        file={properties}
+        onClose={() => setProperties(null)}
+        onChanged={onChanged}
+      />
     </>
   );
 
@@ -224,6 +235,7 @@ export function useFileOperations(
     openViewer: viewerState.openViewer,
     closeViewer,
     requestAction,
+    openProperties: setProperties,
     dialogs,
     busy,
   };

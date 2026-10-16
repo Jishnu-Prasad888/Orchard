@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
@@ -57,6 +58,41 @@ func (s *Store) Get(ctx context.Context, userID, fileID string) (Progress, bool,
 		p.UpdatedAt = t
 	}
 	return p, true, nil
+}
+
+// Percents returns file ID -> percent read (0-100) for those of fileIDs the
+// given user has started, in one batch query — for a listing that draws a
+// progress bar on each book's tile. A file absent from the map is unread.
+func (s *Store) Percents(ctx context.Context, userID string, fileIDs []string) (map[string]float64, error) {
+	out := make(map[string]float64, len(fileIDs))
+	if len(fileIDs) == 0 {
+		return out, nil
+	}
+	placeholders := strings.Repeat("?,", len(fileIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, 0, len(fileIDs)+1)
+	args = append(args, userID)
+	for _, id := range fileIDs {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT file_id, percent FROM reading_progress
+		 WHERE user_id = ? AND percent > 0 AND file_id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list reading progress: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var (
+			id      string
+			percent float64
+		)
+		if err := rows.Scan(&id, &percent); err != nil {
+			return nil, fmt.Errorf("scan reading progress: %w", err)
+		}
+		out[id] = percent
+	}
+	return out, rows.Err()
 }
 
 // Set upserts the given user's reading position for a file.

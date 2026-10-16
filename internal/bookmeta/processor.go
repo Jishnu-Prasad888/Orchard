@@ -32,6 +32,21 @@ func NewProcessor(logger *slog.Logger) *Processor {
 	return &Processor{logger: logger}
 }
 
+// CoverExtractorVersion identifies what the cover extractors can do. Raise
+// it whenever they learn to produce a cover for books they could not
+// before: every coverless book last tried by an older version is then
+// re-processed after the next scan (see Pending), so an upgrade fills in
+// existing libraries rather than only helping files added afterwards.
+//
+//	1: PDF first pages rendered by PDFium; EPUB cover fallbacks.
+const CoverExtractorVersion = 1
+
+// Pending implements the indexer's optional backfill hook: the files that
+// should be (re-)processed even though the scan found them unchanged.
+func (p *Processor) Pending(ctx context.Context, db *sql.DB) (map[string]string, error) {
+	return NewStore(db).ListCoverBackfill(ctx, CoverExtractorVersion)
+}
+
 // Handle implements indexer.MediaProcessor.
 func (p *Processor) Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error {
 	fileID, _ := job.Payload["file_id"].(string)
@@ -45,12 +60,19 @@ func (p *Processor) Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error
 		return nil
 	}
 
+	store := NewStore(db)
+	existing, _, err := store.Get(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	// A cover someone chose is theirs: extraction neither replaces the row
+	// (Upsert skips an edited one) nor may it overwrite the image on disk,
+	// which lives at the same covers/<file id> name an extracted one would.
+	keepCover := existing.UserEdited && existing.CoverPath != ""
+
 	m := Metadata{FileID: fileID, Title: titleFromFilename(relPath), ExtractedAt: time.Now().UTC()}
 
-	var (
-		ex  Extracted
-		err error
-	)
+	var ex Extracted
 	switch strings.ToLower(filepath.Ext(relPath)) {
 	case ".epub":
 		ex, err = ExtractEPUB(filepath.Join(root, relPath))
@@ -63,10 +85,16 @@ func (p *Processor) Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error
 	if err != nil {
 		p.logger.Warn("extract book metadata", "file", relPath, "error", err)
 	} else {
+		if keepCover {
+			ex.Cover = nil
+		}
 		applyExtracted(&m, ex, fileID, orchardDir, p.logger)
 	}
 
-	if err := NewStore(db).Upsert(ctx, m); err != nil {
+	if err := store.Upsert(ctx, m); err != nil {
+		return err
+	}
+	if err := store.RecordCoverAttempt(ctx, fileID, m.CoverPath, CoverExtractorVersion); err != nil {
 		return err
 	}
 	// book_text has no DB row of its own to trigger fts_content off of (the

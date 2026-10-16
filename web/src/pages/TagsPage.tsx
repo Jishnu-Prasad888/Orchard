@@ -28,6 +28,7 @@ import {
   NoLibrariesState,
   PageHeader,
 } from '../components/States';
+import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
 import { ViewerModal } from '../components/ViewerModal';
 import './TagsPage.css';
 
@@ -45,6 +46,10 @@ export default function TagsPage() {
   const tags = useLibraryResource(
     useCallback(async (libraryId: string) => (await listTags(libraryId)).tags ?? [], []),
   );
+
+  // The top-bar search filters the tag grid in place (see pageSearch.ts).
+  const pageQuery = usePageQuery();
+  const shownTags = tags.data?.filter((t) => matchesQuery(pageQuery, t.name)) ?? null;
 
   const files = useLibraryResource(
     useCallback(
@@ -247,9 +252,12 @@ export default function TagsPage() {
               </p>
             </EmptyState>
           )}
-          {tags.data !== null && tags.data.length > 0 && (
+          {shownTags !== null && tags.data!.length > 0 && shownTags.length === 0 && (
+            <p className="muted">No tags match “{pageQuery}”.</p>
+          )}
+          {shownTags !== null && shownTags.length > 0 && (
             <ul className="tag-grid" data-testid="tags-grid" aria-label="Tags">
-              {tags.data.map((tag) => (
+              {shownTags.map((tag) => (
                 <li key={tag.id}>
                   <button type="button" className="tag-card" onClick={() => setActiveTag(tag)}>
                     <span

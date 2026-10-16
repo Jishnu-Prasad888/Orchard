@@ -101,7 +101,7 @@ func (s *Server) handleListFavorites(w http.ResponseWriter, r *http.Request, u *
 		return
 	}
 	out := toFileResponses(files)
-	attachCoverURLs(out, s.coverURLsFor(r.Context(), lib, files))
+	attachFileExtras(out, s.fileExtrasFor(r.Context(), lib, u.ID, files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": out})
 }
 

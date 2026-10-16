@@ -214,7 +214,7 @@ func TestStore_SetCover(t *testing.T) {
 	}
 }
 
-func TestStore_HasCovers(t *testing.T) {
+func TestStore_CoverPaths(t *testing.T) {
 	store, _, seed := newTestStore(t)
 	seed("f1", "has-cover.epub")
 	seed("f2", "no-cover.epub")
@@ -229,29 +229,104 @@ func TestStore_HasCovers(t *testing.T) {
 	}
 	// f3 has no book_metadata row at all.
 
-	got, err := store.HasCovers(ctx, []string{"f1", "f2", "f3"})
+	got, err := store.CoverPaths(ctx, []string{"f1", "f2", "f3"})
 	if err != nil {
-		t.Fatalf("HasCovers: %v", err)
+		t.Fatalf("CoverPaths: %v", err)
 	}
-	if !got["f1"] {
-		t.Errorf("f1: got %v, want true", got["f1"])
+	if got["f1"] != "covers/f1.jpg" {
+		t.Errorf("f1: got %q, want its cover path", got["f1"])
 	}
-	if got["f2"] {
-		t.Errorf("f2: got %v, want false (empty cover_path)", got["f2"])
+	if _, ok := got["f2"]; ok {
+		t.Errorf("f2: present in result, want absent (empty cover_path)")
 	}
-	if got["f3"] {
-		t.Errorf("f3: got %v, want false (no row)", got["f3"])
+	if _, ok := got["f3"]; ok {
+		t.Errorf("f3: present in result, want absent (no row)")
 	}
 }
 
-func TestStore_HasCovers_EmptyInput(t *testing.T) {
+func TestStore_CoverPaths_EmptyInput(t *testing.T) {
 	store, _, _ := newTestStore(t)
-	got, err := store.HasCovers(context.Background(), nil)
+	got, err := store.CoverPaths(context.Background(), nil)
 	if err != nil {
-		t.Fatalf("HasCovers: %v", err)
+		t.Fatalf("CoverPaths: %v", err)
 	}
 	if len(got) != 0 {
 		t.Errorf("got %v, want empty", got)
+	}
+}
+
+func TestStore_ListCoverBackfill(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("covered", "covered.pdf")
+	seed("tried", "tried.pdf")
+	seed("stale", "stale.PDF")
+	seed("never", "never.epub")
+	seed("notes", "notes.md")
+	ctx := context.Background()
+
+	for _, m := range []Metadata{
+		{FileID: "covered", Title: "A", CoverPath: "covers/covered.jpg"},
+		{FileID: "tried", Title: "B"},
+		{FileID: "stale", Title: "C"},
+	} {
+		if err := store.Upsert(ctx, m); err != nil {
+			t.Fatalf("Upsert %s: %v", m.FileID, err)
+		}
+	}
+	// "tried" has already been attempted by the current extractor and came
+	// up empty; "stale" was last attempted by an older one.
+	if err := store.RecordCoverAttempt(ctx, "tried", "", 2); err != nil {
+		t.Fatalf("RecordCoverAttempt: %v", err)
+	}
+	if err := store.RecordCoverAttempt(ctx, "stale", "", 1); err != nil {
+		t.Fatalf("RecordCoverAttempt: %v", err)
+	}
+
+	got, err := store.ListCoverBackfill(ctx, 2)
+	if err != nil {
+		t.Fatalf("ListCoverBackfill: %v", err)
+	}
+	want := map[string]string{"stale": "stale.PDF", "never": "never.epub"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for id, relPath := range want {
+		if got[id] != relPath {
+			t.Errorf("%s: got %q, want %q", id, got[id], relPath)
+		}
+	}
+}
+
+func TestStore_RecordCoverAttempt_FillsOnlyAMissingCover(t *testing.T) {
+	store, _, seed := newTestStore(t)
+	seed("f1", "edited.pdf")
+	seed("f2", "custom.pdf")
+	ctx := context.Background()
+
+	// f1: someone fixed the title, but the book never had a cover.
+	title := "Corrected"
+	if _, err := store.SetUserEdit(ctx, "f1", UserEdit{Title: &title}); err != nil {
+		t.Fatalf("SetUserEdit: %v", err)
+	}
+	// f2: someone chose their own cover.
+	if _, err := store.SetCover(ctx, "f2", "covers/f2.png"); err != nil {
+		t.Fatalf("SetCover: %v", err)
+	}
+
+	if err := store.RecordCoverAttempt(ctx, "f1", "covers/f1.jpg", 1); err != nil {
+		t.Fatalf("RecordCoverAttempt f1: %v", err)
+	}
+	if err := store.RecordCoverAttempt(ctx, "f2", "covers/f2.jpg", 1); err != nil {
+		t.Fatalf("RecordCoverAttempt f2: %v", err)
+	}
+
+	f1, _, _ := store.Get(ctx, "f1")
+	if f1.CoverPath != "covers/f1.jpg" || f1.Title != "Corrected" {
+		t.Errorf("f1 = cover %q title %q, want the new cover and the edited title", f1.CoverPath, f1.Title)
+	}
+	f2, _, _ := store.Get(ctx, "f2")
+	if f2.CoverPath != "covers/f2.png" {
+		t.Errorf("f2 cover = %q, want the chosen cover kept", f2.CoverPath)
 	}
 }
 

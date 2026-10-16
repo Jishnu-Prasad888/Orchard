@@ -1,0 +1,64 @@
+/* The Properties dialog: a file's facts, then a book's details. */
+
+.properties {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.properties-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+/* The name and the folder can be long; they get a row to themselves. */
+.properties-facts > div:first-child,
+.properties-facts > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.properties-facts dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.properties-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.properties-book {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.properties-heading {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-md);
+}
+
+/* The book panel was drawn for the viewer's dark side panel; here it sits
+   on the dialog's own surface, with room for a cover worth looking at. */
+.properties .book-panel-cover {
+  width: 120px;
+  height: 180px;
+  background: var(--color-fill-subtle);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.properties .book-panel-cover-placeholder {
+  color: var(--color-text-muted);
+}
+
+.properties .book-panel-cover-row {
+  gap: var(--space-4);
+}
+
+.properties .book-panel-cover-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}

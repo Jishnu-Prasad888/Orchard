@@ -27,8 +27,9 @@ export interface MediaTileProps {
   /** A selection is in progress: the check is always shown. */
   selecting: boolean;
   favorite: boolean;
-  /** 0-100: a reading-progress bar along the tile's bottom edge. Omit (or 0)
-   * to show none. */
+  /** 0-100: how much of the book has been read, shown as a bar and a
+   * percentage along the bottom of the cover. Defaults to the file's own
+   * `progress_percent`; nothing is shown for an unstarted book. */
   progress?: number | undefined;
   /** Roving tab stop: only one tile in the grid is in the Tab order. */
   tabbable: boolean;
@@ -60,6 +61,9 @@ function MediaTileImpl({
 
   const isVideo = file.media_type === 'video';
   const hasThumb = hasThumbnail(file) && !failed;
+  const percent = Math.min(Math.max(progress ?? file.progress_percent ?? 0, 0), 100);
+  // A book that has been opened never reads as 0%, and only a finished one as 100%.
+  const percentLabel = percent >= 100 ? 100 : Math.min(Math.max(Math.round(percent), 1), 99);
 
   const cancelPress = () => {
     if (press.current) clearTimeout(press.current.timer);
@@ -97,6 +101,7 @@ function MediaTileImpl({
     selected ? 'is-selected' : '',
     selecting ? 'is-selecting' : '',
     hasThumb ? '' : 'is-placeholder',
+    percent > 0 ? 'has-progress' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -171,16 +176,21 @@ function MediaTileImpl({
           <Icon name="star" size={14} filled />
         </span>
       )}
-      {!!progress && progress > 0 && (
-        <span
-          className="media-tile-progress"
-          role="progressbar"
-          aria-label="Reading progress"
-          aria-valuenow={Math.round(progress)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <span className="media-tile-progress-fill" style={{ width: `${Math.min(progress, 100)}%` }} />
+      {percent > 0 && (
+        <span className="media-tile-progress" data-testid="media-tile-progress">
+          <span
+            className="media-tile-progress-track"
+            role="progressbar"
+            aria-label="Reading progress"
+            aria-valuenow={percentLabel}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span className="media-tile-progress-fill" style={{ width: `${percent}%` }} />
+          </span>
+          <span className="media-tile-progress-label" aria-hidden="true">
+            {percentLabel}%
+          </span>
         </span>
       )}
 
