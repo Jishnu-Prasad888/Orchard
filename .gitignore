@@ -32,4 +32,3 @@ vendor/
 __pycache__/
 dev ntoes/
 todos/
-package-lock.json
