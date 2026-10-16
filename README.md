@@ -13,12 +13,12 @@ filesystem as the source of truth.
 restructure of an existing photo/video manager: the photo/video/ML-specific
 functionality has been removed, and what remains is a clean, generic
 application shell — auth, multi-library management, a file browser, tags,
-favorites, notes, trash, sharing, permissions, and backups all work today,
+favorites, trash, sharing, permissions, and backups all work today,
 against real indexed files.
 
 The library-specific features this project is ultimately for — books,
-documents, custom covers, full-text content search, quotes, notes tied to
-passages, bookmarks, and reading progress — are **not implemented yet**. That
+documents, custom covers, full-text content search, quotes, highlights,
+bookmarks, and reading progress — are **not implemented yet**. That
 is deliberate: this pass only had to produce a solid, honest foundation to
 build them on, not a half-built version of them. See [Architecture](#architecture)
 for where they are expected to plug in.
@@ -31,7 +31,7 @@ for where they are expected to plug in.
   sessions, registered libraries, permissions, shares, and backups; and one
   per-library database (`internal/librarydb`), stored inside a `.orchard/`
   directory at the root of that library, holding the index, folders, tags,
-  favorites, and notes for that library's files. A library's own database
+  and favorites for that library's files. A library's own database
   travels with it — unplug the drive, move it elsewhere, reconnect, and
   Orchard recognizes it by its stored identity rather than its current path.
 - **Incremental indexer** (`internal/indexer`): scans a library's root,
@@ -70,7 +70,6 @@ internal/
   logging/             structured logging
   media/               file listing/upload/rename/move/copy/trash repository
   metrics/             dependency-free Prometheus exposition
-  notes/               per-file Markdown notes
   sanitize/            path validation (traversal, reserved names)
   search/              FTS5-backed search over indexed files
   tags/                named labels, attach/detach to files
@@ -183,7 +182,7 @@ Two kinds of SQLite database, both pure-Go (no CGO), WAL mode:
   `schema_migrations`.
 - **Per-library database** (`<library root>/.orchard/library.db`):
   `indexed_files`, `index_jobs`, `folders`, `trash`, `fts_files` (FTS5),
-  `tags`, `file_tags`, `favorites`, `file_notes`. The schema is a single
+  `tags`, `file_tags`, `favorites`. The schema is a single
   idempotent DDL block in `internal/librarydb/librarydb.go` (`CREATE TABLE IF
   NOT EXISTS` throughout), applied whenever a library's database is opened —
   because a library can be opened from a different machine than the one that
@@ -191,8 +190,8 @@ Two kinds of SQLite database, both pure-Go (no CGO), WAL mode:
 
 Nothing here is library-content-specific yet: `indexed_files` already carries
 a `media_type` classification (`photo`/`video`/`audio`/`document`/`other`)
-that a future book/document importer can use directly, and tags/favorites/
-notes already attach to any indexed file, not just a particular type.
+that a future book/document importer can use directly, and tags/favorites
+already attach to any indexed file, not just a particular type.
 
 ## Storage model
 

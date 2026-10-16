@@ -211,11 +211,6 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/restore", s.withAuth(allowAny, s.handleRestoreFile))
 		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/permanent", s.withAuth(allowAny, s.handlePermanentDeleteFile))
 
-		// Per-file Markdown notes (captions).
-		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/note", s.withAuth(allowAny, s.handleGetFileNote))
-		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/note", s.withAuth(allowAny, s.handleSetFileNote))
-		mux.Handle("DELETE /api/v1/libraries/{id}/files/{fileID}/note", s.withAuth(allowAny, s.handleClearFileNote))
-
 		// Book metadata, cover, and reading status (library management).
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/book-metadata",
 			s.withAuth(allowAny, s.handleGetBookMetadata))
@@ -257,7 +252,7 @@ func (s *Server) Handler() http.Handler {
 		// Search.
 		mux.Handle("GET /api/v1/libraries/{id}/search", s.withAuth(allowAny, s.handleSearch))
 		// Content search: extracted book text, metadata, quotes,
-		// highlights, and notes — as opposed to the path-only search above.
+		// and highlights — as opposed to the path-only search above.
 		mux.Handle("GET /api/v1/libraries/{id}/search/content", s.withAuth(allowAny, s.handleSearchContent))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/search/content",
 			s.withAuth(allowAny, s.handleSearchFileContent))
@@ -311,22 +306,6 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/quotes", s.withAuth(allowAny, s.handleCreateQuote))
 		mux.Handle("PATCH /api/v1/libraries/{id}/quotes/{quoteID}", s.withAuth(allowAny, s.handleUpdateQuote))
 		mux.Handle("DELETE /api/v1/libraries/{id}/quotes/{quoteID}", s.withAuth(allowAny, s.handleDeleteQuote))
-
-		// Notes. Long-form per-user Markdown writing: many notes per file,
-		// or a standalone note with no file/quote/highlight link at all.
-		// Distinct from the single-caption GET/PUT/DELETE .../note above.
-		mux.Handle("GET /api/v1/libraries/{id}/notes", s.withAuth(allowAny, s.handleListNotes))
-		mux.Handle("POST /api/v1/libraries/{id}/notes", s.withAuth(allowAny, s.handleCreateNote))
-		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/notes", s.withAuth(allowAny, s.handleListFileNotes))
-		mux.Handle("GET /api/v1/libraries/{id}/notes/{noteID}", s.withAuth(allowAny, s.handleGetNote))
-		mux.Handle("PATCH /api/v1/libraries/{id}/notes/{noteID}", s.withAuth(allowAny, s.handleUpdateNote))
-		mux.Handle("DELETE /api/v1/libraries/{id}/notes/{noteID}", s.withAuth(allowAny, s.handleDeleteNote))
-		mux.Handle("GET /api/v1/libraries/{id}/notes/{noteID}/tags", s.withAuth(allowAny, s.handleListNoteTags))
-		mux.Handle("POST /api/v1/libraries/{id}/notes/{noteID}/tags", s.withAuth(allowAny, s.handleAddNoteTag))
-		mux.Handle("DELETE /api/v1/libraries/{id}/notes/{noteID}/tags/{tagID}", s.withAuth(allowAny, s.handleRemoveNoteTag))
-		mux.Handle("GET /api/v1/libraries/{id}/notes/{noteID}/links", s.withAuth(allowAny, s.handleListNoteLinks))
-		mux.Handle("POST /api/v1/libraries/{id}/notes/{noteID}/links", s.withAuth(allowAny, s.handleAddNoteLink))
-		mux.Handle("DELETE /api/v1/libraries/{id}/notes/{noteID}/links/{linkedNoteID}", s.withAuth(allowAny, s.handleRemoveNoteLink))
 
 		// Backups surface (admin). Backup policy is server-wide: where they
 		// are written, when they run, and restore destinations. All serverside.

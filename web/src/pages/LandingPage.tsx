@@ -27,8 +27,8 @@ const FEATURES: Feature[] = [
   },
   {
     icon: 'tag',
-    title: 'Tags and notes',
-    body: 'Label anything, write a note on any file, and come back to a library organized the way you actually think about it.',
+    title: 'Tags and collections',
+    body: 'Label anything, gather books onto your own shelves, and come back to a library organized the way you actually think about it.',
   },
   {
     icon: 'search',

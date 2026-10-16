@@ -21,10 +21,6 @@ var ErrAlreadyExists = errors.New("tag already exists")
 // ErrFileNotTagged is returned when trying to detach a tag that is not attached.
 var ErrFileNotTagged = errors.New("tag is not attached to file")
 
-// ErrNoteNotTagged is returned when trying to detach a tag that is not
-// attached to the note.
-var ErrNoteNotTagged = errors.New("tag is not attached to note")
-
 // Tag represents a named label.
 type Tag struct {
 	ID        string
@@ -159,49 +155,6 @@ func (s *TagStore) ListByTag(ctx context.Context, tagID string) ([]string, error
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
-}
-
-// AttachToNote associates a tag with a note. No-op if already attached.
-// note_tags mirrors file_tags exactly; these are separate methods rather
-// than a generalized join table (see Attach/Detach above).
-func (s *TagStore) AttachToNote(ctx context.Context, noteID, tagID string) error {
-	now := rfc3339(time.Now().UTC())
-	_, err := s.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO note_tags (note_id, tag_id, created_at) VALUES (?, ?, ?)`,
-		noteID, tagID, now)
-	if err != nil {
-		return fmt.Errorf("attach tag to note: %w", err)
-	}
-	return nil
-}
-
-// DetachFromNote removes a tag association from a note.
-func (s *TagStore) DetachFromNote(ctx context.Context, noteID, tagID string) error {
-	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?`, noteID, tagID)
-	if err != nil {
-		return fmt.Errorf("detach tag from note: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return ErrNoteNotTagged
-	}
-	return nil
-}
-
-// ListByNote returns all tags attached to a given note.
-func (s *TagStore) ListByNote(ctx context.Context, noteID string) ([]*Tag, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT t.id, t.name, t.color, t.created_at
-		 FROM tags t
-		 JOIN note_tags nt ON nt.tag_id = t.id
-		 WHERE nt.note_id = ?
-		 ORDER BY t.name COLLATE NOCASE`, noteID)
-	if err != nil {
-		return nil, fmt.Errorf("list tags by note: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	return s.scanTags(rows)
 }
 
 // --- row scanners ---

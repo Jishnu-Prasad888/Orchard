@@ -1,6 +1,6 @@
 /**
- * Markdown and plain-text reader. Markdown renders through the same
- * renderer the notes editor uses; anything else (plain .txt, or any
+ * Markdown and plain-text reader. Markdown renders through the app's
+ * shared Markdown renderer; anything else (plain .txt, or any
  * document type without a dedicated reader) shows as preformatted text.
  *
  * Navigation is scroll-based: the table of contents is built from the

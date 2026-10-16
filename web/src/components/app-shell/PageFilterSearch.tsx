@@ -1,6 +1,6 @@
 /**
  * The top-bar search on pages that hold a list of their own (quotes,
- * bookmarks, notes, tags, collections): it filters that list as you type
+ * bookmarks, tags, collections): it filters that list as you type
  * rather than sending you to the file search. The query lives in the page's
  * URL (`?q=`), so a filtered view survives a reload and the back button.
  */

@@ -41,8 +41,6 @@ function setup(overrides: { tags?: typeof tags; tagFiles?: typeof tagFiles } = {
       const name = url.split('tag=')[1]?.split('&')[0] ?? '';
       return json(name === 'vacation' ? files : { files: [] });
     },
-    (url) =>
-      url.includes('/files/f1/note') ? json({ note: { file_id: 'f1', body: '' } }) : undefined,
     (url) => (url.includes('/favorites') ? json({ files: [] }) : undefined),
     (url) =>
       url.includes('/files/f1/metadata')

@@ -44,7 +44,12 @@ describe('SearchPage', () => {
                   excerpt: 'fear is the mindkiller',
                   location: 'page:42',
                 },
-                { source_type: 'note', source_id: 'n1', excerpt: 'a standalone note about dunes' },
+                {
+                  source_type: 'highlight',
+                  source_id: 'h1',
+                  file_id: 'f1',
+                  excerpt: 'the spice must flow',
+                },
               ],
             })
           : undefined,
@@ -71,12 +76,13 @@ describe('SearchPage', () => {
 
     const section = await screen.findByTestId('content-search-results');
     expect(within(section).getByText(/mindkiller/)).toBeInTheDocument();
-    expect(within(section).getByText(/standalone note about dunes/)).toBeInTheDocument();
+    expect(within(section).getByText(/spice must flow/)).toBeInTheDocument();
     expect(within(section).getByText('Your quote')).toBeInTheDocument();
-    expect(within(section).getByText('Your note')).toBeInTheDocument();
+    expect(within(section).getByText('Your highlight')).toBeInTheDocument();
 
-    const noteLink = within(section).getByText(/standalone note/).closest('a');
-    expect(noteLink).toHaveAttribute('href', '/notes?open=n1');
+    // A highlight with no saved location falls back to its list page.
+    const highlightLink = within(section).getByText(/spice must flow/).closest('a');
+    expect(highlightLink).toHaveAttribute('href', '/bookmarks');
 
     const quoteLink = within(section).getByText(/mindkiller/).closest('a');
     expect(quoteLink).toHaveAttribute('href', `/read/lib1/f1?loc=${encodeURIComponent('page:42')}`);

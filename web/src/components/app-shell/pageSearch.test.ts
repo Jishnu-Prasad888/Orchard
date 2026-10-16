@@ -10,7 +10,7 @@ describe('pageSearchMode', () => {
   it('filters pages that hold their own lists', () => {
     expect(pageSearchMode('/quotes')).toEqual({ kind: 'filter', noun: 'quotes' });
     expect(pageSearchMode('/bookmarks')).toMatchObject({ kind: 'filter' });
-    expect(pageSearchMode('/notes')).toMatchObject({ kind: 'filter' });
+    expect(pageSearchMode('/tags')).toMatchObject({ kind: 'filter' });
   });
 
   it('searches files everywhere else', () => {

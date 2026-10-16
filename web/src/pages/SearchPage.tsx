@@ -21,20 +21,16 @@ const SOURCE_LABEL: Record<ContentSourceType, string> = {
   metadata: 'Book details',
   quote: 'Your quote',
   highlight: 'Your highlight',
-  note: 'Your note',
 };
 
 /** Where clicking a content hit should go. Quote/highlight hits jump
  * straight into the reader at the saved location when one is known
- * (falling back to their list page, which can locate it too, if not); a
- * note hit deep-links to itself via NotesPage's `?open=` support; book
+ * (falling back to their list page, which can locate it too, if not); book
  * text/metadata open the book itself — extraction doesn't preserve a
  * page/CFI anchor, so this is "open the book", not a pinpoint jump, for
  * those two source types specifically. */
 function linkFor(hit: ContentHit, libraryId: string): string {
   switch (hit.source_type) {
-    case 'note':
-      return `/notes?open=${hit.source_id}`;
     case 'quote':
       return hit.file_id && hit.location
         ? `/read/${libraryId}/${hit.file_id}?loc=${encodeURIComponent(hit.location)}`
@@ -49,8 +45,8 @@ function linkFor(hit: ContentHit, libraryId: string): string {
   }
 }
 
-/** Matches against extracted book text, book metadata, quotes, highlights,
- * and notes — a secondary results section below the file grid, since this
+/** Matches against extracted book text, book metadata, quotes, and
+ * highlights — a secondary results section below the file grid, since this
  * content has no place in a file-oriented MediaGrid. Fails soft: an error
  * here never blocks the primary (file path) search above it. */
 function ContentSearchResults({ libraryId, q }: { libraryId: string; q: string }) {

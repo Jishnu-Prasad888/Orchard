@@ -17,17 +17,16 @@ const (
 	ContentMetadata  ContentSourceType = "metadata"
 	ContentQuote     ContentSourceType = "quote"
 	ContentHighlight ContentSourceType = "highlight"
-	ContentNote      ContentSourceType = "note"
 )
 
 // ContentQuery searches the content of extracted book text, book metadata,
-// quotes, highlights, and notes — everything indexed into fts_content, as
+// quotes, and highlights — everything indexed into fts_content, as
 // opposed to Search/SearchQuery, which only ever matches file paths.
 type ContentQuery struct {
 	// Text is the search expression. See fts.BuildExpression for the
 	// accepted syntax.
 	Text string
-	// UserID scopes per-user content (quotes/highlights/notes) to this
+	// UserID scopes per-user content (quotes/highlights) to this
 	// user; library-wide content (book text/metadata) is always included
 	// regardless. Required.
 	UserID string
@@ -153,7 +152,7 @@ func excerptAround(text, needle string, radius int) string {
 // used by internal/bookmeta for book_metadata/book_text — content that is
 // either written via UPSERT (whose trigger-firing semantics aren't worth
 // depending on) or has no DB row of its own to trigger off (book text,
-// which lives in a file). Quotes/highlights/notes are kept in sync by
+// which lives in a file). Quotes/highlights are kept in sync by
 // triggers instead (see the schema comment on fts_content in
 // internal/librarydb) since neither of those risks applies to them. An
 // empty text removes the row without replacing it.

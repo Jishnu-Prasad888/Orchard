@@ -124,7 +124,27 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := addReadingAndOpensIndexes(db); err != nil {
 		return err
 	}
-	return addFTSContent(db, orchardDir)
+	if err := addFTSContent(db, orchardDir); err != nil {
+		return err
+	}
+	return removeNotesFromSearch(db)
+}
+
+// removeNotesFromSearch takes the retired Notes feature out of content
+// search on a library database that had it: its sync triggers and its
+// indexed rows. Both are derived data. The notes, note_tags, note_links, and
+// file_notes tables themselves are left as they are — they hold people's own
+// writing, which is not deleted just because the app stopped showing it.
+func removeNotesFromSearch(db *sql.DB) error {
+	for _, trigger := range []string{
+		"fts_content_notes_insert", "fts_content_notes_update", "fts_content_notes_delete",
+	} {
+		if _, err := db.Exec(`DROP TRIGGER IF EXISTS ` + trigger); err != nil {
+			return err
+		}
+	}
+	_, err := db.Exec(`DELETE FROM fts_content WHERE source_type = 'note'`)
+	return err
 }
 
 // addIndexedFileMediaType backfills indexed_files.media_type on a library
@@ -192,9 +212,9 @@ func addIndexedFileMediaType(db *sql.DB) error {
 	return nil
 }
 
-// addFavoriteNoteUserScoping migrates favorites and file_notes from
-// library-wide to per-user records. Both tables originally had no user_id at
-// all (file_id was the whole primary key), so a favorite or note was visible
+// addFavoriteNoteUserScoping migrates favorites from library-wide to
+// per-user records. The table originally had no user_id at all (file_id
+// was the whole primary key), so a favorite was visible
 // to every account on the library — Phase 0a of the library roadmap fixes
 // this so reading status, progress, bookmarks, and quotes can all follow the
 // same per-user pattern from the start.
@@ -213,13 +233,6 @@ func addFavoriteNoteUserScoping(db *sql.DB) error {
 			user_id    TEXT NOT NULL,
 			file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
 			created_at TEXT NOT NULL,
-			PRIMARY KEY (user_id, file_id)
-		)`},
-		{"file_notes", `CREATE TABLE file_notes (
-			user_id    TEXT NOT NULL,
-			file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
-			body       TEXT NOT NULL DEFAULT '',
-			updated_at TEXT NOT NULL,
 			PRIMARY KEY (user_id, file_id)
 		)`},
 	}
@@ -241,9 +254,6 @@ func addFavoriteNoteUserScoping(db *sql.DB) error {
 	// file_id lookups (cascade from indexed_files, collection counts) no
 	// longer hit the primary key directly once user_id leads it.
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS favorites_file_idx ON favorites (file_id)`); err != nil {
-		return err
-	}
-	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS file_notes_file_idx ON file_notes (file_id)`); err != nil {
 		return err
 	}
 	return nil
@@ -334,7 +344,6 @@ func addFTSContent(db *sql.DB, orchardDir string) error {
 			FROM book_metadata WHERE trim(title || ' ' || author || ' ' || description) != ''`},
 		{"quote", `SELECT id, file_id, user_id, trim(text || ' ' || commentary) FROM quotes`},
 		{"highlight", `SELECT id, file_id, user_id, trim(text || ' ' || note) FROM highlights`},
-		{"note", `SELECT id, COALESCE(file_id, ''), user_id, trim(COALESCE(title, '') || ' ' || body) FROM notes`},
 	}
 	for _, b := range backfillRows {
 		rows, err := db.Query(b.query)
@@ -558,19 +567,6 @@ CREATE TABLE IF NOT EXISTS favorites (
 	PRIMARY KEY (user_id, file_id)
 );
 
--- file_notes stores per-file, per-user Markdown notes (captions,
--- descriptions, journal entries) written in the web UI. They are app-level
--- data and live in the library database so they travel with a portable
--- library. Each user has at most one note per file; an empty/missing body
--- means no note.
-CREATE TABLE IF NOT EXISTS file_notes (
-	user_id    TEXT NOT NULL,
-	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
-	body       TEXT NOT NULL DEFAULT '',
-	updated_at TEXT NOT NULL,
-	PRIMARY KEY (user_id, file_id)
-);
-
 -- book_metadata holds book-style metadata for document files (title,
 -- author, cover, extracted text), one row per file, populated by
 -- internal/bookmeta's MediaProcessor as documents are indexed. It is
@@ -722,69 +718,16 @@ CREATE INDEX IF NOT EXISTS quotes_user_file_idx ON quotes (user_id, file_id);
 CREATE INDEX IF NOT EXISTS quotes_file_idx ON quotes (file_id);
 CREATE INDEX IF NOT EXISTS quotes_user_favorite_idx ON quotes (user_id, favorite);
 
--- notes are long-form, per-user Markdown writing: many notes per file,
--- or a standalone note with no file at all (file_id/quote_id/highlight_id
--- are all optional and mutually independent — a note can be about a file,
--- about a saved quote, about a highlight, or about nothing in particular).
--- This is the full "Notes" feature; it is separate from file_notes, which
--- remains the lightweight single-caption-per-file editor in the viewer.
--- Deleting the file a note is about deletes the note (same as every other
--- per-file annotation); deleting a linked quote/highlight only clears that
--- link, since the note's own writing should survive it.
-CREATE TABLE IF NOT EXISTS notes (
-	id           TEXT PRIMARY KEY,
-	user_id      TEXT NOT NULL,
-	file_id      TEXT REFERENCES indexed_files(id) ON DELETE CASCADE,
-	quote_id     TEXT REFERENCES quotes(id) ON DELETE SET NULL,
-	highlight_id TEXT REFERENCES highlights(id) ON DELETE SET NULL,
-	title        TEXT NOT NULL DEFAULT '',
-	body         TEXT NOT NULL DEFAULT '',
-	created_at   TEXT NOT NULL,
-	updated_at   TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS notes_user_idx ON notes (user_id);
-CREATE INDEX IF NOT EXISTS notes_user_file_idx ON notes (user_id, file_id);
-CREATE INDEX IF NOT EXISTS notes_quote_idx ON notes (quote_id);
-CREATE INDEX IF NOT EXISTS notes_highlight_idx ON notes (highlight_id);
-
--- note_tags is the many-to-many join between notes and the shared tags
--- vocabulary, mirroring file_tags exactly (tags.go's file-tag methods are
--- hardcoded to file_tags, so notes get their own parallel methods rather
--- than a generalized join table).
-CREATE TABLE IF NOT EXISTS note_tags (
-	note_id    TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-	tag_id     TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-	created_at TEXT NOT NULL,
-	PRIMARY KEY (note_id, tag_id)
-);
-
-CREATE INDEX IF NOT EXISTS note_tags_tag_idx  ON note_tags (tag_id);
-CREATE INDEX IF NOT EXISTS note_tags_note_idx ON note_tags (note_id);
-
--- note_links is a many-to-many, directed edge between two of the same
--- user's notes ("note-to-note linking"). Stored directionally but queried
--- both ways (a link is shown from either end), the way wiki-style
--- backlinks work.
-CREATE TABLE IF NOT EXISTS note_links (
-	note_id        TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-	linked_note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-	created_at     TEXT NOT NULL,
-	PRIMARY KEY (note_id, linked_note_id)
-);
-
-CREATE INDEX IF NOT EXISTS note_links_linked_idx ON note_links (linked_note_id);
-
 -- fts_content is a second FTS5 table (separate from fts_files, which stays
 -- filename-only) indexing the content of annotations and extracted book
 -- text, so search can find a term inside a book or inside what a user
 -- wrote about it, not just in a filename. source_type/source_id identify
 -- the underlying row ('metadata'/'book_text' use file_id as source_id,
--- since neither has an id of its own); file_id scopes a hit to a book
--- (empty for a standalone note); user_id scopes per-user content (quote/
--- highlight/note) so a search never surfaces another user's writing —
+-- since neither has an id of its own); file_id scopes a hit to a book;
+-- user_id scopes per-user content (quote/highlight) so a search never
+-- surfaces another user's writing —
 -- empty for library-wide content (book_text/metadata), visible to anyone
--- with library access. Quotes/highlights/notes are kept in sync by
+-- with library access. Quotes/highlights are kept in sync by
 -- triggers below (safe: they are never written via UPSERT, so there is no
 -- INSERT-vs-UPDATE trigger ambiguity to worry about). book_metadata/
 -- book_text are synced explicitly by internal/bookmeta instead — bookmeta
@@ -829,19 +772,6 @@ CREATE TRIGGER IF NOT EXISTS fts_content_highlights_update AFTER UPDATE ON highl
 END;
 CREATE TRIGGER IF NOT EXISTS fts_content_highlights_delete AFTER DELETE ON highlights BEGIN
 	DELETE FROM fts_content WHERE source_type = 'highlight' AND source_id = old.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS fts_content_notes_insert AFTER INSERT ON notes BEGIN
-	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
-	VALUES ('note', new.id, COALESCE(new.file_id, ''), new.user_id, trim(COALESCE(new.title, '') || ' ' || new.body));
-END;
-CREATE TRIGGER IF NOT EXISTS fts_content_notes_update AFTER UPDATE ON notes BEGIN
-	DELETE FROM fts_content WHERE source_type = 'note' AND source_id = old.id;
-	INSERT INTO fts_content (source_type, source_id, file_id, user_id, text)
-	VALUES ('note', new.id, COALESCE(new.file_id, ''), new.user_id, trim(COALESCE(new.title, '') || ' ' || new.body));
-END;
-CREATE TRIGGER IF NOT EXISTS fts_content_notes_delete AFTER DELETE ON notes BEGIN
-	DELETE FROM fts_content WHERE source_type = 'note' AND source_id = old.id;
 END;
 
 -- fts_content_state is a tiny marker table so the one-time backfill in

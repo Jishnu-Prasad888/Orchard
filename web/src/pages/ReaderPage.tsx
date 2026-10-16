@@ -488,7 +488,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       setSearching(true);
       // The reader's own client-side search (open-book text only) and the
       // server-side content search (this book's extracted text plus your
-      // quotes/highlights/notes about it) run side by side — one has no
+      // quotes/highlights in it) run side by side — one has no
       // bearing on the other's availability.
       searchFileContent(libraryId, fileId, query)
         .then((resp) => setContentHits(resp.hits ?? []))
@@ -878,7 +878,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                 {contentHits !== null && contentHits.length > 0 && (
                   <>
                     <h3 className="reader-search-section-heading">
-                      Your notes &amp; quotes about this book
+                      Your quotes &amp; highlights in this book
                     </h3>
                     <ul className="reader-search-results" data-testid="reader-content-hits">
                       {contentHits.map((h, i) =>

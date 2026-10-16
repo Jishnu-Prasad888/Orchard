@@ -189,8 +189,8 @@ func enrichContentLocations(ctx context.Context, lib *library.Library, userID st
 
 // handleSearchContent — GET /api/v1/libraries/{id}/search/content?q=...
 //
-// Searches extracted book text, book metadata, quotes, highlights, and
-// notes content — everything in fts_content — as opposed to handleSearch,
+// Searches extracted book text, book metadata, quotes, and highlights —
+// everything in fts_content — as opposed to handleSearch,
 // which only ever matches file paths.
 func (s *Server) handleSearchContent(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	lib, err := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
@@ -229,7 +229,7 @@ func (s *Server) handleSearchContent(w http.ResponseWriter, r *http.Request, u *
 // handleSearchFileContent — GET /api/v1/libraries/{id}/files/{fileID}/search/content?q=...
 //
 // The reader-local variant of handleSearchContent: scoped to one book, so
-// it can answer "does this book (or my notes/quotes/highlights about it)
+// it can answer "does this book (or my quotes/highlights in it)
 // contain this term, and where" from the server-extracted text and
 // annotations — complementing the reader's own client-side, open-book-only
 // search (components/reader/*.tsx's ReaderHandle.search).
