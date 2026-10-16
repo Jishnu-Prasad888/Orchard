@@ -1,76 +1,87 @@
-import { useId } from 'react';
+import '@fontsource-variable/literata/opsz.css';
+import '@fontsource-variable/literata/opsz-italic.css';
 import { Link } from 'react-router-dom';
 
 import Brand from '../components/Brand';
-import { Icon, type IconName } from '../components/ui/Icon';
 import './LandingPage.css';
 
 /**
- * Public marketing page at /landing. Explains what Orchard is: a calm,
- * self-hosted personal library — content first, nothing flashy.
+ * Public page at /landing: what Orchard is, and why it exists.
  *
- * Not part of the authenticated app shell: no sidebar, no library context.
- * Every link here goes to a route that already exists (/login, /setup).
+ * The page is built around one image from the subject itself — a page of a
+ * book someone has been reading in Orchard, with a passage highlighted, a
+ * bookmark ribbon, and a note in the margin. Everything else stays quiet:
+ * a short essay on why Orchard was made, three promises it keeps, what it
+ * does, and where your reading data actually lives.
+ *
+ * Outside the app shell (no sidebar, no library context). Links go only to
+ * routes that exist: /setup and /login. Reading type is Literata, loaded
+ * with this page alone (it's a lazy route), so the app never pays for it.
  */
 
-interface Feature {
-  icon: IconName;
+interface Group {
   title: string;
-  body: string;
+  lines: string[];
 }
 
-const FEATURES: Feature[] = [
+const WHAT_IT_DOES: Group[] = [
   {
-    icon: 'folder',
-    title: 'Where your files already are',
-    body: 'Point Orchard at a directory and it indexes what is there in place. Nothing is copied, moved, or rewritten — your filesystem stays the source of truth.',
+    title: 'Read',
+    lines: [
+      'PDF, EPUB, Markdown and plain text, in one reader.',
+      'Turn pages or scroll, one page or two side by side.',
+      'Light, dark or sepia, at the size and spacing you like.',
+    ],
   },
   {
-    icon: 'tag',
-    title: 'Tags and collections',
-    body: 'Label anything, gather books onto your own shelves, and come back to a library organized the way you actually think about it.',
+    title: 'Mark',
+    lines: [
+      'Highlight in five colours, with a note if you want one.',
+      'Save quotes with your own thoughts beside them.',
+      'Bookmark a page and give it a name.',
+    ],
   },
   {
-    icon: 'search',
-    title: 'Find anything',
-    body: 'Fast full-text search across your whole library, without waiting on anyone else’s index.',
+    title: 'Find',
+    lines: [
+      'Search the words inside your books, not just their file names.',
+      'Search what you’ve highlighted and quoted, too.',
+      'Gather books with tags, collections and favourites.',
+    ],
   },
   {
-    icon: 'lock',
-    title: 'Yours alone',
-    body: 'Self-hosted on hardware you control. No subscription, no one else’s server, no one else’s eyes on your library.',
-  },
-  {
-    icon: 'share',
-    title: 'Share deliberately',
-    body: 'Grant access by account, or hand out a password-protected link — only when and to whom you choose.',
-  },
-  {
-    icon: 'restore',
-    title: 'Durable by design',
-    body: 'Backups are built in, so what you keep here stays kept.',
+    title: 'Keep',
+    lines: [
+      'Back up every library, then verify or restore it.',
+      'Share one book by link, or a library by account.',
+      'Add family or friends; each person has their own shelf.',
+    ],
   },
 ];
 
-/**
- * A simple divider between sections. Purely decorative, so it is aria-hidden.
- */
-function SectionDivider() {
-  const reactId = useId().replace(/:/g, '');
-  const gradId = `divider-fade-${reactId}`;
+function MarkedPage() {
   return (
-    <div className="landing-divider" aria-hidden="true">
-      <svg viewBox="0 0 1200 24" preserveAspectRatio="none" className="landing-divider-svg">
-        <defs>
-          <linearGradient id={gradId} x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="var(--color-border)" stopOpacity="0" />
-            <stop offset="50%" stopColor="var(--color-border)" stopOpacity="1" />
-            <stop offset="100%" stopColor="var(--color-border)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <line x1="0" y1="12" x2="1200" y2="12" stroke={`url(#${gradId})`} strokeWidth="1" />
-      </svg>
-    </div>
+    <figure className="landing-page-figure" aria-label="A page of Walden, marked up in Orchard">
+      <div className="landing-sheet">
+        <span className="landing-ribbon" aria-hidden="true" />
+        <p className="landing-sheet-head">
+          <span>Walden</span>
+          <span>Chapter 2</span>
+        </p>
+        <p className="landing-sheet-text">
+          <mark className="landing-highlight">
+            I went to the woods because I wished to live deliberately,
+          </mark>{' '}
+          to front only the essential facts of life, and see if I could not learn what it had to
+          teach, and not, when I came to die, discover that I had not lived. I did not wish to live
+          what was not life, living is so dear.
+        </p>
+        <p className="landing-margin-note">Read this again in spring.</p>
+      </div>
+      <figcaption className="landing-figcaption">
+        Henry David Thoreau, <cite>Walden</cite> (1854), as it looks in Orchard’s reader.
+      </figcaption>
+    </figure>
   );
 }
 
@@ -78,91 +89,133 @@ export default function LandingPage() {
   return (
     <div className="landing" data-testid="landing-page">
       <header className="landing-nav">
-        <div className="landing-nav-inner">
-          <Link to="/landing" className="landing-nav-brand">
-            <Brand>Orchard</Brand>
-          </Link>
-          <nav className="landing-nav-links" aria-label="Page sections">
-            <a href="#meaning">The name</a>
-            <a href="#features">What it does</a>
-            <Link to="/login" className="button">
-              Sign in
-            </Link>
-          </nav>
-        </div>
+        <Link to="/landing" className="landing-nav-brand">
+          <Brand>Orchard</Brand>
+        </Link>
+        <Link to="/login" className="button ghost-button">
+          Sign in
+        </Link>
       </header>
 
       <main>
-        <section className="landing-hero">
+        <section className="landing-hero" aria-labelledby="landing-title">
           <div className="landing-hero-copy">
-            <h1 className="landing-hero-brand">
-              <Brand>Orchard</Brand>
+            <h1 id="landing-title" className="landing-title">
+              A library <span className="landing-title-phrase">just for you.</span>
             </h1>
-            <p className="landing-hero-tagline">
-              A calm, personal library that grows at your own pace.
+            <p className="landing-lede">
+              Orchard gathers the books you already have into one quiet place, on a computer you
+              own. It remembers where you stopped, and keeps everything you mark along the way.
             </p>
-            <p className="landing-hero-sub">
-              Your own files, kept in place, on hardware you own, organized the way you actually
-              want them.
-            </p>
-            <div className="landing-hero-actions">
+            <div className="landing-actions">
               <Link to="/setup" className="button primary-button landing-cta">
-                Get started
+                Set up Orchard
               </Link>
               <Link to="/login" className="button landing-cta">
                 Sign in
               </Link>
             </div>
           </div>
+          <MarkedPage />
         </section>
 
-        <SectionDivider />
+        <section className="landing-why" aria-labelledby="landing-why-title">
+          <h2 id="landing-why-title" className="landing-heading">
+            Why Orchard exists
+          </h2>
+          <div className="landing-essay">
+            <p>
+              Books end up scattered. Some are in a downloads folder, some on an old laptop, some on
+              a drive in a drawer, and the rest inside three different reading apps. Each app keeps
+              its own copy, its own idea of where you stopped, and your highlights inside its own
+              account. Change apps, or lose the account, and the margins of every book you have read
+              go with it.
+            </p>
+            <p>
+              Orchard was made to put all of that back in one place that belongs to you. It reads
+              your files where they already are, and keeps what you mark in them in the library
+              itself, not on someone else’s server. No store, no recommendations, nobody else’s
+              catalogue between you and your books.
+            </p>
+          </div>
 
-        <section id="meaning" className="landing-section landing-meaning">
-          <p className="landing-eyebrow">The name</p>
-          <h2 className="landing-heading">Why &ldquo;Orchard&rdquo;?</h2>
-          <div className="landing-meaning-body">
-            <p>
-              An orchard is planted once and tended for years. Nothing in it is finished on day one
-              — it is added to a little at a time, and what you planted last season is still there,
-              unbothered, when you come back to it.
-            </p>
-            <p>
-              That is the idea here: a library that is yours to grow slowly, without anyone
-              rearranging it behind your back, and without anything you add ever needing to be
-              moved, re-encoded, or handed to someone else&rsquo;s server to be useful.
-            </p>
+          <dl className="landing-promises">
+            <div>
+              <dt>Your files stay where they are.</dt>
+              <dd>
+                Orchard reads your folders as they are. Nothing is copied, renamed or converted, and
+                you can still open every file without it.
+              </dd>
+            </div>
+            <div>
+              <dt>What you mark stays with the book.</dt>
+              <dd>
+                Your place, bookmarks, highlights and quotes are saved inside the library folder, so
+                they move wherever it goes.
+              </dd>
+            </div>
+            <div>
+              <dt>It runs on your own computer.</dt>
+              <dd>
+                No subscription and no account with anyone else. Your reading is nobody’s business
+                but yours.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="landing-does" aria-labelledby="landing-does-title">
+          <h2 id="landing-does-title" className="landing-heading">
+            What it does
+          </h2>
+          <div className="landing-groups">
+            {WHAT_IT_DOES.map((group) => (
+              <div key={group.title} className="landing-group">
+                <h3>{group.title}</h3>
+                <ul>
+                  {group.lines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         </section>
 
-        <SectionDivider />
-
-        <section id="features" className="landing-section">
-          <p className="landing-eyebrow">What it does</p>
-          <h2 className="landing-heading">A foundation, not a feature list</h2>
-          <ul className="landing-feature-grid">
-            {FEATURES.map((feature) => (
-              <li key={feature.title} className="landing-feature-card">
-                <span className="landing-feature-icon">
-                  <Icon name={feature.icon} size={22} />
-                </span>
-                <h3>{feature.title}</h3>
-                <p>{feature.body}</p>
-              </li>
-            ))}
-          </ul>
+        <section className="landing-portable" aria-labelledby="landing-portable-title">
+          <div className="landing-portable-copy">
+            <h2 id="landing-portable-title" className="landing-heading">
+              Take it with you
+            </h2>
+            <p>
+              Everything Orchard knows about your reading lives in one small folder next to your
+              books. Unplug the drive, connect it to another computer running Orchard, and sign in
+              with the same name: your place in every book is still there, and so is every highlight
+              and quote.
+            </p>
+          </div>
+          <pre
+            className="landing-tree"
+            aria-label="A library folder: your books, plus a .orchard folder holding your reading data"
+          >
+            {`Books/
+├── Walden.epub
+├── Meditations.pdf
+├── Field Notes.md
+└── .orchard/
+    └── library.db   `}
+            <span className="landing-tree-note">your place, highlights, quotes</span>
+          </pre>
         </section>
 
-        <SectionDivider />
-
-        <section className="landing-section landing-final-cta">
-          <h2 className="landing-heading">Start your own orchard</h2>
-          <p className="landing-hero-sub">
-            A few minutes of setup, and your library has somewhere to live.
-          </p>
-          <div className="landing-hero-actions">
+        <section className="landing-closing" aria-labelledby="landing-closing-title">
+          <h2 id="landing-closing-title" className="landing-heading">
+            Start your library
+          </h2>
+          <p>Set it up in a few minutes, on a computer you already have.</p>
+          <div className="landing-actions">
             <Link to="/setup" className="button primary-button landing-cta">
-              Get started
+              Set up Orchard
             </Link>
             <Link to="/login" className="button landing-cta">
               Sign in
@@ -172,9 +225,8 @@ export default function LandingPage() {
       </main>
 
       <footer className="landing-footer">
-        <span>
-          <Brand>Orchard</Brand> — self-hosted, and yours.
-        </span>
+        <Brand>Orchard</Brand>
+        <span>A library just for you, kept on your own computer.</span>
       </footer>
     </div>
   );

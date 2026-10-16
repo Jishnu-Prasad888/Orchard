@@ -11,7 +11,6 @@ import FavoritesPage from './pages/FavoritesPage';
 import FilesPage from './pages/FilesPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import HomePage from './pages/HomePage';
-import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SearchPage from './pages/SearchPage';
 import SetupPage from './pages/SetupPage';
@@ -29,6 +28,8 @@ const SharingPage = lazyPage(() => import('./pages/SharingPage'));
 const TagsPage = lazyPage(() => import('./pages/TagsPage'));
 const SettingsPage = lazyPage(() => import('./pages/SettingsPage'));
 const PublicSharePage = lazyPage(() => import('./pages/PublicSharePage'));
+// Public marketing page; its reading serif ships only with it.
+const LandingPage = lazyPage(() => import('./pages/LandingPage'));
 // The reader pulls in pdf.js and epub.js, by far the heaviest dependencies
 // in the app — never part of the main bundle.
 const ReaderPage = lazyPage(() => import('./pages/ReaderPage'));
