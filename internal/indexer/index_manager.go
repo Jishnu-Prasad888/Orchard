@@ -25,6 +25,14 @@ type MediaProcessor interface {
 	Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error
 }
 
+// BackfillingProcessor is an optional extension of MediaProcessor: after a
+// scan, Pending names files (ID -> library-relative path) that should be
+// processed even though the scan found them unchanged — typically because
+// the processor has since learned to derive something it could not before.
+type BackfillingProcessor interface {
+	Pending(ctx context.Context, db *sql.DB) (map[string]string, error)
+}
+
 // IndexStatus is the current state of a library's index.
 type IndexStatus struct {
 	LibraryID string       `json:"library_id"`
@@ -288,20 +296,40 @@ func (m *IndexManager) RunScanJob(ctx context.Context, job *jobs.Job) error {
 	// Enqueue media-processing jobs for new and modified files.
 	q := jobs.NewQueue(ldb.DB(), m.logger)
 	enqueued := 0
+	queued := map[string]bool{}
+	enqueue := func(fileID, relPath string) {
+		if queued[fileID] {
+			return
+		}
+		queued[fileID] = true
+		if _, err := q.Enqueue(ctx, jobs.KindProcessMedia, map[string]any{
+			"library_id":  libraryID,
+			"file_id":     fileID,
+			"rel_path":    relPath,
+			"root":        root,
+			"orchard_dir": orchardDir,
+		}); err != nil {
+			m.logger.Warn("enqueue process_media job", "file_id", fileID, "error", err)
+		} else {
+			enqueued++
+		}
+	}
 	for _, change := range result.Changes {
 		if change.Kind != ChangeNew && change.Kind != ChangeModified {
 			continue
 		}
-		if _, err := q.Enqueue(ctx, jobs.KindProcessMedia, map[string]any{
-			"library_id":  libraryID,
-			"file_id":     change.File.ID,
-			"rel_path":    change.File.RelPath,
-			"root":        root,
-			"orchard_dir": orchardDir,
-		}); err != nil {
-			m.logger.Warn("enqueue process_media job", "file_id", change.File.ID, "error", err)
-		} else {
-			enqueued++
+		enqueue(change.File.ID, change.File.RelPath)
+	}
+	// Unchanged files the processor wants another go at. The worker runs one
+	// job at a time in order, so everything queued here is done before the
+	// next scan asks again — nothing is queued twice.
+	if bp, ok := m.mediaProcessor.(BackfillingProcessor); ok {
+		pending, err := bp.Pending(ctx, ldb.DB())
+		if err != nil {
+			m.logger.Warn("list files pending processing", "library_id", libraryID, "error", err)
+		}
+		for fileID, relPath := range pending {
+			enqueue(fileID, relPath)
 		}
 	}
 	if enqueued > 0 {

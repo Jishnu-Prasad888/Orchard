@@ -118,6 +118,9 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := addBookMetadataUserEdited(db); err != nil {
 		return err
 	}
+	if err := addBookMetadataCoverVersion(db); err != nil {
+		return err
+	}
 	if err := addReadingAndOpensIndexes(db); err != nil {
 		return err
 	}
@@ -259,6 +262,22 @@ func addBookMetadataUserEdited(db *sql.DB) error {
 		return nil
 	}
 	_, err = db.Exec(`ALTER TABLE book_metadata ADD COLUMN user_edited INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// addBookMetadataCoverVersion backfills book_metadata.cover_version on a
+// library database created before that column existed. Existing rows get 0,
+// which is older than any extractor version — exactly what marks their
+// missing covers as worth another attempt.
+func addBookMetadataCoverVersion(db *sql.DB) error {
+	has, err := columnExists(db, "book_metadata", "cover_version")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE book_metadata ADD COLUMN cover_version INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 
@@ -560,6 +579,9 @@ CREATE TABLE IF NOT EXISTS file_notes (
 -- user_edited marks a row a person has hand-edited (title, cover, etc. from
 -- the book details panel): once set, a later re-extraction (the file was
 -- replaced on disk) must never silently overwrite what they typed.
+-- cover_version is the version of the cover extractor that last tried this
+-- file (see bookmeta.CoverExtractorVersion): a file with no cover and an
+-- older version is retried after an upgrade that can now produce one.
 CREATE TABLE IF NOT EXISTS book_metadata (
 	file_id      TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
 	title        TEXT NOT NULL DEFAULT '',
@@ -571,7 +593,8 @@ CREATE TABLE IF NOT EXISTS book_metadata (
 	cover_path   TEXT NOT NULL DEFAULT '',
 	text_path    TEXT NOT NULL DEFAULT '',
 	user_edited  INTEGER NOT NULL DEFAULT 0,
-	extracted_at TEXT NOT NULL
+	extracted_at TEXT NOT NULL,
+	cover_version INTEGER NOT NULL DEFAULT 0
 );
 
 -- reading_status is a user's progress through a book (want to read /
@@ -841,4 +864,26 @@ CREATE TABLE IF NOT EXISTS recent_searches (
 );
 
 CREATE INDEX IF NOT EXISTS recent_searches_user_time_idx ON recent_searches (user_id, searched_at);
+
+-- library_members records who each user_id in this library belongs to, by
+-- username. user_ids are random per Orchard install, so without this a
+-- library opened on a fresh install would hold everyone's reading data
+-- under ids nobody has any more (see members.go).
+CREATE TABLE IF NOT EXISTS library_members (
+	user_id    TEXT PRIMARY KEY,
+	username   TEXT NOT NULL COLLATE NOCASE,
+	updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS library_members_username_idx ON library_members (username COLLATE NOCASE);
+
+-- member_settings holds a member's preferences that travel with the
+-- library (reader preferences, Home layout), as JSON values by key.
+CREATE TABLE IF NOT EXISTS member_settings (
+	user_id    TEXT NOT NULL,
+	key        TEXT NOT NULL,
+	value      TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	PRIMARY KEY (user_id, key)
+);
 `

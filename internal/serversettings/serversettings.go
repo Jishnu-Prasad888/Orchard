@@ -49,3 +49,29 @@ func (s *Store) SetBool(ctx context.Context, key string, value bool) error {
 	}
 	return nil
 }
+
+// GetString returns the stored string for key, or def when no row exists.
+func (s *Store) GetString(ctx context.Context, key, def string) (string, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT value FROM server_settings WHERE key = ?`, key).Scan(&value)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return def, nil
+		}
+		return "", fmt.Errorf("get server setting %s: %w", key, err)
+	}
+	return value, nil
+}
+
+// SetString stores a string for key.
+func (s *Store) SetString(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO server_settings (key, value, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		key, value, time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return fmt.Errorf("set server setting %s: %w", key, err)
+	}
+	return nil
+}

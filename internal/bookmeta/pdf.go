@@ -10,7 +10,10 @@ import (
 
 // ExtractPDF reads the /Info dictionary (title/author) and the full plain
 // text of a PDF file at path. PDF has no standard publisher/ISBN fields, so
-// those are left empty; year comes from CreationDate when present.
+// those are left empty; year comes from CreationDate when present. The
+// cover is a rasterization of the first page (see renderPDFCover) — its
+// failure never fails the whole extraction, since the title/author/text
+// above are already independently useful.
 func ExtractPDF(pdfPath string) (ex Extracted, err error) {
 	// ledongthuc/pdf documents itself as incomplete and can panic on a
 	// malformed file; one bad PDF must not take down the library's whole
@@ -39,6 +42,8 @@ func ExtractPDF(pdfPath string) (ex Extracted, err error) {
 			ex.Text = string(b)
 		}
 	}
+
+	ex.Cover, ex.CoverExt = renderPDFCover(pdfPath)
 
 	return ex, nil
 }

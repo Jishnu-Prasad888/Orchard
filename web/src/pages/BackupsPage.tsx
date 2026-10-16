@@ -19,12 +19,14 @@ import { useResource } from '../api/resources';
 import {
   exportBookMetadataUrl,
   getBackup,
+  getBackupConfig,
   listBackups,
   restoreBackup,
   runBackup,
+  setBackupDir,
   verifyBackup,
 } from '../api/queries';
-import type { BackupRecord } from '../api/types';
+import type { BackupConfig, BackupRecord } from '../api/types';
 import { formatBytes } from '../api/types';
 import { ConfirmDialog, Dialog, PromptDialog } from '../components/Dialog';
 import { EmptyState, ErrorState, LoadingState, PageHeader } from '../components/States';
@@ -52,6 +54,117 @@ function StatusBadge({ record }: { record: BackupRecord }) {
     >
       {STATUS_LABEL[record.status] ?? record.status}
     </span>
+  );
+}
+
+const DIR_SOURCE_NOTE: Record<string, string> = {
+  setting: 'Chosen here.',
+  env: 'Set by the ORCHARD_BACKUP_DIR environment variable. Choosing a folder here overrides it.',
+  default:
+    "Orchard's default, inside its data directory. Pick a folder on another drive to protect against losing this one.",
+};
+
+/** Where backups are written, with a way to change it. */
+function BackupLocation({
+  config,
+  onChanged,
+}: {
+  config: BackupConfig | null;
+  onChanged: (next: BackupConfig) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = () => {
+    setSaving(true);
+    setError(null);
+    setBackupDir(draft.trim())
+      .then((next) => {
+        onChanged(next);
+        setEditing(false);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <section className="backup-location" aria-labelledby="backup-location-heading">
+      <div className="backup-location-text">
+        <h2 id="backup-location-heading">Backup location</h2>
+        {!editing && (
+          <>
+            <p className="backup-location-path" data-testid="backup-dir">
+              {config?.dir || <span className="muted">Not set</span>}
+            </p>
+            {config?.dir_source && (
+              <p className="muted backup-location-note">{DIR_SOURCE_NOTE[config.dir_source]}</p>
+            )}
+          </>
+        )}
+        {editing && (
+          <form
+            className="backup-location-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save();
+            }}
+          >
+            <label className="field">
+              <span>Folder on the server (absolute path)</span>
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="/mnt/backup-drive/orchard"
+                spellCheck={false}
+                autoFocus
+                data-testid="backup-dir-input"
+              />
+            </label>
+            <p className="muted backup-location-note">
+              Created if it doesn't exist. Earlier backups stay where they are.
+            </p>
+            {error && (
+              <p className="error-text" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="backup-location-actions">
+              <button
+                type="submit"
+                className="button primary-button"
+                disabled={saving || !draft.trim()}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+      {!editing && (
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            setDraft(config?.dir ?? '');
+            setError(null);
+            setEditing(true);
+          }}
+          data-testid="change-backup-dir"
+        >
+          {config?.dir ? 'Change' : 'Choose folder'}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -222,6 +335,12 @@ export default function BackupsPage() {
     [],
     isAdmin,
   );
+  const config = useResource(
+    useCallback(() => getBackupConfig(), []),
+    [],
+    isAdmin,
+  );
+  const [savedConfig, setSavedConfig] = useState<BackupConfig | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
@@ -306,6 +425,14 @@ export default function BackupsPage() {
             </button>
           </>
         }
+      />
+
+      <BackupLocation
+        config={savedConfig ?? config.data}
+        onChanged={(next) => {
+          setSavedConfig(next);
+          setNotice(`Backups will now be written to ${next.dir}.`);
+        }}
       />
 
       {/* While the confirm dialog is open it owns the error, so a screen reader

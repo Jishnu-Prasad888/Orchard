@@ -84,6 +84,62 @@ func (s *Server) handleRunBackup(w http.ResponseWriter, r *http.Request, u *auth
 	writeJSON(w, s.logger, http.StatusOK, toBackupResponse(rec))
 }
 
+// backupConfigResponse is where backups go and how they are kept.
+type backupConfigResponse struct {
+	Dir string `json:"dir"`
+	// DirSource is "setting", "env", or "default" (see backups.DirFrom*).
+	DirSource       string `json:"dir_source"`
+	Keep            int    `json:"keep"`
+	IntervalMinutes int    `json:"interval_minutes"`
+	Encrypted       bool   `json:"encrypted"`
+}
+
+func (s *Server) backupConfigResponse() backupConfigResponse {
+	cfg := s.backups.BackupConfig()
+	return backupConfigResponse{
+		Dir:             cfg.Dir,
+		DirSource:       cfg.DirSource,
+		Keep:            cfg.Keep,
+		IntervalMinutes: int(cfg.Interval.Minutes()),
+		Encrypted:       cfg.Passphrase != "",
+	}
+}
+
+// handleGetBackupConfig — GET /api/v1/backups/config
+func (s *Server) handleGetBackupConfig(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	writeJSON(w, s.logger, http.StatusOK, s.backupConfigResponse())
+}
+
+// handleSetBackupConfig — PUT /api/v1/backups/config
+//
+// Changes the backup directory. It is created if missing and must be
+// writable; the choice is saved and outlives ORCHARD_BACKUP_DIR.
+func (s *Server) handleSetBackupConfig(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	var body struct {
+		Dir string `json:"dir"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
+		return
+	}
+	if s.settings == nil {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusServiceUnavailable, CodeServiceUnavailable,
+			"Settings are not available.")
+		return
+	}
+	if err := s.backups.SetDir(body.Dir, backups.DirFromSetting); err != nil {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest, err.Error())
+		return
+	}
+	if err := s.settings.SetString(r.Context(), backups.DirSettingKey, s.backups.BackupConfig().Dir); err != nil {
+		s.logger.Error("save backup directory", "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+			CodeInternal, "Internal server error.")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, s.backupConfigResponse())
+}
+
 // handleListBackups — GET /api/v1/backups
 func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, u *auth.User) {
 	recs, err := s.backups.List(r.Context(), 50)

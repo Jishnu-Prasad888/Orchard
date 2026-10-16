@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"sync"
 	"sync/atomic"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
@@ -36,6 +37,9 @@ type Server struct {
 	metrics        *metrics.Registry
 	settings       *serversettings.Store
 	userSettings   *usersettings.Store
+	// reconnected remembers which (library, user) pairs this process has
+	// already reconciled with the library's member records (members.go).
+	reconnected sync.Map
 	// ready gates the /ready endpoint: true once startup completes, flipped
 	// false by MarkNotReady before graceful shutdown so proxies drain.
 	ready atomic.Bool
@@ -329,6 +333,8 @@ func (s *Server) Handler() http.Handler {
 		if s.backups != nil {
 			mux.Handle("POST /api/v1/backups", s.withAuth(allowAdmin, s.handleRunBackup))
 			mux.Handle("GET /api/v1/backups", s.withAuth(allowAdmin, s.handleListBackups))
+			mux.Handle("GET /api/v1/backups/config", s.withAuth(allowAdmin, s.handleGetBackupConfig))
+			mux.Handle("PUT /api/v1/backups/config", s.withAuth(allowAdmin, s.handleSetBackupConfig))
 			mux.Handle("GET /api/v1/backups/{id}", s.withAuth(allowAdmin, s.handleGetBackup))
 			mux.Handle("POST /api/v1/backups/{id}/verify", s.withAuth(allowAdmin, s.handleVerifyBackup))
 			mux.Handle("POST /api/v1/backups/{id}/restore", s.withAuth(allowAdmin, s.handleRestoreBackup))

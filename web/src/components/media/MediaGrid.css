@@ -184,22 +184,59 @@
   bottom: var(--space-2);
 }
 
-/* A thin bar along the tile's bottom edge marking a resume point. */
+/* Reading progress: a bar and a percentage along the bottom of the cover,
+   on their own scrim so they read over any artwork. */
 .media-tile-progress {
   position: absolute;
   z-index: var(--z-raised);
   right: 0;
   bottom: 0;
   left: 0;
-  height: 3px;
-  background: color-mix(in srgb, var(--viewer-background) 55%, transparent);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2) 6px;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0));
   pointer-events: none;
+}
+
+.media-tile-progress-track {
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.32);
+  border-radius: var(--radius-pill);
 }
 
 .media-tile-progress-fill {
   display: block;
   height: 100%;
   background: var(--color-primary);
+  border-radius: inherit;
+}
+
+.media-tile-progress-label {
+  flex-shrink: 0;
+  min-width: 2.2em;
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #fff;
+  text-align: right;
+}
+
+/* The name and the favorite star sit above the progress strip, not under it. */
+.media-tile.has-progress .media-tile-caption {
+  bottom: 20px;
+}
+
+.media-tile.has-progress .media-tile-favorite {
+  bottom: 24px;
+}
+
+.media-tile.has-progress.is-placeholder .media-tile-glyph {
+  padding-bottom: 40px;
 }
 
 /* ----------------------------- selection ------------------------------ */

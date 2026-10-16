@@ -1,16 +1,19 @@
 /**
- * The top bar: settings search in the middle;
+ * The top bar: a page-aware search in the middle (see pageSearch.ts);
  * upload, help, and the account on the right. On phones the bar shrinks to the
  * wordmark and the account, and search moves to its own tab.
  */
 
 import { useRef, type RefObject } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
 import { Icon } from '../ui/Icon';
 import { useUploads } from '../upload/UploadProvider';
 import { AccountMenu } from './AccountMenu';
+import { PageFilterSearch } from './PageFilterSearch';
+import { pageSearchMode } from './pageSearch';
+import { SearchBox } from './SearchBox';
 import { SettingsSearch } from './SettingsSearch';
 
 export function TopBar({
@@ -24,6 +27,8 @@ export function TopBar({
   const { enqueue } = useUploads();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const canUpload = library !== null && library.status !== 'offline';
+  const { pathname } = useLocation();
+  const mode = pageSearchMode(pathname);
 
   return (
     <header className="topbar" data-sticky-top>
@@ -37,7 +42,12 @@ export function TopBar({
       </Link>
 
       <div className="topbar-search">
-        <SettingsSearch inputRef={searchRef} />
+        {mode.kind === 'settings' && <SettingsSearch inputRef={searchRef} />}
+        {mode.kind === 'files' && <SearchBox inputRef={searchRef} />}
+        {mode.kind === 'filter' && (
+          // Keyed by page so each page's box starts from its own URL.
+          <PageFilterSearch key={pathname} noun={mode.noun} inputRef={searchRef} />
+        )}
       </div>
 
       <div className="topbar-actions">

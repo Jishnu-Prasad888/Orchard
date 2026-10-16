@@ -46,3 +46,36 @@ export function storeTheme(theme: ThemePreference): void {
     // A failed write only means the choice is not remembered next visit.
   }
 }
+
+/** The palette actually on screen: an explicit choice, or the OS's for
+ * `system`. */
+export function resolvedAppTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light';
+  const explicit = document.documentElement.dataset.theme;
+  if (explicit === 'light' || explicit === 'dark') return explicit;
+  return typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+}
+
+/** Calls `onChange` whenever the palette on screen may have changed: the
+ * stored preference is applied (the `data-theme` attribute), or the OS
+ * switches while following it. Returns an unsubscribe function. */
+export function subscribeAppTheme(onChange: () => void): () => void {
+  if (typeof document === 'undefined') return () => {};
+  const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(onChange);
+  observer?.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+  const mql =
+    typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-color-scheme: dark)')
+      : null;
+  mql?.addEventListener?.('change', onChange);
+  return () => {
+    observer?.disconnect();
+    mql?.removeEventListener?.('change', onChange);
+  };
+}

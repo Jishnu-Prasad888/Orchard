@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -56,7 +55,7 @@ type bookMetadataResponse struct {
 	ExtractedAt string `json:"extracted_at,omitempty"`
 }
 
-func toBookMetadataResponse(libraryID string, m bookmeta.Metadata) bookMetadataResponse {
+func toBookMetadataResponse(lib *library.Library, m bookmeta.Metadata) bookMetadataResponse {
 	resp := bookMetadataResponse{
 		FileID:      m.FileID,
 		Title:       m.Title,
@@ -68,7 +67,7 @@ func toBookMetadataResponse(libraryID string, m bookmeta.Metadata) bookMetadataR
 		UserEdited:  m.UserEdited,
 	}
 	if m.CoverPath != "" {
-		resp.CoverURL = fmt.Sprintf("/api/v1/libraries/%s/files/%s/cover", libraryID, m.FileID)
+		resp.CoverURL = coverURL(lib.ID, m.FileID, coverVersion(lib, m.CoverPath))
 	}
 	if !m.ExtractedAt.IsZero() {
 		resp.ExtractedAt = m.ExtractedAt.UTC().Format(time.RFC3339)
@@ -100,7 +99,7 @@ func (s *Server) handleGetBookMetadata(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	m.FileID = r.PathValue("fileID")
-	writeJSON(w, s.logger, http.StatusOK, map[string]any{"book": toBookMetadataResponse(lib.ID, m)})
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"book": toBookMetadataResponse(lib, m)})
 }
 
 // bookMetadataUpdateRequest is the accepted PATCH payload: every field is
@@ -150,7 +149,7 @@ func (s *Server) handleUpdateBookMetadata(w http.ResponseWriter, r *http.Request
 			CodeInternal, "Failed to save book metadata.")
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, map[string]any{"book": toBookMetadataResponse(lib.ID, m)})
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"book": toBookMetadataResponse(lib, m)})
 }
 
 // handleGetCover — GET /api/v1/libraries/{id}/files/{fileID}/cover
@@ -193,6 +192,14 @@ func (s *Server) handleGetCover(w http.ResponseWriter, r *http.Request, u *auth.
 		return
 	}
 	w.Header().Set("Content-Type", media.DetectMIME(m.CoverPath))
+	// A versioned URL (see coverURL) names one exact image, so it can be
+	// cached for good; a bare one must be re-checked, or a replaced cover
+	// would keep showing its predecessor.
+	if r.URL.Query().Get("v") != "" {
+		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "private, no-cache")
+	}
 	http.ServeContent(w, r, filepath.Base(m.CoverPath), info.ModTime(), f)
 }
 
@@ -272,5 +279,5 @@ func (s *Server) handleUploadCover(w http.ResponseWriter, r *http.Request, u *au
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError, CodeInternal, "Internal server error.")
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, map[string]any{"book": toBookMetadataResponse(lib.ID, m)})
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"book": toBookMetadataResponse(lib, m)})
 }

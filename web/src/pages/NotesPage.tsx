@@ -39,6 +39,7 @@ import {
   NoLibrariesState,
   PageHeader,
 } from '../components/States';
+import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
 import { Icon } from '../components/ui/Icon';
 import './NotesPage.css';
 
@@ -419,6 +420,13 @@ export default function NotesPage() {
   const fileIds = (notes.data ?? []).map((n) => n.file_id).filter((id): id is string => !!id);
   const labels = useFileLabels(libraryId, fileIds);
 
+  // The top-bar search filters the grid in place (see pageSearch.ts).
+  const pageQuery = usePageQuery();
+  const shownNotes =
+    notes.data?.filter((n) =>
+      matchesQuery(pageQuery, n.title, n.body, n.file_id ? labels[n.file_id]?.title : undefined),
+    ) ?? null;
+
   // A deep link from elsewhere (e.g. a content-search hit) opens a specific
   // note. If it's already in the loaded list this is derived directly
   // (no effect needed); only the fallback — fetching a note the current
@@ -611,9 +619,13 @@ export default function NotesPage() {
         </EmptyState>
       )}
 
-      {notes.data !== null && notes.data.length > 0 && (
+      {shownNotes !== null && notes.data!.length > 0 && shownNotes.length === 0 && (
+        <p className="muted">No notes match “{pageQuery}”.</p>
+      )}
+
+      {shownNotes !== null && shownNotes.length > 0 && (
         <ul className="note-grid" data-testid="notes-list" aria-label="Notes">
-          {notes.data.map((n) => (
+          {shownNotes.map((n) => (
             <li key={n.id}>
               <button
                 type="button"

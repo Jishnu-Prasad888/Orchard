@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net/http"
+	"net/url"
 	"path"
 	"regexp"
 	"strings"
@@ -54,6 +56,13 @@ type epubManifestItem struct {
 	Properties string `xml:"properties,attr"`
 }
 
+// epubGuideRef is an EPUB 2 <guide> entry, pointing at a structural page
+// of the book by role ("cover", "toc", …).
+type epubGuideRef struct {
+	Type string `xml:"type,attr"`
+	Href string `xml:"href,attr"`
+}
+
 type epubItemRef struct {
 	IDRef string `xml:"idref,attr"`
 }
@@ -76,6 +85,9 @@ type epubPackage struct {
 	Spine struct {
 		ItemRefs []epubItemRef `xml:"itemref"`
 	} `xml:"spine"`
+	Guide struct {
+		References []epubGuideRef `xml:"reference"`
+	} `xml:"guide"`
 }
 
 // ExtractEPUB reads title/author/publisher/year/ISBN/description, the cover
@@ -127,15 +139,7 @@ func ExtractEPUB(epubPath string) (Extracted, error) {
 		byID[item.ID] = item
 	}
 
-	if coverID := epubCoverItemID(pkg.Metadata.Meta, byID); coverID != "" {
-		if item, ok := byID[coverID]; ok {
-			coverPath := path.Join(opfDir, item.Href)
-			if data, err := readZipFile(&zr.Reader, coverPath); err == nil {
-				ex.Cover = data
-				ex.CoverExt = extFromMediaType(item.MediaType)
-			}
-		}
-	}
+	ex.Cover, ex.CoverExt = epubCover(&zr.Reader, opfDir, &pkg, byID)
 
 	var text strings.Builder
 	for _, ref := range pkg.Spine.ItemRefs {
@@ -158,19 +162,39 @@ func ExtractEPUB(epubPath string) (Extracted, error) {
 	return ex, nil
 }
 
+// readZipFile reads one archive member by path. EPUBs in the wild get the
+// details wrong often enough — a manifest href that is percent-encoded, or
+// whose case differs from the archive entry — that an exact match is tried
+// first and those two near-misses after it.
 func readZipFile(zr *zip.Reader, name string) ([]byte, error) {
 	name = strings.TrimPrefix(name, "/")
-	for _, f := range zr.File {
-		if f.Name == name {
-			rc, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer func() { _ = rc.Close() }()
-			return io.ReadAll(rc)
-		}
+	candidates := []string{name}
+	if unescaped, err := url.PathUnescape(name); err == nil && unescaped != name {
+		candidates = append(candidates, unescaped)
 	}
-	return nil, fmt.Errorf("not found in archive: %s", name)
+	find := func(match func(entry, want string) bool) *zip.File {
+		for _, want := range candidates {
+			for _, f := range zr.File {
+				if match(f.Name, want) {
+					return f
+				}
+			}
+		}
+		return nil
+	}
+	f := find(func(entry, want string) bool { return entry == want })
+	if f == nil {
+		f = find(strings.EqualFold)
+	}
+	if f == nil {
+		return nil, fmt.Errorf("not found in archive: %s", name)
+	}
+	rc, err := f.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rc.Close() }()
+	return io.ReadAll(rc)
 }
 
 func firstNonEmpty(vals []string) string {
@@ -182,21 +206,142 @@ func firstNonEmpty(vals []string) string {
 	return ""
 }
 
-// epubCoverItemID resolves the manifest item ID for the cover image, trying
-// the EPUB 3 way (manifest item with properties="cover-image") and falling
-// back to the EPUB 2 way (<meta name="cover" content="{id}"/>).
-func epubCoverItemID(metas []epubMeta, byID map[string]epubManifestItem) string {
-	for id, item := range byID {
-		if strings.Contains(item.Properties, "cover-image") {
-			return id
+// epubCover finds the book's cover image. Only some EPUBs declare one the
+// way either spec asks, so this works down from the declared answers to
+// educated guesses, taking the first that yields a readable image:
+//
+//  1. EPUB 3: the manifest item with properties="cover-image".
+//  2. EPUB 2: <meta name="cover" content="…"/>, whose content is meant to
+//     be a manifest item ID but is sometimes the image's href instead.
+//  3. A manifest image whose ID or filename says "cover".
+//  4. The <guide>'s cover page, or failing that the first page of the book:
+//     the first image that page shows.
+//  5. The first image in the manifest.
+func epubCover(zr *zip.Reader, opfDir string, pkg *epubPackage, byID map[string]epubManifestItem) ([]byte, string) {
+	items := pkg.Manifest.Items
+	read := func(item epubManifestItem) ([]byte, string) {
+		if item.Href == "" {
+			return nil, ""
+		}
+		return readEPUBImage(zr, path.Join(opfDir, item.Href), item.MediaType)
+	}
+
+	for _, item := range items {
+		if hasToken(item.Properties, "cover-image") {
+			if data, ext := read(item); data != nil {
+				return data, ext
+			}
 		}
 	}
-	for _, m := range metas {
-		if m.Name == "cover" && m.Content != "" {
-			return m.Content
+
+	for _, m := range pkg.Metadata.Meta {
+		if !strings.EqualFold(m.Name, "cover") || m.Content == "" {
+			continue
+		}
+		if item, ok := byID[m.Content]; ok {
+			if data, ext := read(item); data != nil {
+				return data, ext
+			}
+		}
+		for _, item := range items {
+			if item.Href == m.Content {
+				if data, ext := read(item); data != nil {
+					return data, ext
+				}
+			}
 		}
 	}
-	return ""
+
+	for _, item := range items {
+		if !isImageItem(item) {
+			continue
+		}
+		if strings.Contains(strings.ToLower(item.ID), "cover") ||
+			strings.Contains(strings.ToLower(path.Base(item.Href)), "cover") {
+			if data, ext := read(item); data != nil {
+				return data, ext
+			}
+		}
+	}
+
+	var pages []string
+	for _, ref := range pkg.Guide.References {
+		if strings.EqualFold(ref.Type, "cover") && ref.Href != "" {
+			pages = append(pages, path.Join(opfDir, stripFragment(ref.Href)))
+		}
+	}
+	if len(pkg.Spine.ItemRefs) > 0 {
+		if item, ok := byID[pkg.Spine.ItemRefs[0].IDRef]; ok && item.Href != "" {
+			pages = append(pages, path.Join(opfDir, item.Href))
+		}
+	}
+	for _, page := range pages {
+		doc, err := readZipFile(zr, page)
+		if err != nil {
+			continue
+		}
+		if m := pageImageRe.FindSubmatch(doc); m != nil {
+			src := html.UnescapeString(string(m[1]))
+			if strings.Contains(src, ":") { // a data: or remote URL, not a file in the book
+				continue
+			}
+			if data, ext := readEPUBImage(zr, path.Join(path.Dir(page), stripFragment(src)), ""); data != nil {
+				return data, ext
+			}
+		}
+	}
+
+	for _, item := range items {
+		if isImageItem(item) {
+			if data, ext := read(item); data != nil {
+				return data, ext
+			}
+		}
+	}
+	return nil, ""
+}
+
+// pageImageRe matches the first image an XHTML page shows: an <img src>,
+// or the <image href> / <image xlink:href> of an inline SVG, which is how
+// many cover pages scale their picture to the screen.
+var pageImageRe = regexp.MustCompile(`(?is)<(?:img|image)\b[^>]*?\b(?:src|xlink:href|href)\s*=\s*["']([^"']+)["']`)
+
+// readEPUBImage reads an image out of the archive and names its type, from
+// the declared media type when there is one and the bytes themselves when
+// not. Anything that is not an image Orchard can serve yields nothing.
+func readEPUBImage(zr *zip.Reader, name, mediaType string) ([]byte, string) {
+	data, err := readZipFile(zr, name)
+	if err != nil || len(data) == 0 {
+		return nil, ""
+	}
+	ext := extFromMediaType(mediaType)
+	if ext == "" {
+		ext = extFromMediaType(http.DetectContentType(data))
+	}
+	if ext == "" {
+		return nil, ""
+	}
+	return data, ext
+}
+
+func isImageItem(item epubManifestItem) bool {
+	return extFromMediaType(item.MediaType) != ""
+}
+
+func hasToken(list, token string) bool {
+	for _, t := range strings.Fields(list) {
+		if t == token {
+			return true
+		}
+	}
+	return false
+}
+
+func stripFragment(href string) string {
+	if i := strings.IndexByte(href, '#'); i >= 0 {
+		return href[:i]
+	}
+	return href
 }
 
 func extFromMediaType(mt string) string {

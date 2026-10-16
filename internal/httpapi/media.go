@@ -72,7 +72,7 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request, u *auth
 		return
 	}
 	out := toFileResponses(page.Files)
-	attachCoverURLs(out, s.coverURLsFor(r.Context(), lib, page.Files))
+	attachFileExtras(out, s.fileExtrasFor(r.Context(), lib, u.ID, page.Files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
 		"files":       out,
 		"next_cursor": page.NextCursor,
@@ -512,7 +512,7 @@ func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request, u *auth
 		return
 	}
 	out := toFileResponses(files)
-	attachCoverURLs(out, s.coverURLsFor(r.Context(), lib, files))
+	attachFileExtras(out, s.fileExtrasFor(r.Context(), lib, u.ID, files))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": out})
 }
 
@@ -560,10 +560,13 @@ type fileResponse struct {
 	Status      string `json:"status"`
 	ContentHash string `json:"content_hash,omitempty"`
 	// CoverURL is set only for a document file known to have an extracted
-	// or user-uploaded cover (see coverURLsFor) — a grid-listing handler
+	// or user-uploaded cover (see fileExtrasFor) — a grid-listing handler
 	// opts in by calling it, since most single-file responses have no use
 	// for it.
 	CoverURL string `json:"cover_url,omitempty"`
+	// ProgressPercent is how far the acting user has read this book
+	// (0-100), set the same way; absent when they have not started it.
+	ProgressPercent float64 `json:"progress_percent,omitempty"`
 }
 
 type folderResponse struct {

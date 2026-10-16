@@ -63,9 +63,10 @@ function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
       url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks') ? json({ bookmarks: [] }) : undefined,
     (url) =>
       url.endsWith('/api/v1/libraries/lib1/files/f1/highlights') ? json({ highlights: [] }) : undefined,
+    (url) => (url.endsWith('/api/v1/libraries/lib1/files/f1/quotes') ? json({ quotes: [] }) : undefined),
     (url) =>
       url.includes('/api/v1/libraries/lib1/files/f1/search/content') ? json({ hits: [] }) : undefined,
-    (url) => (url.endsWith('/api/v1/settings/reader') ? json({ preferences: DEFAULT_PREFS }) : undefined),
+    (url) => (url.includes('/api/v1/settings/reader') ? json({ preferences: DEFAULT_PREFS }) : undefined),
     (url, init) =>
       init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/opened')
         ? noContent()
@@ -192,7 +193,7 @@ describe('ReaderPage', () => {
   it('saves a reader preference change', async () => {
     const fetchMock = setup([
       (url, init) =>
-        init?.method === 'PUT' && url.endsWith('/api/v1/settings/reader')
+        init?.method === 'PUT' && url.includes('/api/v1/settings/reader')
           ? json({ preferences: { ...DEFAULT_PREFS, theme: 'dark' } })
           : undefined,
     ]);
@@ -205,6 +206,31 @@ describe('ReaderPage', () => {
     await waitFor(() => {
       expect(called(fetchMock, 'PUT', '/api/v1/settings/reader')).toBe(true);
     });
+  });
+
+  it('follows the app between light and dark when set to match it', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    try {
+      setup([
+        (url) =>
+          url.includes('/api/v1/settings/reader')
+            ? json({ preferences: { ...DEFAULT_PREFS, theme: 'auto' } })
+            : undefined,
+      ]);
+      await screen.findByText('The Great Essay');
+      const shell = document.querySelector('.reader-shell')!;
+      expect(shell).toHaveAttribute('data-theme', 'dark');
+
+      // Switching the app's theme while reading switches the book too.
+      document.documentElement.dataset.theme = 'light';
+      await waitFor(() => expect(shell).toHaveAttribute('data-theme', 'light'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reading settings' }));
+      const panel = await screen.findByTestId('reader-settings');
+      expect(within(panel).getByRole('radio', { name: 'Match app' })).toBeChecked();
+    } finally {
+      delete document.documentElement.dataset.theme;
+    }
   });
 
   it('opens the book details panel for editing metadata', async () => {
@@ -267,7 +293,7 @@ describe('ReaderPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Bookmarks and highlights' }));
     const panel = await screen.findByTestId('reader-annotations');
-    fireEvent.click(within(panel).getByRole('button', { name: /Add here/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: /Bookmark this page/ }));
 
     await waitFor(() => {
       expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/bookmarks')).toBe(true);
@@ -275,39 +301,192 @@ describe('ReaderPage', () => {
     expect(await within(panel).findByRole('button', { name: 'Remove bookmark' })).toBeInTheDocument();
   });
 
-  it('selects text and saves a highlight', async () => {
-    const fetchMock = setup([
-      (url, init) =>
-        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/highlights')
-          ? json({
-              highlight: {
-                id: 'hl1',
-                file_id: 'f1',
-                location: 'block-2',
-                text: 'First section text.',
-                color: 'yellow',
-                note: '',
-                created_at: '2026-10-01T00:00:00Z',
-                updated_at: '2026-10-01T00:00:00Z',
-              },
-            })
-          : undefined,
-    ]);
-    const paragraph = await screen.findByText('First section text.');
+  const savedHighlight = {
+    id: 'hl1',
+    file_id: 'f1',
+    location: 'block-2',
+    text: 'First section text.',
+    color: 'yellow',
+    note: '',
+    created_at: '2026-10-01T00:00:00Z',
+    updated_at: '2026-10-01T00:00:00Z',
+  };
 
+  /** Selects the paragraph the way a reader would, and returns the bar. */
+  async function selectParagraph() {
+    const paragraph = await screen.findByText('First section text.');
     const range = document.createRange();
     range.selectNodeContents(paragraph);
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
     document.dispatchEvent(new Event('selectionchange'));
+    const preview = await screen.findByText('“First section text.”');
+    return { paragraph, bar: preview.closest<HTMLElement>('.reader-selection-bar')! };
+  }
 
-    const bar = await screen.findByText('“First section text.”');
-    fireEvent.click(within(bar.closest('.reader-selection-bar')!).getByRole('button', { name: /Highlight/ }));
+  function postBody(fetchMock: ReturnType<typeof setup>, path: string) {
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).endsWith(path) && init?.method === 'POST',
+    );
+    return call ? JSON.parse(String(call[1]?.body)) : undefined;
+  }
+
+  it('highlights a selection in one click and confirms it', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/highlights')
+          ? json({ highlight: { ...savedHighlight, color: 'green' } })
+          : undefined,
+    ]);
+    const { bar } = await selectParagraph();
+
+    fireEvent.click(within(bar).getByRole('button', { name: 'Highlight green' }));
+
+    expect(await screen.findByTestId('reader-flash')).toHaveTextContent('Highlighted!');
+    expect(postBody(fetchMock, '/api/v1/libraries/lib1/files/f1/highlights')).toMatchObject({
+      location: 'block-1',
+      text: 'First section text.',
+      color: 'green',
+    });
+  });
+
+  it('keeps the selection for a note even after typing clears it', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/highlights')
+          ? json({ highlight: { ...savedHighlight, note: 'remember this' } })
+          : undefined,
+    ]);
+    const { bar } = await selectParagraph();
+    fireEvent.click(within(bar).getByRole('button', { name: /Note/ }));
+
+    // Focusing the note field collapses the selection in the book.
+    window.getSelection()?.removeAllRanges();
+    document.dispatchEvent(new Event('selectionchange'));
+
+    fireEvent.change(await screen.findByPlaceholderText('Add a note (optional)'), {
+      target: { value: 'remember this' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/highlights')).toBe(true);
+      expect(postBody(fetchMock, '/api/v1/libraries/lib1/files/f1/highlights')).toMatchObject({
+        text: 'First section text.',
+        note: 'remember this',
+      });
     });
+  });
+
+  it('saves a quote from the right-click menu and lists it under Quotes', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/quotes')
+          ? json({
+              quote: {
+                id: 'q1',
+                file_id: 'f1',
+                text: 'First section text.',
+                location: 'block-2',
+                favorite: false,
+                created_at: '2026-10-01T00:00:00Z',
+                updated_at: '2026-10-01T00:00:00Z',
+              },
+            })
+          : undefined,
+    ]);
+    const { paragraph } = await selectParagraph();
+
+    fireEvent.contextMenu(paragraph);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save quote' }));
+
+    expect(await screen.findByTestId('reader-flash')).toHaveTextContent('Quoted!');
+    expect(postBody(fetchMock, '/api/v1/libraries/lib1/files/f1/quotes')).toMatchObject({
+      text: 'First section text.',
+      location: 'block-1',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quotes from this book' }));
+    expect(
+      within(screen.getByTestId('reader-quotes')).getByText(/First section text\./),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the browser menu alone when nothing is selected', async () => {
+    setup();
+    const paragraph = await screen.findByText('First section text.');
+    const event = fireEvent.contextMenu(paragraph);
+    expect(event).toBe(true); // not default-prevented
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('confirms a new bookmark with a quick flash', async () => {
+    setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks')
+          ? json({
+              bookmark: {
+                id: 'b1',
+                file_id: 'f1',
+                location: '0.0000',
+                created_at: '2026-10-01T00:00:00Z',
+              },
+            })
+          : undefined,
+    ]);
+    await screen.findByText('First section text.');
+    fireEvent.click(screen.getByRole('button', { name: 'Bookmarks and highlights' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Bookmark this page/ }));
+
+    expect(await screen.findByTestId('reader-flash')).toHaveTextContent('Bookmarked!');
+  });
+
+  it('lists marks as cards that say where they are, and renames a bookmark', async () => {
+    const fetchMock = setup([
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f1/bookmarks')
+          ? json({
+              bookmarks: [
+                { id: 'b1', file_id: 'f1', location: 'block-1', created_at: '2026-10-01T00:00:00Z' },
+              ],
+            })
+          : undefined,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f1/highlights')
+          ? json({ highlights: [{ ...savedHighlight, location: 'block-3', note: 'a note' }] })
+          : undefined,
+      (url, init) =>
+        init?.method === 'PATCH' && url.endsWith('/api/v1/libraries/lib1/bookmarks/b1')
+          ? json({
+              bookmark: {
+                id: 'b1',
+                file_id: 'f1',
+                location: 'block-1',
+                label: 'Start here',
+                created_at: '2026-10-01T00:00:00Z',
+              },
+            })
+          : undefined,
+    ]);
+    await screen.findByText('First section text.');
+    fireEvent.click(screen.getByRole('button', { name: 'Bookmarks and highlights' }));
+    const panel = await screen.findByTestId('reader-annotations');
+
+    // Named after the chapter it falls in until it has a name of its own.
+    const bookmarks = within(panel).getByRole('list', { name: 'Bookmarks' });
+    expect(await within(bookmarks).findByText('Introduction')).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Rename bookmark' }));
+    const input = within(panel).getByLabelText('Bookmark name');
+    fireEvent.change(input, { target: { value: 'Start here' } });
+    fireEvent.submit(input.closest('form')!);
+    expect(await within(panel).findByText('Start here')).toBeInTheDocument();
+    expect(called(fetchMock, 'PATCH', '/api/v1/libraries/lib1/bookmarks/b1')).toBe(true);
+
+    fireEvent.click(within(panel).getByRole('tab', { name: /Highlights/ }));
+    const highlights = within(panel).getByRole('list', { name: 'Highlights' });
+    expect(within(highlights).getByText('First section text.')).toBeInTheDocument();
+    expect(within(highlights).getByText('a note')).toBeInTheDocument();
+    expect(within(highlights).getByText('Conclusion')).toBeInTheDocument();
   });
 });

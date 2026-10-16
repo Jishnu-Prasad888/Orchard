@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -25,6 +27,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/logging"
 	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
+	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
 	"github.com/Jishnu-Prasad888/Orchard/internal/version"
 	"github.com/Jishnu-Prasad888/Orchard/internal/webui"
 )
@@ -129,8 +132,10 @@ func run() error {
 	// Backups: one-shot, scheduled, and restore operations over the server
 	// database and every registered library. The scheduler is a no-op when no
 	// backup directory is configured.
+	backupDir, backupDirSource := resolveBackupDir(ctx, cfg, serversettings.NewStore(pool), logger)
 	backupMgr := backups.NewManager(pool, logger, libraries, backups.Config{
-		Dir:        cfg.BackupDir,
+		Dir:        backupDir,
+		DirSource:  backupDirSource,
 		Keep:       cfg.BackupKeep,
 		Passphrase: cfg.BackupPassphrase,
 		Interval:   time.Duration(cfg.BackupIntervalMinutes) * time.Minute,
@@ -195,4 +200,24 @@ func run() error {
 	}
 	logger.Info("server stopped")
 	return nil
+}
+
+// resolveBackupDir picks where backups go: the folder an administrator chose
+// in the app, else ORCHARD_BACKUP_DIR, else "backups" inside the data
+// directory — so backups work out of the box without any configuration.
+func resolveBackupDir(
+	ctx context.Context, cfg config.Config, settings *serversettings.Store, logger *slog.Logger,
+) (dir, source string) {
+	saved, err := settings.GetString(ctx, backups.DirSettingKey, "")
+	if err != nil {
+		logger.Warn("read saved backup directory", "error", err)
+	}
+	switch {
+	case saved != "":
+		return saved, backups.DirFromSetting
+	case cfg.BackupDir != "":
+		return cfg.BackupDir, backups.DirFromEnv
+	default:
+		return filepath.Join(cfg.DataDir, "backups"), backups.DirFromDefault
+	}
 }

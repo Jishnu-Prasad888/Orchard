@@ -23,12 +23,7 @@ import type { BookMetadata, FileSummary, ReadingStatus } from '../../api/types';
 import { READING_STATUS_LABEL } from '../../api/types';
 import { Icon } from '../ui/Icon';
 
-const READING_STATUS_OPTIONS: ReadingStatus[] = [
-  'want_to_read',
-  'reading',
-  'completed',
-  'on_hold',
-];
+const READING_STATUS_OPTIONS: ReadingStatus[] = ['want_to_read', 'reading', 'completed', 'on_hold'];
 
 interface FormState {
   title: string;
@@ -54,7 +49,17 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function BookPanel({ libraryId, file }: { libraryId: string; file: FileSummary }) {
+export function BookPanel({
+  libraryId,
+  file,
+  onChanged,
+}: {
+  libraryId: string;
+  file: FileSummary;
+  /** Called after the cover or the details are saved, so whatever shows
+   * them elsewhere (a grid's thumbnail, a title) can refresh. */
+  onChanged?: (() => void) | undefined;
+}) {
   const [book, setBook] = useState<BookMetadata | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [status, setStatus] = useState<ReadingStatus | null>(null);
@@ -100,6 +105,7 @@ export function BookPanel({ libraryId, file }: { libraryId: string; file: FileSu
         setBook(resp.book);
         setForm(formFromMetadata(resp.book));
         setSaved(true);
+        onChanged?.();
       })
       .catch((e: unknown) => setSaveError(message(e)))
       .finally(() => setSaveBusy(false));
@@ -112,7 +118,10 @@ export function BookPanel({ libraryId, file }: { libraryId: string; file: FileSu
     setCoverBusy(true);
     setCoverError(null);
     uploadCover(libraryId, file.id, chosen)
-      .then((resp) => setBook(resp.book))
+      .then((resp) => {
+        setBook(resp.book);
+        onChanged?.();
+      })
       .catch((e: unknown) => setCoverError(message(e)))
       .finally(() => setCoverBusy(false));
   };
@@ -120,7 +129,10 @@ export function BookPanel({ libraryId, file }: { libraryId: string; file: FileSu
   const onStatusChange = (next: ReadingStatus | '') => {
     setStatusBusy(true);
     setStatusError(null);
-    const call = next === '' ? clearReadingStatus(libraryId, file.id) : setReadingStatus(libraryId, file.id, next);
+    const call =
+      next === ''
+        ? clearReadingStatus(libraryId, file.id)
+        : setReadingStatus(libraryId, file.id, next);
     call
       .then(() => setStatus(next === '' ? null : next))
       .catch((e: unknown) => setStatusError(message(e)))
@@ -155,8 +167,9 @@ export function BookPanel({ libraryId, file }: { libraryId: string; file: FileSu
             onClick={() => fileInputRef.current?.click()}
             disabled={coverBusy}
           >
-            {coverBusy ? 'Uploading…' : book.cover_url ? 'Change cover' : 'Add cover'}
+            {coverBusy ? 'Uploading…' : book.cover_url ? 'Change cover image' : 'Add cover image'}
           </button>
+          <p className="book-panel-cover-note muted">JPEG, PNG, WebP or GIF, up to 8 MB.</p>
           <input
             ref={fileInputRef}
             type="file"

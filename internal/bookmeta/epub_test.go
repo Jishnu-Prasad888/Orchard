@@ -157,3 +157,136 @@ func TestYearFromDateString(t *testing.T) {
 		}
 	}
 }
+
+// writeTestEPUB zips the given archive members into an EPUB at a temp path.
+func writeTestEPUB(t *testing.T, files map[string]string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "book.epub")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for name, content := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const testEPUBContainer = `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`
+
+// fakeJPEG is enough of a JPEG for content sniffing to call it one.
+const fakeJPEG = "\xff\xd8\xff\xe0\x00\x10JFIF\x00 cover"
+
+// TestExtractEPUB_CoverFallbacks covers books that do not declare a cover
+// the way the EPUB 3 spec asks, each of which used to come out coverless.
+func TestExtractEPUB_CoverFallbacks(t *testing.T) {
+	opf := func(metadata, manifest, tail string) string {
+		return `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>` + metadata + `</metadata>
+  <manifest>` + manifest + `<item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="chap1"/></spine>` + tail + `
+</package>`
+	}
+	const chapter = `<html><body><p>Text.</p></body></html>`
+
+	cases := []struct {
+		name  string
+		files map[string]string
+	}{
+		{
+			name: "EPUB 2 meta naming the manifest item",
+			files: map[string]string{
+				"OEBPS/content.opf": opf(`<meta name="cover" content="img1"/>`,
+					`<item id="img1" href="images/front.jpg" media-type="image/jpeg"/>`, ""),
+				"OEBPS/images/front.jpg": fakeJPEG,
+				"OEBPS/chapter1.xhtml":   chapter,
+			},
+		},
+		{
+			name: "meta naming the image file instead of its id",
+			files: map[string]string{
+				"OEBPS/content.opf": opf(`<meta name="cover" content="images/front.jpg"/>`,
+					`<item id="img1" href="images/front.jpg" media-type="image/jpeg"/>`, ""),
+				"OEBPS/images/front.jpg": fakeJPEG,
+				"OEBPS/chapter1.xhtml":   chapter,
+			},
+		},
+		{
+			name: "undeclared image called cover, percent-encoded href",
+			files: map[string]string{
+				"OEBPS/content.opf": opf("",
+					`<item id="x1" href="images/Book%20Cover.jpg" media-type="image/jpeg"/>`, ""),
+				"OEBPS/images/Book Cover.jpg": fakeJPEG,
+				"OEBPS/chapter1.xhtml":        chapter,
+			},
+		},
+		{
+			name: "guide cover page showing an svg image",
+			files: map[string]string{
+				"OEBPS/content.opf": opf("",
+					`<item id="pg" href="text/titlepage.xhtml" media-type="application/xhtml+xml"/>`+
+						`<item id="x1" href="images/a.jpg" media-type="image/jpeg"/>`,
+					`<guide><reference type="cover" href="text/titlepage.xhtml#top"/></guide>`),
+				"OEBPS/text/titlepage.xhtml": `<html><body><svg><image width="10" xlink:href="../images/a.jpg"/></svg></body></html>`,
+				"OEBPS/images/a.jpg":         fakeJPEG,
+				"OEBPS/chapter1.xhtml":       chapter,
+			},
+		},
+		{
+			name: "first page of the book showing an image",
+			files: map[string]string{
+				"OEBPS/content.opf":    opf("", `<item id="x1" href="pic.jpg" media-type="image/jpeg"/>`, ""),
+				"OEBPS/pic.jpg":        fakeJPEG,
+				"OEBPS/chapter1.xhtml": `<html><body><img alt="" src="pic.jpg"/></body></html>`,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.files["META-INF/container.xml"] = testEPUBContainer
+			ex, err := ExtractEPUB(writeTestEPUB(t, tc.files))
+			if err != nil {
+				t.Fatalf("ExtractEPUB: %v", err)
+			}
+			if string(ex.Cover) != fakeJPEG || ex.CoverExt != ".jpg" {
+				t.Errorf("cover = (%d bytes, %q), want the book's image as .jpg", len(ex.Cover), ex.CoverExt)
+			}
+		})
+	}
+}
+
+func TestExtractEPUB_NoImagesMeansNoCover(t *testing.T) {
+	ex, err := ExtractEPUB(writeTestEPUB(t, map[string]string{
+		"META-INF/container.xml": testEPUBContainer,
+		"OEBPS/content.opf": `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest><item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="chap1"/></spine>
+</package>`,
+		"OEBPS/chapter1.xhtml": `<html><body><p>Text only.</p></body></html>`,
+	}))
+	if err != nil {
+		t.Fatalf("ExtractEPUB: %v", err)
+	}
+	if len(ex.Cover) != 0 || ex.CoverExt != "" {
+		t.Errorf("cover = (%d bytes, %q), want none", len(ex.Cover), ex.CoverExt)
+	}
+}

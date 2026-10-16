@@ -197,7 +197,7 @@ func (s *Server) handleListInProgress(w http.ResponseWriter, r *http.Request, u 
 	for _, e := range entries {
 		files = append(files, e.File)
 	}
-	covers := s.coverURLsFor(r.Context(), lib, files)
+	extras := s.fileExtrasFor(r.Context(), lib, "", files)
 
 	out := make([]inProgressFileResponse, 0, len(entries))
 	for _, e := range entries {
@@ -209,7 +209,7 @@ func (s *Server) handleListInProgress(w http.ResponseWriter, r *http.Request, u 
 		if !e.UpdatedAt.IsZero() {
 			resp.UpdatedAt = e.UpdatedAt.UTC().Format(time.RFC3339)
 		}
-		if url, ok := covers[e.File.ID]; ok {
+		if url, ok := extras.covers[e.File.ID]; ok {
 			resp.CoverURL = url
 		}
 		out = append(out, resp)

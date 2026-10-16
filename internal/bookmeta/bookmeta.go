@@ -262,12 +262,12 @@ func (s *Store) ListAllWithPaths(ctx context.Context) ([]MetadataWithPath, error
 	return out, rows.Err()
 }
 
-// HasCovers reports which of fileIDs have a non-empty cover_path, in one
-// batch query — for a file-listing grid deciding which tiles get a cover
-// thumbnail, which would otherwise be an N+1 Get per file. A file missing
-// from the result (or absent from the returned map entirely) has no cover.
-func (s *Store) HasCovers(ctx context.Context, fileIDs []string) (map[string]bool, error) {
-	out := make(map[string]bool, len(fileIDs))
+// CoverPaths returns file ID -> cover_path for those of fileIDs that have a
+// cover, in one batch query — for a file-listing grid deciding which tiles
+// get a cover thumbnail, which would otherwise be an N+1 Get per file. A
+// file absent from the returned map has no cover.
+func (s *Store) CoverPaths(ctx context.Context, fileIDs []string) (map[string]string, error) {
+	out := make(map[string]string, len(fileIDs))
 	if len(fileIDs) == 0 {
 		return out, nil
 	}
@@ -278,18 +278,63 @@ func (s *Store) HasCovers(ctx context.Context, fileIDs []string) (map[string]boo
 		args[i] = id
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT file_id FROM book_metadata WHERE cover_path != '' AND file_id IN (`+placeholders+`)`,
+		`SELECT file_id, cover_path FROM book_metadata WHERE cover_path != '' AND file_id IN (`+placeholders+`)`,
 		args...)
 	if err != nil {
-		return nil, fmt.Errorf("check covers: %w", err)
+		return nil, fmt.Errorf("list covers: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan cover file id: %w", err)
+		var id, coverPath string
+		if err := rows.Scan(&id, &coverPath); err != nil {
+			return nil, fmt.Errorf("scan cover path: %w", err)
 		}
-		out[id] = true
+		out[id] = coverPath
+	}
+	return out, rows.Err()
+}
+
+// RecordCoverAttempt notes that the cover extractor at the given version
+// has run for a file, and fills in coverRelPath when the row has no cover
+// yet. It is separate from Upsert because it also applies to a row a person
+// has edited: Upsert leaves such a row alone, but a book whose title was
+// corrected by hand should still gain a cover it never had. A cover that is
+// already set — extracted or uploaded — is never replaced here.
+func (s *Store) RecordCoverAttempt(ctx context.Context, fileID, coverRelPath string, version int) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE book_metadata
+		SET cover_version = ?,
+		    cover_path    = CASE WHEN cover_path = '' THEN ? ELSE cover_path END
+		WHERE file_id = ?`, version, coverRelPath, fileID)
+	if err != nil {
+		return fmt.Errorf("record cover attempt: %w", err)
+	}
+	return nil
+}
+
+// ListCoverBackfill returns file ID -> library-relative path for every
+// present book that has no cover and that the extractor at the given
+// version has not tried yet: books indexed before covers could be made for
+// their format, or never processed at all.
+func (s *Store) ListCoverBackfill(ctx context.Context, version int) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT f.id, f.rel_path
+		FROM indexed_files f
+		LEFT JOIN book_metadata bm ON bm.file_id = f.id
+		WHERE f.status = 'present'
+		  AND (lower(f.rel_path) LIKE '%.pdf' OR lower(f.rel_path) LIKE '%.epub')
+		  AND (bm.file_id IS NULL OR (bm.cover_path = '' AND bm.cover_version < ?))`, version)
+	if err != nil {
+		return nil, fmt.Errorf("list cover backfill: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, relPath string
+		if err := rows.Scan(&id, &relPath); err != nil {
+			return nil, fmt.Errorf("scan cover backfill: %w", err)
+		}
+		out[id] = relPath
 	}
 	return out, rows.Err()
 }

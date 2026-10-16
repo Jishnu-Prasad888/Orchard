@@ -36,6 +36,7 @@ import {
   NoLibrariesState,
   PageHeader,
 } from '../components/States';
+import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
 import { Icon } from '../components/ui/Icon';
 import { ViewerModal } from '../components/ViewerModal';
 import './CollectionsPage.css';
@@ -57,6 +58,11 @@ export default function CollectionsPage() {
   const collections = useLibraryResource(
     useCallback(async (libraryId: string) => (await listCollections(libraryId)).collections ?? [], []),
   );
+
+  // The top-bar search filters the collection grid in place (see pageSearch.ts).
+  const pageQuery = usePageQuery();
+  const shownCollections =
+    collections.data?.filter((c) => matchesQuery(pageQuery, c.name, c.description)) ?? null;
 
   // A deep link from elsewhere (e.g. a pinned collection on Home) opens a
   // specific collection once the list has loaded.
@@ -296,9 +302,14 @@ export default function CollectionsPage() {
               </p>
             </EmptyState>
           )}
-          {collections.data !== null && collections.data.length > 0 && (
+          {shownCollections !== null &&
+            collections.data!.length > 0 &&
+            shownCollections.length === 0 && (
+              <p className="muted">No collections match “{pageQuery}”.</p>
+            )}
+          {shownCollections !== null && shownCollections.length > 0 && (
             <ul className="collection-grid" data-testid="collections-grid" aria-label="Collections">
-              {collections.data.map((c) => (
+              {shownCollections.map((c) => (
                 <li key={c.id}>
                   <div className="collection-card">
                     <button

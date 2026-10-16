@@ -156,7 +156,10 @@ func redactPath(p string) string {
 
 // securityHeaders sets baseline browser hardening headers on every response.
 // The embedded SPA is self-contained (no inline scripts, no external origins),
-// so a 'self' content security policy does not require nonces.
+// so a 'self' content security policy does not require nonces. blob: is
+// allowed for images, styles and fonts because that is how the EPUB reader
+// shows a book's own: it unpacks them from the archive in the browser and
+// hands them to the page as blob URLs, which never leave this origin.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -164,8 +167,8 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; "+
-				"style-src 'self' 'unsafe-inline'; script-src 'self'; "+
+			"default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: data:; "+
+				"style-src 'self' 'unsafe-inline' blob:; font-src 'self' data: blob:; script-src 'self'; "+
 				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		next.ServeHTTP(w, r)

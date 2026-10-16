@@ -141,6 +141,36 @@ describe('MediaGrid', () => {
     expect(within(untouched as HTMLElement).queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
+  it("shows each book's own reading progress as a bar and a percentage", () => {
+    const books = [
+      fileFixture({
+        id: 'b1',
+        name: 'halfway.pdf',
+        media_type: 'document',
+        progress_percent: 37.4,
+      }),
+      fileFixture({
+        id: 'b2',
+        name: 'just-opened.pdf',
+        media_type: 'document',
+        progress_percent: 0.2,
+      }),
+      fileFixture({ id: 'b3', name: 'unread.pdf', media_type: 'document' }),
+    ];
+    render(<MediaGrid libraryId="lib1" files={books} onOpen={() => {}} label="Books" />);
+    const tile = (name: string) =>
+      screen.getByRole('button', { name }).closest('.media-tile') as HTMLElement;
+
+    expect(within(tile('halfway.pdf')).getByText('37%')).toBeInTheDocument();
+    expect(within(tile('halfway.pdf')).getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '37',
+    );
+    // A book that has been opened at all never reads as 0%.
+    expect(within(tile('just-opened.pdf')).getByText('1%')).toBeInTheDocument();
+    expect(within(tile('unread.pdf')).queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
   it('shows a book cover as its thumbnail instead of the document glyph', () => {
     const books = [
       fileFixture({

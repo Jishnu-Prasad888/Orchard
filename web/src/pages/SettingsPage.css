@@ -299,5 +299,5 @@
 .settings-warning {
   margin: 0 0 var(--space-4);
   font-size: 12px;
-  color: var(--danger);
+  color: var(--color-danger-ink);
 }

@@ -39,6 +39,21 @@ export interface ReaderSelection {
   location: string;
 }
 
+/** A saved highlight, as a reader needs it to paint one: its anchor (same
+ * convention as `location` everywhere), the selected text, and a color. */
+export interface ReaderHighlight {
+  id: string;
+  location: string;
+  text: string;
+  color: string;
+}
+
+/** Where a right-click landed, in viewport coordinates. */
+export interface ReaderPoint {
+  x: number;
+  y: number;
+}
+
 export interface ReaderProps {
   libraryId: string;
   fileId: string;
@@ -57,4 +72,10 @@ export interface ReaderProps {
   /** Called whenever the user's text selection inside the reader changes;
    * null when the selection is cleared. */
   onSelectionChange: (selection: ReaderSelection | null) => void;
+  /** The user's saved highlights in this book, painted over its text. */
+  highlights: ReaderHighlight[];
+  /** Called on a right-click over selected text the page can't see itself
+   * (an EPUB chapter lives in its own iframe); the PDF and text readers'
+   * DOM is the page's own, so it catches those directly. */
+  onSelectionContextMenu?: (point: ReaderPoint) => void;
 }
