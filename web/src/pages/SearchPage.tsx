@@ -81,7 +81,9 @@ function ContentSearchResults({ libraryId, q }: { libraryId: string; q: string }
           <li key={`${h.source_type}-${h.source_id}-${i}`}>
             <Link to={linkFor(h, libraryId)} className="content-hit-card">
               <span className="content-hit-type">{SOURCE_LABEL[h.source_type]}</span>
-              {h.file_id && <span className="content-hit-file">{labels[h.file_id]?.title ?? '…'}</span>}
+              {h.file_id && (
+                <span className="content-hit-file">{labels[h.file_id]?.title ?? '…'}</span>
+              )}
               <span className="content-hit-excerpt">{h.excerpt}</span>
             </Link>
           </li>

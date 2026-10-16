@@ -231,8 +231,9 @@ describe('SetupPage', () => {
     setup();
 
     expect(await screen.findByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'This server is already set up' })).not
-      .toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'This server is already set up' }),
+    ).not.toBeInTheDocument();
   });
 
   it('submits a signup request and shows the pending confirmation', async () => {

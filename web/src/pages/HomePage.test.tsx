@@ -1,7 +1,15 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { apiError, called, fileFixture, json, mockApi, originalFetch, renderPage } from '../test/harness';
+import {
+  apiError,
+  called,
+  fileFixture,
+  json,
+  mockApi,
+  originalFetch,
+  renderPage,
+} from '../test/harness';
 import type { Collection, InProgressFile, Quote } from '../api/types';
 import HomePage from './HomePage';
 
@@ -34,17 +42,10 @@ function setup(options: Options = {}) {
         ? json({ files: inProgress })
         : undefined,
     (url) =>
-      url.includes('/api/v1/libraries/lib1/favorites')
-        ? json({ files: favorites })
-        : undefined,
+      url.includes('/api/v1/libraries/lib1/favorites') ? json({ files: favorites }) : undefined,
     (url) =>
-      url.includes('/api/v1/libraries/lib1/collections')
-        ? json({ collections })
-        : undefined,
-    (url) =>
-      url.includes('/api/v1/libraries/lib1/quotes')
-        ? json({ quotes })
-        : undefined,
+      url.includes('/api/v1/libraries/lib1/collections') ? json({ collections }) : undefined,
+    (url) => (url.includes('/api/v1/libraries/lib1/quotes') ? json({ quotes }) : undefined),
     (url) =>
       url.includes('/api/v1/settings/home-layout')
         ? json({
@@ -94,7 +95,9 @@ describe('HomePage', () => {
   });
 
   it('shows a recently-opened section when the user has opened a book', async () => {
-    setup({ recentlyOpened: [fileFixture({ id: 'f3', name: 'novel.epub', media_type: 'document' })] });
+    setup({
+      recentlyOpened: [fileFixture({ id: 'f3', name: 'novel.epub', media_type: 'document' })],
+    });
 
     const opened = await screen.findByTestId('home-recently-opened');
     expect(within(opened).getByRole('button', { name: 'novel.epub' })).toBeInTheDocument();

@@ -123,9 +123,9 @@ export default function LandingPage() {
           <h2 className="landing-heading">Why &ldquo;Orchard&rdquo;?</h2>
           <div className="landing-meaning-body">
             <p>
-              An orchard is planted once and tended for years. Nothing in it is finished on day
-              one — it is added to a little at a time, and what you planted last season is still
-              there, unbothered, when you come back to it.
+              An orchard is planted once and tended for years. Nothing in it is finished on day one
+              — it is added to a little at a time, and what you planted last season is still there,
+              unbothered, when you come back to it.
             </p>
             <p>
               That is the idea here: a library that is yours to grow slowly, without anyone

@@ -120,7 +120,10 @@ export const TextReader = forwardRef<ReaderHandle, ReaderProps>(function TextRea
         // Report a position immediately rather than waiting for the first
         // scroll, so "add bookmark here" has a location to use right away
         // (bookmarks, unlike resume progress, can't be stored as "").
-        onProgress(Number.isFinite(fraction) ? fraction.toFixed(4) : '0.0000', Math.max(0, fraction) * 100);
+        onProgress(
+          Number.isFinite(fraction) ? fraction.toFixed(4) : '0.0000',
+          Math.max(0, fraction) * 100,
+        );
       }
     }
     // Re-runs only when the rendered content itself changes.

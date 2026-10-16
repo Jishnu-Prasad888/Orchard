@@ -30,7 +30,10 @@ const collectionsList = {
 const collectionFiles = { files: [fileFixture()] };
 
 function setup(
-  overrides: { collections?: typeof collectionsList; collectionFiles?: typeof collectionFiles } = {},
+  overrides: {
+    collections?: typeof collectionsList;
+    collectionFiles?: typeof collectionFiles;
+  } = {},
 ) {
   const collectionsResp = overrides.collections ?? collectionsList;
   const filesResp = overrides.collectionFiles ?? collectionFiles;
@@ -68,7 +71,8 @@ function setup(
         : undefined,
     (url) =>
       url.endsWith('/api/v1/libraries/lib1/collections/c1/files') ? json(filesResp) : undefined,
-    (url) => (url.endsWith('/api/v1/libraries/lib1/collections') ? json(collectionsResp) : undefined),
+    (url) =>
+      url.endsWith('/api/v1/libraries/lib1/collections') ? json(collectionsResp) : undefined,
     (url) => (url.includes('/favorites') ? json({ files: [] }) : undefined),
     (url) =>
       url.includes('/files/f1/metadata')
@@ -150,7 +154,8 @@ describe('CollectionsPage', () => {
               409,
             )
           : undefined,
-      (url) => (url.endsWith('/api/v1/libraries/lib1/collections') ? json(collectionsList) : undefined),
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/collections') ? json(collectionsList) : undefined,
     ]);
     renderPage(<CollectionsPage />);
 

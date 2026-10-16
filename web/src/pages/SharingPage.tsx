@@ -260,8 +260,8 @@ export default function SharingPage() {
         <div className="share-fresh" role="status" data-testid="fresh-share">
           <h2>Your link is ready</h2>
           <p className="muted">
-            This is the only time Orchard shows the token. Copy it now — it cannot be recovered later,
-            only replaced.
+            This is the only time Orchard shows the token. Copy it now — it cannot be recovered
+            later, only replaced.
           </p>
           <div className="share-fresh-row">
             <label className="visually-hidden" htmlFor="fresh-share-url">
@@ -359,8 +359,8 @@ export default function SharingPage() {
 
       {shares.data !== null && shares.data.some((s) => !expired(s)) && (
         <p className="muted share-note">
-          The link itself is not shown here on purpose — Orchard only ever returns the token once, at
-          creation. If you lose it, revoke the share and make a new one.
+          The link itself is not shown here on purpose — Orchard only ever returns the token once,
+          at creation. If you lose it, revoke the share and make a new one.
         </p>
       )}
 

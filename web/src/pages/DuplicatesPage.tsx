@@ -15,7 +15,13 @@ import { formatBytes } from '../api/types';
 import { useLibraryResource } from '../api/resources';
 import { useFileOperations } from '../components/FileOperations';
 import { LibraryGatePage } from '../components/LibraryGatePage';
-import { EmptyState, ErrorState, LibraryOfflineNotice, LoadingState, PageHeader } from '../components/States';
+import {
+  EmptyState,
+  ErrorState,
+  LibraryOfflineNotice,
+  LoadingState,
+  PageHeader,
+} from '../components/States';
 import { Icon } from '../components/ui/Icon';
 import { ViewerModal } from '../components/ViewerModal';
 import './DuplicatesPage.css';
@@ -50,7 +56,11 @@ function Duplicates({ library }: { library: Library }) {
 
       {library.status === 'offline' && <LibraryOfflineNotice library={library} />}
       {groups.error && (
-        <ErrorState message={groups.error} onRetry={groups.reload} title="Couldn't check for duplicates" />
+        <ErrorState
+          message={groups.error}
+          onRetry={groups.reload}
+          title="Couldn't check for duplicates"
+        />
       )}
       {groups.loading && <LoadingState label="Checking for duplicates…" />}
 

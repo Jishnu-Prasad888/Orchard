@@ -7,7 +7,7 @@
  * almost the same shape (a named group, and everything carrying it).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
@@ -47,7 +47,8 @@ export default function CollectionsPage() {
   const isAdmin = user?.role === 'admin';
   const [params, setParams] = useSearchParams();
   const openID = params.get('open');
-  const [active, setActive] = useState<Collection | null>(null);
+  // The collection the user opened here; a deep link opens one too (below).
+  const [picked, setActive] = useState<Collection | null>(null);
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Collection | null>(null);
   const [deleting, setDeleting] = useState<Collection | null>(null);
@@ -56,7 +57,10 @@ export default function CollectionsPage() {
   const [promptError, setPromptError] = useState<string | null>(null);
 
   const collections = useLibraryResource(
-    useCallback(async (libraryId: string) => (await listCollections(libraryId)).collections ?? [], []),
+    useCallback(
+      async (libraryId: string) => (await listCollections(libraryId)).collections ?? [],
+      [],
+    ),
   );
 
   // The top-bar search filters the collection grid in place (see pageSearch.ts).
@@ -65,12 +69,11 @@ export default function CollectionsPage() {
     collections.data?.filter((c) => matchesQuery(pageQuery, c.name, c.description)) ?? null;
 
   // A deep link from elsewhere (e.g. a pinned collection on Home) opens a
-  // specific collection once the list has loaded.
-  useEffect(() => {
-    if (!openID || active || !collections.data) return;
-    const match = collections.data.find((c) => c.id === openID);
-    if (match) setActive(match);
-  }, [openID, active, collections.data]);
+  // specific collection once the list has loaded. Closing one clears the
+  // link as well, so this never reopens a collection the user just closed.
+  const deepLinked =
+    !picked && openID ? (collections.data?.find((c) => c.id === openID) ?? null) : null;
+  const active = picked ?? deepLinked;
 
   const clearOpenParam = useCallback(() => {
     setParams(
@@ -87,7 +90,9 @@ export default function CollectionsPage() {
   const files = useLibraryResource(
     useCallback(
       (libraryId) =>
-        activeId ? listCollectionFiles(libraryId, activeId).then((r) => r.files ?? []) : Promise.resolve([]),
+        activeId
+          ? listCollectionFiles(libraryId, activeId).then((r) => r.files ?? [])
+          : Promise.resolve([]),
       [activeId],
     ),
     [activeId],
@@ -145,7 +150,9 @@ export default function CollectionsPage() {
   );
 
   const togglePin = (c: Collection) => {
-    void run(() => updateCollection(gate.kind === 'ready' ? gate.libraryId : '', c.id, { pinned: !c.pinned }));
+    void run(() =>
+      updateCollection(gate.kind === 'ready' ? gate.libraryId : '', c.id, { pinned: !c.pinned }),
+    );
   };
 
   if (gate.kind === 'loading') {
@@ -237,7 +244,11 @@ export default function CollectionsPage() {
             >
               Rename
             </button>
-            <button type="button" className="button danger-button" onClick={() => setDeleting(active)}>
+            <button
+              type="button"
+              className="button danger-button"
+              onClick={() => setDeleting(active)}
+            >
               Delete collection
             </button>
           </div>

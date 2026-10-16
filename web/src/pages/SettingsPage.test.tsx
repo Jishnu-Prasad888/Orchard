@@ -244,7 +244,9 @@ describe('SettingsPage', () => {
     const adminRow = within(list).getByText('jishnu').closest('li') as HTMLElement;
     fireEvent.click(within(adminRow).getByRole('button', { name: 'Disable' }));
 
-    expect(await screen.findByText('This is the only remaining administrator.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('This is the only remaining administrator.'),
+    ).toBeInTheDocument();
     expect(called(fn, 'PATCH', '/api/v1/users/u1')).toBe(true);
   });
 
@@ -265,13 +267,28 @@ describe('SettingsPage', () => {
   });
 
   it('lists pending signup requests and approves one', async () => {
-    const pendingRequest = { id: 'p1', username: 'newperson', requested_at: '2026-04-01T00:00:00Z' };
+    const pendingRequest = {
+      id: 'p1',
+      username: 'newperson',
+      requested_at: '2026-04-01T00:00:00Z',
+    };
     const fn = setup([
       (url) =>
         url.endsWith('/api/v1/signup-requests') ? json({ requests: [pendingRequest] }) : undefined,
       (url, init) =>
         init?.method === 'POST' && url.endsWith('/api/v1/signup-requests/p1/approve')
-          ? json({ user: { id: 'u4', username: 'newperson', role: 'user', enabled: true, created_at: '2026-04-01T00:00:00Z' } }, 201)
+          ? json(
+              {
+                user: {
+                  id: 'u4',
+                  username: 'newperson',
+                  role: 'user',
+                  enabled: true,
+                  created_at: '2026-04-01T00:00:00Z',
+                },
+              },
+              201,
+            )
           : undefined,
     ]);
 
@@ -286,7 +303,11 @@ describe('SettingsPage', () => {
   });
 
   it('denies a pending signup request', async () => {
-    const pendingRequest = { id: 'p1', username: 'newperson', requested_at: '2026-04-01T00:00:00Z' };
+    const pendingRequest = {
+      id: 'p1',
+      username: 'newperson',
+      requested_at: '2026-04-01T00:00:00Z',
+    };
     const fn = setup([
       (url) =>
         url.endsWith('/api/v1/signup-requests') ? json({ requests: [pendingRequest] }) : undefined,

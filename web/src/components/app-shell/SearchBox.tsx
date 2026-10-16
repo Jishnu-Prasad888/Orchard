@@ -14,7 +14,12 @@ import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
-import { forgetRecentSearch, listRecentSearches, listTags, recordRecentSearch } from '../../api/queries';
+import {
+  forgetRecentSearch,
+  listRecentSearches,
+  listTags,
+  recordRecentSearch,
+} from '../../api/queries';
 import { Icon, type IconName } from '../ui/Icon';
 import './SearchBox.css';
 
@@ -128,7 +133,9 @@ export function SearchBox({
   const forget = (text: string) => {
     if (!libraryId) return;
     setRecent((prev) =>
-      prev?.libraryId === libraryId ? { libraryId, queries: prev.queries.filter((v) => v !== text) } : prev,
+      prev?.libraryId === libraryId
+        ? { libraryId, queries: prev.queries.filter((v) => v !== text) }
+        : prev,
     );
     void forgetRecentSearch(libraryId, text).catch(() => {});
   };
@@ -283,9 +290,7 @@ export function SearchBox({
       {showList && (
         <div className="search-suggestions">
           {suggestions.length === 0 ? (
-            <p className="search-suggestions-hint">
-              Search by file name, folder, or tag.
-            </p>
+            <p className="search-suggestions-hint">Search by file name, folder, or tag.</p>
           ) : (
             <>
               {!q && <p className="search-suggestions-heading">Recent searches</p>}

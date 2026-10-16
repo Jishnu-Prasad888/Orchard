@@ -35,12 +35,12 @@ type BackfillingProcessor interface {
 
 // IndexStatus is the current state of a library's index.
 type IndexStatus struct {
-	LibraryID string       `json:"library_id"`
-	Present   int          `json:"present"`
-	Missing   int          `json:"missing"`
-	Deleted   int          `json:"deleted"`
-	ActiveJob *jobs.Job    `json:"active_job,omitempty"`
-	LastJobID string       `json:"last_job_id,omitempty"`
+	LibraryID string    `json:"library_id"`
+	Present   int       `json:"present"`
+	Missing   int       `json:"missing"`
+	Deleted   int       `json:"deleted"`
+	ActiveJob *jobs.Job `json:"active_job,omitempty"`
+	LastJobID string    `json:"last_job_id,omitempty"`
 	// LastScan is the most recently finished scan's summary (errors and
 	// newly-missing files, capped — see ScanSummary), independent of
 	// whether another scan is active or queued right now.

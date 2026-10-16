@@ -993,14 +993,23 @@ export function ViewerModal({
               tabIndex={0}
             >
               {activeTab === 'details' && <DetailsPanel key={file.id} file={file} />}
-              {activeTab === 'book' && <BookPanel key={file.id} libraryId={libraryId} file={file} />}
+              {activeTab === 'book' && (
+                <BookPanel key={file.id} libraryId={libraryId} file={file} />
+              )}
               {activeTab === 'tags' && (
                 <TagsPanel key={file.id} libraryId={libraryId} file={file} onChanged={onChanged} />
               )}
               {activeTab === 'collections' && (
-                <CollectionsPanel key={file.id} libraryId={libraryId} file={file} onChanged={onChanged} />
+                <CollectionsPanel
+                  key={file.id}
+                  libraryId={libraryId}
+                  file={file}
+                  onChanged={onChanged}
+                />
               )}
-              {activeTab === 'share' && <SharePanel key={file.id} libraryId={libraryId} file={file} />}
+              {activeTab === 'share' && (
+                <SharePanel key={file.id} libraryId={libraryId} file={file} />
+              )}
             </div>
           </aside>
         )}

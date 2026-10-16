@@ -15,7 +15,12 @@ import {
 import type { RouteHandler } from '../test/harness';
 import BookmarksPage from './BookmarksPage';
 
-const book = fileFixture({ id: 'f1', rel_path: 'dune.epub', name: 'dune.epub', media_type: 'document' });
+const book = fileFixture({
+  id: 'f1',
+  rel_path: 'dune.epub',
+  name: 'dune.epub',
+  media_type: 'document',
+});
 
 const bookmark = {
   id: 'bm1',
@@ -39,9 +44,18 @@ const highlight = {
 function apiRules(overrides: RouteHandler[] = []): RouteHandler[] {
   return [
     ...overrides,
-    (url) => (url.includes('/api/v1/libraries/lib1/bookmarks') ? json({ bookmarks: [bookmark] }) : undefined),
-    (url) => (url.includes('/api/v1/libraries/lib1/highlights') ? json({ highlights: [highlight] }) : undefined),
-    (url) => (url.includes('/api/v1/libraries/lib1/files/f1/book-metadata') ? json({ book: null }) : undefined),
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/bookmarks')
+        ? json({ bookmarks: [bookmark] })
+        : undefined,
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/highlights')
+        ? json({ highlights: [highlight] })
+        : undefined,
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/files/f1/book-metadata')
+        ? json({ book: null })
+        : undefined,
     (url) => (url.endsWith('/api/v1/libraries/lib1/files/f1') ? json({ file: book }) : undefined),
   ];
 }
@@ -70,8 +84,10 @@ describe('BookmarksPage', () => {
 
   it('shows empty states when there is nothing yet', async () => {
     setup([
-      (url) => (url.includes('/api/v1/libraries/lib1/bookmarks') ? json({ bookmarks: [] }) : undefined),
-      (url) => (url.includes('/api/v1/libraries/lib1/highlights') ? json({ highlights: [] }) : undefined),
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/bookmarks') ? json({ bookmarks: [] }) : undefined,
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/highlights') ? json({ highlights: [] }) : undefined,
     ]);
 
     expect(await screen.findByTestId('bookmarks-empty')).toBeInTheDocument();
