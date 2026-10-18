@@ -311,3 +311,25 @@
     transform: translateY(-4px);
   }
 }
+
+/* A row being pointed out (e.g. a file that just finished uploading) blinks
+   twice — the same signal as a revealed card in the grid. */
+.file-row.is-revealed > * {
+  animation: file-row-reveal 800ms ease-in-out 2;
+}
+
+@keyframes file-row-reveal {
+  50% {
+    background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+    box-shadow:
+      inset 0 2px 0 var(--color-primary),
+      inset 0 -2px 0 var(--color-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-row.is-revealed > * {
+    animation: none;
+    background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+}

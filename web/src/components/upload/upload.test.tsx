@@ -1,7 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { UploadProvider, useUploads } from './UploadProvider';
+import { mockApi, originalFetch } from '../../test/harness';
+import Providers from '../../test/Providers';
+import { TopBar } from '../app-shell/TopBar';
+import { useUploads } from './UploadProvider';
 import { UploadTray } from './UploadTray';
 
 type Handler = (() => void) | null;
@@ -23,8 +28,11 @@ class FakeXhr {
   open(_m: string, url: string) {
     this.url = url;
   }
+  body: unknown = null;
   setRequestHeader() {}
-  send() {}
+  send(body: unknown) {
+    this.body = body;
+  }
   abort() {
     this.onabort?.();
   }
@@ -58,20 +66,60 @@ function Pick() {
   );
 }
 
-function setup() {
+/** Where the app has navigated to, for asserting the tray's links. */
+function Location() {
+  const { pathname, search } = useLocation();
+  return <p data-testid="location">{pathname + search}</p>;
+}
+
+function mount(ui: React.ReactNode) {
   requests.length = 0;
   vi.stubGlobal('XMLHttpRequest', FakeXhr);
+  mockApi();
   render(
-    <UploadProvider>
+    <MemoryRouter initialEntries={['/']}>
+      <Providers>
+        <Routes>
+          <Route path="*" element={<Location />} />
+        </Routes>
+        {ui}
+      </Providers>
+    </MemoryRouter>,
+  );
+}
+
+function setup() {
+  mount(
+    <>
       <Pick />
       <UploadTray />
-    </UploadProvider>,
+    </>,
   );
   fireEvent.click(screen.getByText('add'));
 }
 
+/** The server's answer for an uploaded file. */
+function uploadedFile(id: string, name: string, mediaType: string) {
+  return JSON.stringify({
+    file: {
+      id,
+      library_id: 'lib1',
+      rel_path: `trip/${name}`,
+      name,
+      folder_path: 'trip',
+      size_bytes: 1,
+      mod_time: '2026-10-19T00:00:00Z',
+      media_type: mediaType,
+      status: 'present',
+    },
+  });
+}
+
 describe('uploads', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
+  });
 
   it('runs two at a time, into the chosen folder, and starts the next as one finishes', async () => {
     setup();
@@ -120,5 +168,53 @@ describe('uploads', () => {
     act(() => requests[0]!.progress(1, 1));
     const bar = screen.getByRole('progressbar', { name: 'Upload progress' });
     await waitFor(() => expect(Number(bar.getAttribute('aria-valuenow'))).toBeGreaterThan(0));
+  });
+
+  it('opens a finished upload with View', async () => {
+    setup();
+    await waitFor(() => expect(requests).toHaveLength(2));
+    act(() => requests[0]!.finish(201, uploadedFile('f1', 'a.jpg', 'photo')));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View a.jpg' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/files?folder=trip&view=f1');
+  });
+
+  it('opens an uploaded book in the reader', async () => {
+    setup();
+    await waitFor(() => expect(requests).toHaveLength(2));
+    act(() => requests[0]!.finish(201, uploadedFile('b1', 'a.epub', 'document')));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View a.epub' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/read/lib1/b1');
+  });
+
+  it('shows the uploaded files in their folder when the tray is clicked', async () => {
+    setup();
+    await waitFor(() => expect(requests).toHaveLength(2));
+    act(() => requests[0]!.finish(201, uploadedFile('f1', 'a.jpg', 'photo')));
+    act(() => requests[1]!.finish(201, uploadedFile('f2', 'b.jpg', 'photo')));
+
+    fireEvent.click(await screen.findByTestId('upload-reveal'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/files?folder=trip&reveal=f1,f2');
+  });
+
+  it('uploads from the top bar into the folder on screen', async () => {
+    function OnFolder() {
+      const { setTarget } = useUploads();
+      useEffect(() => setTarget({ libraryId: 'lib1', folder: 'trip' }), [setTarget]);
+      return null;
+    }
+    mount(
+      <>
+        <OnFolder />
+        <TopBar searchRef={{ current: null }} onShowShortcuts={() => {}} />
+      </>,
+    );
+
+    const input = await screen.findByLabelText('Upload files to Photos');
+    fireEvent.change(input, { target: { files: [new File(['x'], 'beach.jpg')] } });
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect((requests[0]!.body as FormData).get('path')).toBe('trip/beach.jpg');
   });
 });

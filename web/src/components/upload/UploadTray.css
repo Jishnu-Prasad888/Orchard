@@ -119,3 +119,33 @@
   color: var(--color-danger-ink);
   overflow-wrap: anywhere;
 }
+
+/* A finished upload leads to its file: the title (and each finished row) is
+   a button that shows it in its folder. It keeps reading as text, with a
+   quiet hover to say it can be clicked. */
+.upload-tray-title.is-actionable,
+.upload-item-text.is-actionable {
+  margin: calc(-1 * var(--space-1));
+  padding: var(--space-1);
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.upload-tray-title.is-actionable:hover,
+.upload-item-text.is-actionable:hover {
+  background: var(--color-fill-hover);
+}
+
+.upload-tray-view,
+.upload-item-view {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-ink);
+}

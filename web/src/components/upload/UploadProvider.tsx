@@ -6,8 +6,13 @@
  *
  * A page hands files to `enqueue` and is free to unmount; the queue lives in
  * the app shell, runs two uploads at a time, and reports progress to the
- * compact tray in the corner. Pages that list files watch `completed` and
- * reload when it changes, so a finished upload appears without a refresh.
+ * compact tray in the corner. Each finished upload announces that its
+ * library changed, so every open list (Files, Home, search) re-reads itself
+ * and the new file appears without a refresh.
+ *
+ * The Files page registers the folder it is showing as the upload target, so
+ * the top bar's Upload button puts files where the person is looking rather
+ * than at the library root.
  */
 
 import {
@@ -21,7 +26,9 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
+import { notifyLibraryChanged } from '../../api/libraryEvents';
 import { joinRelPath, uploadFileWithProgress } from '../../api/queries';
+import type { FileSummary } from '../../api/types';
 import { useToast } from '../ui/Toast';
 
 export type UploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'cancelled';
@@ -36,6 +43,14 @@ export interface UploadItem {
   loaded: number;
   total: number;
   error?: string | undefined;
+  /** The file as the server indexed it, once uploaded. */
+  uploaded?: FileSummary | undefined;
+}
+
+/** Where an upload without an explicit folder should go. */
+export interface UploadTarget {
+  libraryId: string;
+  folder: string;
 }
 
 export interface UploadsState {
@@ -47,6 +62,9 @@ export interface UploadsState {
   retry: (id: number) => void;
   /** Remove finished, failed, and cancelled entries from the tray. */
   dismissFinished: () => void;
+  /** The folder on screen, if a page showing one has registered it. */
+  target: UploadTarget | null;
+  setTarget: (target: UploadTarget | null) => void;
 }
 
 const UploadsContext = createContext<UploadsState | null>(null);
@@ -56,6 +74,12 @@ const CONCURRENCY = 2;
 export function UploadProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [completed, setCompleted] = useState(0);
+  const [target, setTargetState] = useState<UploadTarget | null>(null);
+  const setTarget = useCallback((next: UploadTarget | null) => {
+    setTargetState((prev) =>
+      prev?.libraryId === next?.libraryId && prev?.folder === next?.folder ? prev : next,
+    );
+  }, []);
   const nextId = useRef(1);
   const controllers = useRef(new Map<number, AbortController>());
   // Ids already handed to the network, so an effect that runs twice (Strict
@@ -79,9 +103,10 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         signal: controller.signal,
         onProgress: ({ loaded, total }) => patch(item.id, { loaded, total }),
       })
-        .then(() => {
-          patch(item.id, { status: 'done', loaded: item.total });
+        .then((resp) => {
+          patch(item.id, { status: 'done', loaded: item.total, uploaded: resp.file });
           setCompleted((n) => n + 1);
+          notifyLibraryChanged(item.libraryId);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') {
@@ -159,8 +184,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const value = useMemo<UploadsState>(
-    () => ({ items, completed, enqueue, cancel, retry, dismissFinished }),
-    [items, completed, enqueue, cancel, retry, dismissFinished],
+    () => ({ items, completed, enqueue, cancel, retry, dismissFinished, target, setTarget }),
+    [items, completed, enqueue, cancel, retry, dismissFinished, target, setTarget],
   );
 
   return <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>;
@@ -173,6 +198,8 @@ const INERT: UploadsState = {
   cancel: () => {},
   retry: () => {},
   dismissFinished: () => {},
+  target: null,
+  setTarget: () => {},
 };
 
 /** The upload queue. Outside the shell it is inert. */
