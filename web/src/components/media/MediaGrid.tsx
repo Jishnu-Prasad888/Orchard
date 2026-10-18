@@ -62,6 +62,8 @@ export interface MediaGridProps {
   /** Accessible name for the grid region ("Photos", "Album: Summer"). */
   label: string;
   testId?: string;
+  /** Files to point out: the first is scrolled into view and each blinks. */
+  revealed?: ReadonlySet<string>;
 }
 
 export function MediaGrid({
@@ -78,6 +80,7 @@ export function MediaGrid({
   onLoadMore,
   label,
   testId = 'media-grid',
+  revealed,
 }: MediaGridProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -161,6 +164,28 @@ export function MediaGrid({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [hasMore, onLoadMore, files.length]);
+
+  // Bring the first revealed file to the middle of the screen. Its row may
+  // not be mounted yet (only rows near the viewport are), so this scrolls by
+  // the layout's own row position rather than looking for the element.
+  const revealIndex = revealed?.size ? files.findIndex((f) => revealed.has(f.id)) : -1;
+  useEffect(() => {
+    if (revealIndex < 0) return;
+    const current = layoutRef.current;
+    const rowIndex = current.rowOfItem[revealIndex];
+    const row = rowIndex === undefined ? undefined : current.rows[rowIndex];
+    const el = containerRef.current;
+    if (!row || !el) return;
+    const rowTop = el.getBoundingClientRect().top + window.scrollY + row.top;
+    const viewTop = window.scrollY + stickyOffset();
+    const viewBottom = window.scrollY + window.innerHeight;
+    if (rowTop >= viewTop && rowTop + row.height <= viewBottom) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({
+      top: Math.max(0, rowTop + row.height / 2 - window.innerHeight / 2),
+      behavior: reduce ? 'auto' : 'smooth',
+    });
+  }, [revealIndex]);
 
   // Keep the roving tab stop on a file that still exists.
   const safeFocus = Math.min(focusIndex, Math.max(0, files.length - 1));
@@ -300,6 +325,7 @@ export function MediaGrid({
                     onToggleSelect={onToggleSelect}
                     onFocusTile={setFocusIndex}
                     onContextMenu={onContextMenu}
+                    revealed={revealed?.has(file.id) ?? false}
                   />
                 );
               })}

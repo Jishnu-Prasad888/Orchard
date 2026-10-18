@@ -5,11 +5,20 @@
  * complete"); expanded, it lists each file with its own state and a cancel or
  * retry control. It never blocks the page and never covers the bottom
  * navigation.
+ *
+ * Once something has uploaded, the tray leads to it, the way a file
+ * manager's upload panel does: "View" opens the file, and clicking a
+ * finished file (or the tray itself) shows it in its folder, its card
+ * blinking twice so it is easy to spot.
  */
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import { useLibraries } from '../../api/libraries';
+import type { FileSummary } from '../../api/types';
 import { formatBytes } from '../../api/types';
+import { isReadableDocument } from '../media';
 import { Icon } from '../ui/Icon';
 import { type UploadItem, useUploads } from './UploadProvider';
 import './UploadTray.css';
@@ -26,11 +35,39 @@ function summary(items: UploadItem[]) {
   return { active: active.length, done, failed, fraction: total > 0 ? loaded / total : 0 };
 }
 
+function folderQuery(folder: string): string {
+  return folder ? `folder=${encodeURIComponent(folder)}&` : '';
+}
+
 export function UploadTray() {
   const { items, cancel, retry, dismissFinished } = useUploads();
+  const { libraryId } = useLibraries();
+  const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
 
   if (items.length === 0) return null;
+
+  // Finished uploads in the library on screen can be opened or shown; one in
+  // another library would land on the wrong library's Files page.
+  const reachable = (item: UploadItem): item is UploadItem & { uploaded: FileSummary } =>
+    item.status === 'done' && !!item.uploaded && item.libraryId === libraryId;
+  const finished = items.filter(reachable);
+  const latest = finished[finished.length - 1];
+
+  /** Open the file: books in the reader, anything else in the viewer. */
+  const view = (file: FileSummary) => {
+    if (isReadableDocument(file)) navigate(`/read/${libraryId}/${file.id}`);
+    else navigate(`/files?${folderQuery(file.folder_path)}view=${encodeURIComponent(file.id)}`);
+  };
+
+  /** Show files in their folder, their cards blinking. Uploads can span
+   * folders; the latest one's folder is the one shown. */
+  const reveal = (files: FileSummary[]) => {
+    const last = files[files.length - 1];
+    if (!last) return;
+    const here = files.filter((f) => f.folder_path === last.folder_path).map((f) => f.id);
+    navigate(`/files?${folderQuery(last.folder_path)}reveal=${here.join(',')}`);
+  };
 
   const { active, done, failed, fraction } = summary(items);
   const title =
@@ -46,24 +83,51 @@ export function UploadTray() {
     ? `${firstFailure.file.name}: ${firstFailure.error ?? 'The upload failed.'}`
     : null;
 
+  const heading = (
+    <>
+      <span className="upload-tray-heading" role="status" aria-live="polite">
+        {title}
+      </span>
+      <span className="upload-tray-sub">
+        {done} complete
+        {active > 0 && ` · ${active} remaining`}
+        {failed > 0 && ` · ${failed} failed`}
+      </span>
+      {failureReason && !expanded && (
+        <span className="upload-tray-sub upload-tray-reason" title={failureReason}>
+          {failureReason}
+        </span>
+      )}
+    </>
+  );
+
   return (
     <section className="upload-tray" aria-label="Uploads" data-testid="upload-tray">
       <header className="upload-tray-head">
-        <div className="upload-tray-title">
-          <span className="upload-tray-heading" role="status" aria-live="polite">
-            {title}
-          </span>
-          <span className="upload-tray-sub">
-            {done} complete
-            {active > 0 && ` · ${active} remaining`}
-            {failed > 0 && ` · ${failed} failed`}
-          </span>
-          {failureReason && !expanded && (
-            <span className="upload-tray-sub upload-tray-reason" title={failureReason}>
-              {failureReason}
-            </span>
-          )}
-        </div>
+        {finished.length > 0 ? (
+          <button
+            type="button"
+            className="upload-tray-title is-actionable"
+            onClick={() => reveal(finished.map((i) => i.uploaded))}
+            title="Show in folder"
+            data-testid="upload-reveal"
+          >
+            {heading}
+          </button>
+        ) : (
+          <div className="upload-tray-title">{heading}</div>
+        )}
+        {latest && (
+          <button
+            type="button"
+            className="button ghost-button upload-tray-view"
+            onClick={() => view(latest.uploaded)}
+            aria-label={`View ${latest.uploaded.name}`}
+            data-testid="upload-view"
+          >
+            View
+          </button>
+        )}
         <button
           type="button"
           className="icon-button"
@@ -113,19 +177,40 @@ export function UploadTray() {
                 }
                 size={18}
               />
-              <div className="upload-item-text">
-                <span className="upload-item-name" title={item.dest}>
-                  {item.file.name}
-                </span>
-                <span className="upload-item-status">
-                  {item.status === 'uploading' &&
-                    `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`}
-                  {item.status === 'queued' && 'Waiting'}
-                  {item.status === 'done' && 'Uploaded'}
-                  {item.status === 'cancelled' && 'Cancelled'}
-                  {item.status === 'error' && (item.error ?? 'Failed')}
-                </span>
-              </div>
+              {reachable(item) ? (
+                <button
+                  type="button"
+                  className="upload-item-text is-actionable"
+                  onClick={() => reveal([item.uploaded])}
+                  title="Show in folder"
+                >
+                  <span className="upload-item-name" title={item.dest}>
+                    {item.file.name}
+                  </span>
+                  <span className="upload-item-status">
+                    {item.status === 'uploading' &&
+                      `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`}
+                    {item.status === 'queued' && 'Waiting'}
+                    {item.status === 'done' && 'Uploaded'}
+                    {item.status === 'cancelled' && 'Cancelled'}
+                    {item.status === 'error' && (item.error ?? 'Failed')}
+                  </span>
+                </button>
+              ) : (
+                <div className="upload-item-text">
+                  <span className="upload-item-name" title={item.dest}>
+                    {item.file.name}
+                  </span>
+                  <span className="upload-item-status">
+                    {item.status === 'uploading' &&
+                      `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`}
+                    {item.status === 'queued' && 'Waiting'}
+                    {item.status === 'done' && 'Uploaded'}
+                    {item.status === 'cancelled' && 'Cancelled'}
+                    {item.status === 'error' && (item.error ?? 'Failed')}
+                  </span>
+                </div>
+              )}
               {(item.status === 'queued' || item.status === 'uploading') && (
                 <button
                   type="button"
@@ -134,6 +219,16 @@ export function UploadTray() {
                   onClick={() => cancel(item.id)}
                 >
                   <Icon name="close" size={18} />
+                </button>
+              )}
+              {reachable(item) && (
+                <button
+                  type="button"
+                  className="button ghost-button upload-item-view"
+                  onClick={() => view(item.uploaded)}
+                  aria-label={`View ${item.uploaded.name}`}
+                >
+                  View
                 </button>
               )}
               {(item.status === 'error' || item.status === 'cancelled') && (

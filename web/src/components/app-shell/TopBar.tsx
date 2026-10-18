@@ -24,9 +24,11 @@ export function TopBar({
   onShowShortcuts: () => void;
 }) {
   const { library } = useLibraries();
-  const { enqueue } = useUploads();
+  const { enqueue, target } = useUploads();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const canUpload = library !== null && library.status !== 'offline';
+  // Upload into the folder on screen (Files registers it), else the root.
+  const uploadFolder = library && target?.libraryId === library.id ? target.folder : '';
   const { pathname } = useLocation();
   const mode = pageSearchMode(pathname);
 
@@ -57,7 +59,7 @@ export function TopBar({
               type="button"
               className="button ghost-button topbar-upload"
               onClick={() => fileRef.current?.click()}
-              title={`Upload to ${library.name}`}
+              title={`Upload to ${library.name}${uploadFolder ? ` / ${uploadFolder}` : ''}`}
             >
               <Icon name="upload" />
               <span className="topbar-upload-label">Upload</span>
@@ -70,7 +72,7 @@ export function TopBar({
               aria-label={`Upload files to ${library.name}`}
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
-                if (files.length) enqueue(library.id, files, '');
+                if (files.length) enqueue(library.id, files, uploadFolder);
                 event.target.value = '';
               }}
             />

@@ -7,6 +7,8 @@
  * Columns fold away on narrow screens, name first to stay.
  */
 
+import { useEffect, useRef } from 'react';
+
 import type { FileSort, SortOrder } from '../../api/queries';
 import type { FileSummary, Folder } from '../../api/types';
 import { formatBytes } from '../../api/types';
@@ -28,6 +30,8 @@ interface FileTableProps {
   sort?: { sort: FileSort; order: SortOrder } | undefined;
   onSort?: ((sort: FileSort, order: SortOrder) => void) | undefined;
   onMenu?: (file: FileSummary, x: number, y: number) => void;
+  /** Files to point out: the first is scrolled into view and each blinks. */
+  revealed?: ReadonlySet<string>;
 }
 
 const COLUMNS: Array<{ id: FileSort | null; label: string; className: string }> = [
@@ -48,11 +52,23 @@ export function FileTable({
   sort,
   onSort,
   onMenu,
+  revealed,
 }: FileTableProps) {
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const firstRevealed = revealed?.size ? files.find((f) => revealed.has(f.id))?.id : undefined;
+  useEffect(() => {
+    if (!firstRevealed) return;
+    const row = tableRef.current?.querySelector<HTMLElement>(
+      `tr[data-file-id="${CSS.escape(firstRevealed)}"]`,
+    );
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    row?.scrollIntoView?.({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  }, [firstRevealed]);
+
   const allSelected = files.length > 0 && selection.size === files.length;
 
   return (
-    <table className="file-table" data-testid="file-list">
+    <table className="file-table" data-testid="file-list" ref={tableRef}>
       <caption className="visually-hidden">Files, with type, size, and modified date</caption>
       <thead>
         <tr>
@@ -137,7 +153,14 @@ export function FileTable({
           return (
             <tr
               key={file.id}
-              className={selected ? 'file-row is-selected' : 'file-row'}
+              data-file-id={file.id}
+              className={[
+                'file-row',
+                selected ? 'is-selected' : '',
+                revealed?.has(file.id) ? 'is-revealed' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onContextMenu={(event) => {
                 if (!onMenu) return;
                 event.preventDefault();

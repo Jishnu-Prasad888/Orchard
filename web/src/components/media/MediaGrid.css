@@ -379,3 +379,33 @@
 .media-date {
   animation: content-in var(--duration-slow) var(--ease-out) backwards;
 }
+
+/* A card being pointed out (e.g. a file that just finished uploading):
+   a ring and a wash blink on twice, then the card is itself again. The
+   overlay sits inside the tile, which clips anything drawn outside it. */
+.media-tile.is-revealed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  opacity: 0;
+  animation: reveal-blink 800ms ease-in-out 2;
+}
+
+@keyframes reveal-blink {
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No blinking: a steady ring for as long as the file is pointed out. */
+  .media-tile.is-revealed::after {
+    opacity: 1;
+    animation: none;
+  }
+}

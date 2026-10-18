@@ -11,7 +11,7 @@
  * file — lives in the URL, so Back, reload, and sharing a link all work.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
@@ -147,6 +147,9 @@ export default function MediaPage({ config }: { config: MediaPageConfig }) {
   return <MediaBrowser config={config} library={gate.library} />;
 }
 
+/** How long a revealed file's card blinks (two blinks; see MediaGrid.css). */
+const REVEAL_MS = 1600;
+
 function MediaBrowser({ config, library }: { config: MediaPageConfig; library: Library }) {
   const libraryId = library.id;
   const [params, setParams] = useSearchParams();
@@ -165,6 +168,10 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const tag = config.searchPage ? (params.get('tag') ?? undefined) : undefined;
   const author = config.searchPage ? (params.get('author') ?? undefined) : undefined;
   const collectionId = config.searchPage ? (params.get('collection') ?? undefined) : undefined;
+  // Files to point out once they're on screen (`?reveal=id,id`), e.g. from
+  // the upload panel: their cards blink twice, then the parameter goes away.
+  const revealParam = params.get('reveal') ?? '';
+  const revealed = useMemo(() => new Set(revealParam.split(',').filter(Boolean)), [revealParam]);
 
   const [sortValue, setSortValue] = useState<SortValue>('mod_time:desc');
   const [sort, order] = sortValue.split(':') as [FileSort, SortOrder];
@@ -192,6 +199,14 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
       // Not remembered.
     }
   };
+
+  // The top bar's Upload button puts files into the folder on screen.
+  const { setTarget: setUploadTarget } = uploads;
+  useEffect(() => {
+    if (!folderMode) return;
+    setUploadTarget({ libraryId, folder });
+    return () => setUploadTarget(null);
+  }, [folderMode, libraryId, folder, setUploadTarget]);
 
   /** Change one URL parameter in place (typing a query should not fill history). */
   const setParam = useCallback(
@@ -240,11 +255,31 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     withFolders: folderMode && !q,
   };
 
-  const listing = useFileListing(libraryId, query, {
-    enabled: !offline,
-    refreshKey: uploads.completed,
-  });
+  // A finished upload announces a library change, which re-reads this list
+  // behind what is on screen (see useFileListing) — no flash, no lost scroll.
+  const listing = useFileListing(libraryId, query, { enabled: !offline });
   const { files, folders, total } = listing;
+
+  // Once a revealed file has had its two blinks, stop pointing at it; give a
+  // file that never shows up (deleted since, or further down the list) a
+  // little longer before letting go.
+  const revealShown = files.some((f) => revealed.has(f.id));
+  useEffect(() => {
+    if (!revealParam) return;
+    const timer = setTimeout(
+      () =>
+        setParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('reveal');
+            return next;
+          },
+          { replace: true },
+        ),
+      revealShown ? REVEAL_MS : REVEAL_MS * 3,
+    );
+    return () => clearTimeout(timer);
+  }, [revealParam, revealShown, setParams]);
 
   const favorites = useFavorites(libraryId);
   const selection = useSelection(files, `${libraryId}|${JSON.stringify(query)}`);
@@ -673,6 +708,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
               sort={listing.searching ? undefined : { sort, order }}
               onSort={(s, o) => setSortValue(`${s}:${o}`)}
               onMenu={openMenu}
+              revealed={revealed}
             />
           ) : (
             files.length > 0 && (
@@ -688,6 +724,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
                 onLoadMore={listing.loadMore}
                 label={config.title}
                 testId="file-grid"
+                revealed={revealed}
               />
             )
           )}

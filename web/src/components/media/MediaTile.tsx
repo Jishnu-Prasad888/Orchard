@@ -37,6 +37,8 @@ export interface MediaTileProps {
   onToggleSelect: (file: FileSummary, index: number, range: boolean) => void;
   onFocusTile: (index: number) => void;
   onContextMenu?: ((file: FileSummary, x: number, y: number) => void) | undefined;
+  /** Being pointed out (e.g. just uploaded): the card blinks twice. */
+  revealed?: boolean;
 }
 
 function MediaTileImpl({
@@ -54,6 +56,7 @@ function MediaTileImpl({
   onToggleSelect,
   onFocusTile,
   onContextMenu,
+  revealed = false,
 }: MediaTileProps) {
   const [failed, setFailed] = useState(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
@@ -102,6 +105,7 @@ function MediaTileImpl({
     selecting ? 'is-selecting' : '',
     hasThumb ? '' : 'is-placeholder',
     percent > 0 ? 'has-progress' : '',
+    revealed ? 'is-revealed' : '',
   ]
     .filter(Boolean)
     .join(' ');

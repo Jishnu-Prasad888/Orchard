@@ -802,6 +802,17 @@ describe('MediaPage', () => {
     });
   });
 
+  it('points out a revealed file by making its card blink', async () => {
+    mockApi(apiRules());
+    renderPage(<MediaPage config={CONFIG} />, { route: '/files?reveal=f1' });
+
+    const grid = await screen.findByTestId('file-grid');
+    const tile = within(grid).getByText('IMG_0001.png').closest('[data-testid="media-tile"]');
+    expect(tile).toHaveClass('is-revealed');
+    const other = within(grid).getByText('clip.mp4').closest('[data-testid="media-tile"]');
+    expect(other).not.toHaveClass('is-revealed');
+  });
+
   it('offers no note or caption in the viewer', async () => {
     const fetchMock = setup();
 
