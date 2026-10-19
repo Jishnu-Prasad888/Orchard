@@ -45,6 +45,10 @@ type IndexStatus struct {
 	// newly-missing files, capped — see ScanSummary), independent of
 	// whether another scan is active or queued right now.
 	LastScan *ScanSummary `json:"last_scan,omitempty"`
+	// Revision changes whenever the library's contents may have: the counts
+	// moved or background work finished. Clients poll this one cheap
+	// endpoint and re-read heavier listings only when it changes.
+	Revision string `json:"revision"`
 }
 
 // IndexManager coordinates opening the per-library database, enqueueing scan
@@ -243,6 +247,9 @@ func (m *IndexManager) Status(ctx context.Context, libraryID, root string) (*Ind
 			status.LastJobID = queued[0].ID
 		}
 	}
+
+	latest, _ := q.LatestFinishedAt(ctx)
+	status.Revision = fmt.Sprintf("%d.%d.%d.%s", present, missing, deleted, latest)
 
 	if last, err := q.LastFinished(ctx, jobs.KindIndex); err == nil && last != nil && last.Result != "" {
 		var summary ScanSummary

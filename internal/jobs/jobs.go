@@ -192,6 +192,17 @@ func (q *Queue) LastFinished(ctx context.Context, kind string) (*Job, error) {
 	return job, nil
 }
 
+// LatestFinishedAt is when any job last finished (empty if none), a cheap
+// marker that background work — a scan, a cover, extracted text — changed
+// the library.
+func (q *Queue) LatestFinishedAt(ctx context.Context) (string, error) {
+	var at string
+	err := q.db.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(finished_at), '') FROM index_jobs
+		 WHERE status IN ('completed', 'failed')`).Scan(&at)
+	return at, err
+}
+
 // Cancel marks a queued or running job as cancelled.
 func (q *Queue) Cancel(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx,

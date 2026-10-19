@@ -11,12 +11,11 @@
  * Raspberry Pi with a hundred thousand files.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
 import { useFileLabels } from '../api/fileLabels';
-import { notifyLibraryChanged } from '../api/libraryEvents';
 import { useLibraryResource } from '../api/resources';
 import {
   getHomeLayout,
@@ -57,8 +56,6 @@ const RECENT_LIMIT = 40;
 const HOME_ROWS = 2;
 const PHOTO_GAP = 4;
 /** How often Home re-reads itself: fast while empty (a scan may be filling it). */
-const HOME_EMPTY_REFRESH_MS = 3000;
-const HOME_REFRESH_MS = 15000;
 
 /** How many quotes/collections to fetch for their Home sections. */
 const WRITING_LIMIT = 6;
@@ -226,22 +223,11 @@ function Home({ library }: { library: Library }) {
   const indexStatus = useIndexStatus(libraryId, empty, false);
   const scanning = empty && isIndexing(indexStatus);
 
-  // Keep the page current without a manual refresh. The shell only announces a
-  // change when the index counts move between two of its polls, which a small
-  // library that finishes scanning in between never does — so Home also asks to
-  // be re-read on a timer: quickly while it has nothing to show, slowly after.
-  // The re-read happens behind the data on screen, so nothing flashes.
-  const hasLoaded = data !== null;
-  useEffect(() => {
-    if (!hasLoaded) return;
-    const timer = setInterval(
-      () => {
-        if (!document.hidden) notifyLibraryChanged(libraryId);
-      },
-      empty ? HOME_EMPTY_REFRESH_MS : HOME_REFRESH_MS,
-    );
-    return () => clearInterval(timer);
-  }, [hasLoaded, empty, libraryId]);
+  // Home stays current without a timer of its own: the shell polls the
+  // library's index status revision and announces a change whenever it moves
+  // (a scan, a new cover, an edit from another device), which re-reads this
+  // page behind the data on screen. It used to re-fetch all six sections every
+  // 15 seconds whether or not anything had changed.
 
   const [recentRef, recentWidth] = useWidth();
   const photoColumns = gridMetrics(recentWidth, PHOTO_GAP).columns;

@@ -122,6 +122,9 @@ export interface IndexStatus {
   /** The most recently finished scan's summary — independent of whether
    * another scan is active or queued right now. */
   last_scan?: ScanSummary;
+  /** Changes whenever the library's contents may have — files, covers,
+   * edits from any device. Compare it to know when to re-read listings. */
+  revision?: string;
 }
 
 /** One path that failed during a scan, with a short reason. */
