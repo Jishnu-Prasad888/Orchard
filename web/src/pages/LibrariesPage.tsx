@@ -285,7 +285,6 @@ function AddLibraryDialog({ onClose }: { onClose: () => void }) {
               value={path}
               onChange={(e) => choosePath(e.target.value)}
               placeholder="/mnt/photos"
-              autoFocus
               data-testid="library-path-input"
             />
             <button

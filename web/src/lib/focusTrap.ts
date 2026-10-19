@@ -20,6 +20,10 @@ import type { RefObject } from 'react';
 export const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Selector for the form fields a dialog should land on when it opens. */
+export const FIELDS =
+  'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"]';
+
 /** The part of a keyboard event the trap needs, from either DOM or React. */
 export interface TabKeyEvent {
   key: string;
@@ -36,9 +40,19 @@ export interface TabKeyEvent {
  * actually matters here — a collapsed panel, an `aria-hidden` subtree — is
  * expressed in the attributes this checks.
  */
-function isReachable(el: HTMLElement): boolean {
+export function isReachable(el: HTMLElement): boolean {
   if (el.hidden) return false;
   return !el.closest('[hidden], [aria-hidden="true"]');
+}
+
+/**
+ * Where focus should land when a dialog opens: its first form field, so the
+ * user can start typing straight away, otherwise its first focusable control.
+ */
+export function initialFocus(panel: HTMLElement): HTMLElement | null {
+  const pick = (selector: string) =>
+    Array.from(panel.querySelectorAll<HTMLElement>(selector)).find(isReachable) ?? null;
+  return pick(FIELDS) ?? pick(FOCUSABLE);
 }
 
 /**

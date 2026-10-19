@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { FOCUSABLE, trapTab } from '../lib/focusTrap';
+import { initialFocus, trapTab } from '../lib/focusTrap';
 import { Icon } from './ui/Icon';
 import './Dialog.css';
 
@@ -31,7 +31,7 @@ export interface DialogProps {
 }
 
 /**
- * A modal dialog. Traps Tab within itself, moves focus in on open, restores it
+ * A modal dialog. Traps Tab within itself, focuses its first field on open, restores it
  * to the invoking element on close, and dismisses on Escape.
  */
 export function Dialog({
@@ -48,14 +48,14 @@ export function Dialog({
   const restoreRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
-  // Remember the invoker so focus returns there on close, then move focus in.
+  // Remember the invoker so focus returns there on close, then move focus to
+  // the first field so the user can type straight away.
   useEffect(() => {
     if (!open) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
     if (!panel) return;
-    const first = panel.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? panel).focus();
+    (initialFocus(panel) ?? panel).focus();
     return () => {
       restoreRef.current?.focus?.();
     };
