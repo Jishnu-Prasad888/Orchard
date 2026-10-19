@@ -45,7 +45,7 @@ import { Icon, type IconName } from '../components/ui/Icon';
 import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { useToast } from '../components/ui/Toast';
 import { useFileDrop } from '../components/upload/useFileDrop';
-import { useUploads } from '../components/upload/UploadProvider';
+import { useUploadActions } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
 import './MediaPage.css';
 
@@ -155,7 +155,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const uploads = useUploads();
+  const uploads = useUploadActions();
   const offline = library.status === 'offline';
   const folderMode = config.showFolders ?? false;
   const showTypeFilter = config.showTypeFilter ?? config.type === undefined;

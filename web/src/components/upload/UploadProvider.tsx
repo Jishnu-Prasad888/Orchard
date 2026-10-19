@@ -74,7 +74,20 @@ export interface UploadsState {
   setTarget: (target: UploadTarget | null) => void;
 }
 
+/** What pages need to start uploads; stable while uploads progress. */
+export type UploadActions = Pick<
+  UploadsState,
+  'enqueue' | 'cancel' | 'retry' | 'dismissFinished' | 'target' | 'setTarget'
+>;
+
+// Two contexts so a progress tick re-renders only the tray: pages that just
+// start uploads (Home, Files, the top bar) read the actions, which do not
+// change as bytes go up.
 const UploadsContext = createContext<UploadsState | null>(null);
+const UploadActionsContext = createContext<UploadActions | null>(null);
+
+/** Progress is reported to React at most this often per file. */
+const PROGRESS_INTERVAL_MS = 200;
 
 const CONCURRENCY = 2;
 
@@ -106,9 +119,17 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController();
       controllers.current.set(item.id, controller);
       patch(item.id, { status: 'uploading', loaded: 0, notice: undefined });
+      // XHR fires progress events many times a second; repainting the tray
+      // for each is wasted work on a phone.
+      let lastReport = 0;
       resumableUpload(item.libraryId, item.file, item.dest, {
         signal: controller.signal,
-        onProgress: ({ loaded, total }) => patch(item.id, { loaded, total }),
+        onProgress: ({ loaded, total }) => {
+          const now = Date.now();
+          if (loaded < total && now - lastReport < PROGRESS_INTERVAL_MS) return;
+          lastReport = now;
+          patch(item.id, { loaded, total });
+        },
         onNotice: (notice) => patch(item.id, { notice: notice ?? undefined }),
       })
         .then((file) => {
@@ -191,12 +212,20 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [items]);
 
+  const actions = useMemo<UploadActions>(
+    () => ({ enqueue, cancel, retry, dismissFinished, target, setTarget }),
+    [enqueue, cancel, retry, dismissFinished, target, setTarget],
+  );
   const value = useMemo<UploadsState>(
-    () => ({ items, completed, enqueue, cancel, retry, dismissFinished, target, setTarget }),
-    [items, completed, enqueue, cancel, retry, dismissFinished, target, setTarget],
+    () => ({ ...actions, items, completed }),
+    [actions, items, completed],
   );
 
-  return <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>;
+  return (
+    <UploadActionsContext.Provider value={actions}>
+      <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>
+    </UploadActionsContext.Provider>
+  );
 }
 
 const INERT: UploadsState = {
@@ -213,4 +242,9 @@ const INERT: UploadsState = {
 /** The upload queue. Outside the shell it is inert. */
 export function useUploads(): UploadsState {
   return useContext(UploadsContext) ?? INERT;
+}
+
+/** Just the upload actions — use this unless you show upload progress. */
+export function useUploadActions(): UploadActions {
+  return useContext(UploadActionsContext) ?? INERT;
 }

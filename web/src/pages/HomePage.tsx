@@ -45,7 +45,7 @@ import { EmptyState, ErrorState, LibraryOfflineNotice } from '../components/Stat
 import { downloadUrl } from '../components/media';
 import { Icon } from '../components/ui/Icon';
 import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
-import { useUploads } from '../components/upload/UploadProvider';
+import { useUploadActions } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
 import { greeting } from '../lib/dates';
 import { isIndexing, useIndexStatus } from '../components/app-shell/useIndexStatus';
@@ -511,7 +511,7 @@ function Home({ library }: { library: Library }) {
  * existing upload provider — the same mechanism the top bar's Upload button
  * uses, surfaced here for a quick add-books-and-go without leaving Home. */
 function QuickImport({ library }: { library: Library }) {
-  const { enqueue } = useUploads();
+  const { enqueue } = useUploadActions();
   const fileRef = useRef<HTMLInputElement | null>(null);
   return (
     <>
