@@ -30,7 +30,7 @@ func (s *Server) openMediaService(
 	}
 
 	orchardDir := lib.Root + "/.orchard"
-	db, err := librarydb.Open(orchardDir)
+	db, release, err := librarydb.Acquire(orchardDir)
 	if err != nil {
 		s.logger.Error("open library db", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
@@ -39,7 +39,7 @@ func (s *Server) openMediaService(
 	}
 	store := media.NewFileStore(db, lib.ID)
 	svc := media.NewService(store, lib.Root, media.WithMaxUploadBytes(s.maxUploadBytes))
-	cleanup := func() { _ = db.Close() }
+	cleanup := release
 	return svc, cleanup, true
 }
 

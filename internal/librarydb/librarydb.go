@@ -37,23 +37,30 @@ const (
 
 // DB wraps a per-library SQLite connection pool. Use OpenDB to construct one.
 type DB struct {
-	pool *sql.DB
+	pool    *sql.DB
+	release func()
 }
 
 // DB returns the underlying *sql.DB connection pool.
 func (d *DB) DB() *sql.DB { return d.pool }
 
-// Close closes the underlying connection pool.
-func (d *DB) Close() error { return d.pool.Close() }
+// Close releases the pool; the shared pool behind it stays open for others.
+func (d *DB) Close() error {
+	d.release()
+	return nil
+}
 
 // OpenDB opens (creating if necessary) the per-library SQLite database at
 // <orchardDir>/library.db and applies any pending schema migrations.
+//
+// The pool is shared with every other user of the same library (see
+// Acquire); Close releases this handle rather than closing it.
 func OpenDB(orchardDir string) (*DB, error) {
-	pool, err := Open(orchardDir)
+	pool, release, err := Acquire(orchardDir)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{pool: pool}, nil
+	return &DB{pool: pool, release: release}, nil
 }
 
 // Open opens (creating if necessary) the per-library SQLite database at

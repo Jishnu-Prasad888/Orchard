@@ -28,14 +28,14 @@ func (s *Server) openRecentsStore(
 			CodeConflict, "Library is offline.")
 		return nil, nil, false
 	}
-	db, err := librarydb.Open(lib.Root + "/.orchard")
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
 	if err != nil {
 		s.logger.Error("open library db for recents", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Failed to open library database.")
 		return nil, nil, false
 	}
-	return recents.NewStore(db, lib.ID), func() { _ = db.Close() }, true
+	return recents.NewStore(db, lib.ID), release, true
 }
 
 // handleMarkFileOpened — POST /api/v1/libraries/{id}/files/{fileID}/opened

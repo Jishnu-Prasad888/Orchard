@@ -27,7 +27,7 @@ func (s *Server) openSearchStore(
 		return nil, nil, false
 	}
 	orchardDir := lib.Root + "/.orchard"
-	db, err := librarydb.Open(orchardDir)
+	db, release, err := librarydb.Acquire(orchardDir)
 	if err != nil {
 		s.logger.Error("open library db for search", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
@@ -35,7 +35,7 @@ func (s *Server) openSearchStore(
 		return nil, nil, false
 	}
 	store := search.NewSearchStore(db, lib.ID)
-	return store, func() { _ = db.Close() }, true
+	return store, release, true
 }
 
 // handleSearch — GET /api/v1/libraries/{id}/search
@@ -156,11 +156,11 @@ func enrichContentLocations(ctx context.Context, lib *library.Library, userID st
 	if !needsQuotes && !needsHighlights {
 		return locations
 	}
-	db, err := librarydb.Open(lib.Root + "/.orchard")
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
 	if err != nil {
 		return locations
 	}
-	defer func() { _ = db.Close() }()
+	defer release()
 
 	if needsQuotes {
 		qs := quotes.NewStore(db)

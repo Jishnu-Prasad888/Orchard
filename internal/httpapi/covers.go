@@ -52,11 +52,11 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 	if len(ids) == 0 {
 		return fileExtras{}
 	}
-	db, err := librarydb.Open(lib.Root + "/.orchard")
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
 	if err != nil {
 		return fileExtras{}
 	}
-	defer func() { _ = db.Close() }()
+	defer release()
 
 	var extras fileExtras
 	paths, err := bookmeta.NewStore(db).CoverPaths(ctx, ids)

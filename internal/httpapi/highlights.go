@@ -21,14 +21,14 @@ func (s *Server) openHighlightStore(
 			CodeConflict, "Library is offline.")
 		return nil, nil, false
 	}
-	db, err := librarydb.Open(lib.Root + "/.orchard")
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
 	if err != nil {
 		s.logger.Error("open library db for highlights", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Failed to open library database.")
 		return nil, nil, false
 	}
-	return highlights.NewStore(db), func() { _ = db.Close() }, true
+	return highlights.NewStore(db), release, true
 }
 
 // highlightResponse is the API representation of a highlight.
