@@ -26,6 +26,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/logging"
+	"github.com/Jishnu-Prasad888/Orchard/internal/memlimit"
 	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
 	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
 	"github.com/Jishnu-Prasad888/Orchard/internal/thumbs"
@@ -60,6 +61,7 @@ func run() error {
 		"data_dir", cfg.DataDir,
 		"http_addr", cfg.HTTPAddr,
 	)
+	memlimit.Apply(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -110,6 +112,8 @@ func run() error {
 	// files via the indexer.MediaProcessor extension point.
 	idxManager := indexer.NewIndexManager(logger)
 	idxManager.SetBaseContext(ctx)
+	// Keep the compiled PDF renderer between runs (verified before each use).
+	bookmeta.SetPDFRendererCache(filepath.Join(cfg.DataDir, "cache"), logger)
 	idxManager.SetMediaProcessor(indexer.Combine(bookmeta.NewProcessor(logger), thumbs.NewProcessor(logger)))
 
 	// Recover persisted scan and processing jobs after a restart: start one
