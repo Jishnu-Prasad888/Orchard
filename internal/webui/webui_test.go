@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // buildTestDist writes a minimal real-world-like build output to a temp
@@ -197,5 +198,47 @@ func TestEmbeddedHandler(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Orchard") {
 		t.Errorf("embedded placeholder does not reference Orchard")
+	}
+}
+
+func TestServesPrecompressedAssetsTheClientAccepts(t *testing.T) {
+	h := &spaHandler{fsys: fstest.MapFS{
+		"index.html":           {Data: []byte("<html>")},
+		"assets/app.js":        {Data: []byte("plain")},
+		"assets/app.js.br":     {Data: []byte("brotli")},
+		"assets/app.js.gz":     {Data: []byte("gzip")},
+		"assets/only-plain.js": {Data: []byte("plain only")},
+	}}
+	get := func(path, accept string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if accept != "" {
+			req.Header.Set("Accept-Encoding", accept)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, tc := range []struct{ accept, body, encoding string }{
+		{"gzip, deflate, br", "brotli", "br"},
+		{"gzip", "gzip", "gzip"},
+		{"br;q=0, gzip", "gzip", "gzip"},
+		{"", "plain", ""},
+	} {
+		rec := get("/assets/app.js", tc.accept)
+		if rec.Body.String() != tc.body || rec.Header().Get("Content-Encoding") != tc.encoding {
+			t.Errorf("Accept-Encoding %q: body %q encoding %q", tc.accept, rec.Body, rec.Header().Get("Content-Encoding"))
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {
+			t.Errorf("Accept-Encoding %q: content type %q", tc.accept, ct)
+		}
+		if rec.Header().Get("Vary") != "Accept-Encoding" {
+			t.Errorf("Accept-Encoding %q: missing Vary", tc.accept)
+		}
+	}
+	if rec := get("/assets/only-plain.js", "br"); rec.Body.String() != "plain only" || rec.Header().Get("Content-Encoding") != "" {
+		t.Errorf("uncompressed asset = %q %q", rec.Body, rec.Header().Get("Content-Encoding"))
+	}
+	if rec := get("/library/some/route", "br"); rec.Body.String() != "<html>" {
+		t.Errorf("SPA fallback = %q", rec.Body)
 	}
 }
