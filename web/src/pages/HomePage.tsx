@@ -190,7 +190,7 @@ function Home({ library }: { library: Library }) {
   const ops = useFileOperations(libraryId, home.reload);
   // Right-click on any tile: the same short menu in every section.
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
-  const { openViewer, openProperties } = ops;
+  const { openViewer, openProperties, openTags } = ops;
   const openMenu = useCallback(
     (file: FileSummary, x: number, y: number) =>
       setMenu({
@@ -204,6 +204,13 @@ function Home({ library }: { library: Library }) {
             href: downloadUrl(libraryId, file),
           },
           {
+            id: 'tags',
+            label: 'Tags…',
+            icon: 'tag',
+            onSelect: () => openTags(file),
+            testId: 'menu-tags',
+          },
+          {
             id: 'properties',
             label: 'Properties',
             icon: 'settings',
@@ -212,7 +219,7 @@ function Home({ library }: { library: Library }) {
           },
         ],
       }),
-    [libraryId, openViewer, openProperties],
+    [libraryId, openViewer, openProperties, openTags],
   );
   const data = home.data;
 

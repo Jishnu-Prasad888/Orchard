@@ -23,10 +23,11 @@ import {
   softDeleteFile,
 } from '../api/queries';
 import type { FileSummary } from '../api/types';
-import { ConfirmDialog, PromptDialog } from './Dialog';
+import { ConfirmDialog, Dialog, PromptDialog } from './Dialog';
 import { FolderPicker } from './FolderPicker';
 import { isReadableDocument } from './media';
 import { PropertiesDialog } from './PropertiesDialog';
+import { TagsPanel } from './viewer/TagsPanel';
 import type { ViewerAction } from './ViewerModal';
 
 export type FileDialogKind = ViewerAction | 'permanent';
@@ -45,6 +46,8 @@ export interface FileOperations {
   requestAction: (action: FileDialogKind, file: FileSummary) => void;
   /** Open the Properties dialog for a file. */
   openProperties: (file: FileSummary) => void;
+  /** Open the tag editor for a file. */
+  openTags: (file: FileSummary) => void;
   /** Dialog and error state to render. Renders nothing when idle. */
   dialogs: ReactElement;
   /** True while a dialog action is in flight. */
@@ -70,6 +73,7 @@ export function useFileOperations(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [properties, setProperties] = useState<FileSummary | null>(null);
+  const [tagging, setTagging] = useState<FileSummary | null>(null);
 
   const closeDialog = useCallback(() => {
     setPending(null);
@@ -227,6 +231,23 @@ export function useFileOperations(
         onClose={() => setProperties(null)}
         onChanged={onChanged}
       />
+
+      <Dialog
+        open={tagging !== null}
+        title={tagging ? `Tags for “${tagging.name}”` : 'Tags'}
+        onClose={() => setTagging(null)}
+        size="medium"
+        testId="tags-dialog"
+        footer={
+          <button type="button" className="button primary-button" onClick={() => setTagging(null)}>
+            Done
+          </button>
+        }
+      >
+        {tagging && (
+          <TagsPanel key={tagging.id} libraryId={libraryId} file={tagging} onChanged={onChanged} />
+        )}
+      </Dialog>
     </>
   );
 
@@ -236,6 +257,7 @@ export function useFileOperations(
     closeViewer,
     requestAction,
     openProperties: setProperties,
+    openTags: setTagging,
     dialogs,
     busy,
   };
