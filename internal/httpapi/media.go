@@ -3,7 +3,9 @@ package httpapi
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
+	"github.com/Jishnu-Prasad888/Orchard/internal/uploads"
 )
 
 // openMediaService opens the per-library DB and returns a media.Service and
@@ -182,43 +185,87 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request, u *a
 }
 
 // handleUploadFile — POST /api/v1/libraries/{id}/files/upload
+//
+// The one-shot multipart upload, kept for small files and simple clients;
+// the web UI uses the resumable /uploads protocol (uploads.go). The form is
+// streamed part by part rather than parsed with ParseMultipartForm, which
+// would hold 32 MiB in memory and spool the rest to /tmp — on a Raspberry Pi
+// often a RAM disk. The file lands in the library's .orchard/uploads and is
+// renamed into place, so it is written once.
 func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request, u *auth.User) {
-	lib, err := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
-	if err != nil {
-		s.writeLibraryError(w, r, err)
+	lib, ok := s.onlineLibrary(w, r, u)
+	if !ok {
 		return
 	}
-	// 32 MiB in memory, rest spooled to disk. The request body is capped so
-	// the spool cannot grow without bound (media.WriteUpload enforces the same
-	// limit at the store layer). A small margin absorbs multipart part
-	// headers and form fields.
-	limit := s.maxUploadBytes
-	if limit <= 0 {
-		limit = media.DefaultMaxUploadBytes
-	}
+	reqID := requestIDOrEmpty(r)
+	limit := s.uploadLimit()
+	// A small margin absorbs multipart part headers and form fields.
 	r.Body = http.MaxBytesReader(w, r.Body, limit+(1<<20))
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
-			writeError(w, s.logger, requestIDOrEmpty(r), http.StatusRequestEntityTooLarge,
-				CodePayloadTooLarge, "Upload exceeds the maximum allowed size.")
+	body := newStallReader(r.Body, http.NewResponseController(w))
+	r.Body = io.NopCloser(body)
+	mr, err := r.MultipartReader()
+	if err != nil {
+		writeError(w, s.logger, reqID, http.StatusBadRequest, CodeBadRequest,
+			"The upload wasn’t sent as a multipart form.")
+		return
+	}
+
+	store := uploads.Open(lib.Root)
+	var destPath, fileName, tmpPath string
+	defer func() {
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath) // no-op once committed
+		}
+	}()
+	for {
+		part, err := mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			s.writeUploadError(w, r, err)
 			return
 		}
-		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest,
-			CodeBadRequest, "Invalid multipart form.")
+		switch {
+		case part.FormName() == "path":
+			raw, err := io.ReadAll(io.LimitReader(part, 4096))
+			if err != nil {
+				s.writeUploadError(w, r, err)
+				return
+			}
+			destPath = string(raw)
+		case part.FormName() == "file" && tmpPath == "":
+			fileName = part.FileName()
+			tmp, err := store.CreateTemp()
+			if err != nil {
+				s.writeUploadError(w, r, err)
+				return
+			}
+			tmpPath = tmp.Name()
+			n, copyErr := io.Copy(tmp, io.LimitReader(part, limit+1))
+			closeErr := tmp.Close()
+			if copyErr == nil {
+				copyErr = closeErr
+			}
+			if copyErr != nil {
+				s.writeUploadError(w, r, copyErr)
+				return
+			}
+			if n > limit {
+				s.writeUploadError(w, r, media.ErrUploadTooLarge)
+				return
+			}
+		}
+		_ = part.Close()
+	}
+	body.done()
+	if tmpPath == "" {
+		writeError(w, s.logger, reqID, http.StatusBadRequest, CodeBadRequest,
+			"Missing 'file' field in form.")
 		return
 	}
-	mf, header, err := r.FormFile("file")
-	if err != nil {
-		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest,
-			CodeBadRequest, "Missing 'file' field in form.")
-		return
-	}
-	defer func() { _ = mf.Close() }()
-
-	destPath := r.FormValue("path")
 	if destPath == "" {
-		destPath = header.Filename
+		destPath = fileName
 	}
 	if !s.requireCap(w, r, u, parentFolderKey(lib.ID, destPath), authz.CapCreate) {
 		return
@@ -230,9 +277,9 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request, u *aut
 	}
 	defer cleanup()
 
-	created, err := svc.WriteUpload(r.Context(), destPath, mf)
+	created, err := svc.CommitUpload(r.Context(), destPath, tmpPath)
 	if err != nil {
-		s.writeMediaError(w, r, err)
+		s.writeUploadError(w, r, err, destPath)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusCreated, map[string]any{"file": toFileResponse(created)})

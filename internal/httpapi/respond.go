@@ -85,6 +85,19 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, requestID string, st
 	})
 }
 
+// writeErrorDetails is writeError with machine-readable details, for errors a
+// client recovers from on its own (such as the offset to resume from).
+func writeErrorDetails(w http.ResponseWriter, logger *slog.Logger, requestID string, status int, code, message string, details map[string]any) {
+	writeJSON(w, logger, status, ErrorResponse{
+		Error: ErrorBody{
+			Code:      code,
+			Message:   message,
+			Details:   details,
+			RequestID: requestID,
+		},
+	})
+}
+
 // writeErrorf is writeError with a formatted message.
 func writeErrorf(w http.ResponseWriter, logger *slog.Logger, requestID string, status int, code, format string, args ...any) {
 	writeError(w, logger, requestID, status, code, fmt.Sprintf(format, args...))
