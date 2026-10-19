@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -101,7 +102,56 @@ func (q *Queue) Enqueue(ctx context.Context, kind string, payload map[string]any
 		return "", fmt.Errorf("enqueue job: %w", err)
 	}
 	q.logger.Info("job enqueued", "job_id", id, "kind", kind)
+	wake(q.db)
 	return id, nil
+}
+
+// wakeups holds, per library database pool, the channel its worker sleeps
+// on, so a new job starts at once instead of at the next poll.
+var wakeups sync.Map // *sql.DB → chan struct{}
+
+func wakeChan(db *sql.DB) chan struct{} {
+	ch, _ := wakeups.LoadOrStore(db, make(chan struct{}, 1))
+	return ch.(chan struct{})
+}
+
+func wake(db *sql.DB) {
+	select {
+	case wakeChan(db) <- struct{}{}:
+	default: // a wakeup is already pending
+	}
+}
+
+const (
+	// keepCompleted and keepFailed bound how long finished jobs stay in the
+	// table. Autoscan adds a job a minute per library, so without pruning
+	// the table grows by half a million rows a year.
+	keepCompleted = 24 * time.Hour
+	keepFailed    = 30 * 24 * time.Hour
+)
+
+// Prune deletes finished jobs older than their retention, always keeping
+// the most recent finished job of each kind (it carries the last scan's
+// summary).
+func (q *Queue) Prune(ctx context.Context, now time.Time) (int64, error) {
+	res, err := q.db.ExecContext(ctx, `
+		DELETE FROM index_jobs
+		WHERE (
+			(status = 'completed' AND COALESCE(NULLIF(finished_at, ''), created_at) < ?)
+			OR (status IN ('failed', 'cancelled') AND COALESCE(NULLIF(finished_at, ''), created_at) < ?)
+		)
+		AND id NOT IN (
+			SELECT id FROM (
+				SELECT id, ROW_NUMBER() OVER (PARTITION BY kind ORDER BY finished_at DESC) AS rn
+				FROM index_jobs
+				WHERE status IN ('completed', 'failed') AND finished_at IS NOT NULL AND finished_at != ''
+			) WHERE rn = 1
+		)`,
+		rfc3339(now.Add(-keepCompleted)), rfc3339(now.Add(-keepFailed)))
+	if err != nil {
+		return 0, fmt.Errorf("prune jobs: %w", err)
+	}
+	return res.RowsAffected()
 }
 
 // Get returns a single job by ID, or (nil, nil) when not found.
@@ -142,6 +192,17 @@ func (q *Queue) LastFinished(ctx context.Context, kind string) (*Job, error) {
 	return job, nil
 }
 
+// LatestFinishedAt is when any job last finished (empty if none), a cheap
+// marker that background work — a scan, a cover, extracted text — changed
+// the library.
+func (q *Queue) LatestFinishedAt(ctx context.Context) (string, error) {
+	var at string
+	err := q.db.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(finished_at), '') FROM index_jobs
+		 WHERE status IN ('completed', 'failed')`).Scan(&at)
+	return at, err
+}
+
 // Cancel marks a queued or running job as cancelled.
 func (q *Queue) Cancel(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx,
@@ -171,12 +232,21 @@ func (q *Queue) ResetStuck(ctx context.Context) (int, error) {
 
 // Worker pulls jobs from the queue and executes them. It runs until the
 // context is cancelled, then finishes its current job and returns.
+//
+// It works through queued jobs back to back, then sleeps until a job is
+// enqueued (or pollInterval passes, which catches retries coming due). It
+// used to run at most one job per poll, so a few hundred new books took
+// many minutes to get covers.
 type Worker struct {
 	queue        *Queue
 	handlers     map[string]Handler
 	logger       *slog.Logger
 	pollInterval time.Duration
+	lastPrune    time.Time
 }
+
+// pruneEvery is how often a worker trims its finished jobs.
+const pruneEvery = 6 * time.Hour
 
 // NewWorker constructs a Worker for the given queue.
 func NewWorker(queue *Queue, logger *slog.Logger) *Worker {
@@ -184,7 +254,7 @@ func NewWorker(queue *Queue, logger *slog.Logger) *Worker {
 		queue:        queue,
 		handlers:     make(map[string]Handler),
 		logger:       logger,
-		pollInterval: 2 * time.Second,
+		pollInterval: 10 * time.Second,
 	}
 }
 
@@ -196,16 +266,54 @@ func (w *Worker) Register(kind string, h Handler) {
 // Run starts the worker loop. It blocks until ctx is cancelled.
 func (w *Worker) Run(ctx context.Context) {
 	w.logger.Info("job worker started")
+	wakeup := wakeChan(w.queue.db)
+	timer := time.NewTimer(w.pollInterval)
+	defer timer.Stop()
 	for {
+		w.drain(ctx)
+		w.pruneIfDue(ctx)
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(w.pollInterval)
 		select {
 		case <-ctx.Done():
 			w.logger.Info("job worker stopped")
 			return
-		case <-time.After(w.pollInterval):
-			if err := w.processOne(ctx); err != nil && !errors.Is(err, errNoJob) {
-				w.logger.Error("job worker error", "error", err)
-			}
+		case <-wakeup:
+		case <-timer.C:
 		}
+	}
+}
+
+// drain runs queued jobs until none is runnable, an error occurs (so a
+// broken database cannot spin the CPU), or ctx ends.
+func (w *Worker) drain(ctx context.Context) {
+	for ctx.Err() == nil {
+		err := w.processOne(ctx)
+		if errors.Is(err, errNoJob) {
+			return
+		}
+		if err != nil {
+			w.logger.Error("job worker error", "error", err)
+			return
+		}
+	}
+}
+
+func (w *Worker) pruneIfDue(ctx context.Context) {
+	now := time.Now()
+	if now.Sub(w.lastPrune) < pruneEvery {
+		return
+	}
+	w.lastPrune = now
+	if n, err := w.queue.Prune(ctx, now.UTC()); err != nil {
+		w.logger.Warn("prune finished jobs", "error", err)
+	} else if n > 0 {
+		w.logger.Info("pruned finished jobs", "count", n)
 	}
 }
 

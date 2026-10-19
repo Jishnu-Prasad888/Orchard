@@ -40,3 +40,16 @@ describe('thumbnailUrl', () => {
     expect(thumbnailUrl('lib1', uncovered)).toContain('/files/f3/download');
   });
 });
+
+describe('thumbnailUrl for photos', () => {
+  it('uses the rendered thumbnail once there is one, the original until then', () => {
+    const rendered = fileFixture({
+      id: 'p1',
+      media_type: 'photo',
+      thumbnail_url: '/api/v1/libraries/lib1/files/p1/thumbnail?v=1',
+    });
+    expect(thumbnailUrl('lib1', rendered)).toBe(rendered.thumbnail_url);
+    const pending = fileFixture({ id: 'p2', media_type: 'photo' });
+    expect(thumbnailUrl('lib1', pending)).toContain('/files/p2/download');
+  });
+});

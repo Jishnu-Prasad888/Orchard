@@ -3,11 +3,13 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 // libraryRequest is the accepted create/adopt payload.
@@ -196,9 +198,14 @@ func (s *Server) handleRefreshLibrary(w http.ResponseWriter, r *http.Request, u 
 // handleDeleteLibrary unregisters a library, leaving its .orchard metadata in
 // place. Admin only.
 func (s *Server) handleDeleteLibrary(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	lib, _ := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
 	if err := s.libraries.Remove(actorCtx(r, u).Context(), r.PathValue("id")); err != nil {
 		s.writeLibraryError(w, r, err)
 		return
+	}
+	if lib != nil {
+		// Don't keep an unregistered library's database open.
+		librarydb.Forget(filepath.Join(lib.Root, ".orchard"))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -38,14 +38,18 @@ export function downloadUrl(libraryId: string, file: Pick<FileSummary, 'id'>): s
  */
 export function thumbnailUrl(
   libraryId: string,
-  file: Pick<FileSummary, 'id' | 'media_type' | 'cover_url'>,
+  file: Pick<FileSummary, 'id' | 'media_type' | 'cover_url' | 'thumbnail_url'>,
 ): string {
   if (file.media_type === 'document' && file.cover_url) return file.cover_url;
+  // A photo's rendered thumbnail is a few dozen KB; the original can be
+  // megabytes. Until the server has made one, the tile uses the original.
+  if (file.media_type === 'photo' && file.thumbnail_url) return file.thumbnail_url;
   return downloadUrl(libraryId, file);
 }
 
 /** Whether a tile has an actual image to show, as opposed to a type glyph:
- * a photo (served full-size as its own thumbnail), or a book with a cover. */
+ * a photo (its rendered thumbnail, or the original until there is one), or a
+ * book with a cover. */
 export function hasThumbnail(file: Pick<FileSummary, 'media_type' | 'cover_url'>): boolean {
   return file.media_type === 'photo' || (file.media_type === 'document' && !!file.cover_url);
 }

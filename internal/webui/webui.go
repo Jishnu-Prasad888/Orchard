@@ -7,9 +7,9 @@
 package webui
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -78,33 +78,72 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cleaned = "index.html"
 	}
 
-	data, name, err := h.readOrFallback(cleaned)
-	if err != nil {
-		http.Error(w, "frontend not available", http.StatusInternalServerError)
-		return
+	name := cleaned
+	if info, err := fs.Stat(h.fsys, name); err != nil || info.IsDir() {
+		name = "index.html" // a client-side route
 	}
 
-	if strings.HasPrefix(cleaned, "assets/") {
+	if strings.HasPrefix(name, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 	}
 
-	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
+	f, encoding, err := h.open(name, r.Header.Get("Accept-Encoding"))
+	if err != nil {
+		http.Error(w, "frontend not available", http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	if encoding != "" {
+		w.Header().Set("Content-Encoding", encoding)
+	}
+	if encoding != "" || h.hasVariant(name) {
+		w.Header().Add("Vary", "Accept-Encoding")
+	}
+	// The content type comes from the original name (".js"), never ".br".
+	// Embedded and on-disk files are both seekable, so the file streams
+	// instead of being copied into memory for every request.
+	rs, ok := f.(io.ReadSeeker)
+	if !ok {
+		http.Error(w, "frontend not available", http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, name, time.Time{}, rs)
 }
 
-// readOrFallback reads the requested file; if it does not exist it returns
-// index.html so the SPA can handle client-side routes.
-func (h *spaHandler) readOrFallback(cleaned string) ([]byte, string, error) {
-	data, err := fs.ReadFile(h.fsys, cleaned)
-	if err == nil {
-		return data, cleaned, nil
+// open returns the best representation of name the client accepts: the
+// build's precompressed .br or .gz copy when present, else the file itself.
+func (h *spaHandler) open(name, acceptEncoding string) (fs.File, string, error) {
+	for _, enc := range []struct{ token, ext string }{{"br", ".br"}, {"gzip", ".gz"}} {
+		if !acceptsEncoding(acceptEncoding, enc.token) {
+			continue
+		}
+		if f, err := h.fsys.Open(name + enc.ext); err == nil {
+			return f, enc.token, nil
+		}
 	}
-	index, indexErr := fs.ReadFile(h.fsys, "index.html")
-	if indexErr != nil {
-		return nil, "", fmt.Errorf("read %s: %v; fallback index.html: %w", cleaned, err, indexErr)
+	f, err := h.fsys.Open(name)
+	return f, "", err
+}
+
+func (h *spaHandler) hasVariant(name string) bool {
+	_, err := fs.Stat(h.fsys, name+".gz")
+	return err == nil
+}
+
+// acceptsEncoding reports whether an Accept-Encoding header allows token
+// (and does not refuse it with q=0).
+func acceptsEncoding(header, token string) bool {
+	for _, part := range strings.Split(header, ",") {
+		name, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if !strings.EqualFold(strings.TrimSpace(name), token) {
+			continue
+		}
+		q := strings.ReplaceAll(strings.TrimSpace(params), " ", "")
+		return q != "q=0" && q != "q=0.0" && q != "q=0.00" && q != "q=0.000"
 	}
-	return index, "index.html", nil
+	return false
 }
 
 // cleanPath converts a URL path into a safe, slash-cleaned fs.FS path.

@@ -2,12 +2,14 @@
  * The selected library's index state, kept fresh without being chatty.
  *
  * While a scan is queued or running the status is re-read every few seconds
- * so the count visibly climbs; otherwise once every half minute, which is
- * enough to notice a scan started from another tab or device. Polling pauses
+ * so the count visibly climbs; otherwise every 15 seconds, which is enough to
+ * notice a change made from another tab or device. It is one cheap request:
+ * the server's `revision` moves whenever the library's contents may have, so
+ * pages re-read their (much heavier) listings only when it does. Polling pauses
  * while the tab is hidden — a Raspberry Pi should not answer status requests
  * for a window nobody is looking at.
  *
- * Whenever the counts move — during a scan too, so a new library fills in as
+ * Whenever the revision (or, from an older server, the counts) moves — during a scan too, so a new library fills in as
  * it is indexed — and once more when a scan finishes, the library is announced
  * as changed and open pages re-read it.
  */
@@ -19,7 +21,7 @@ import { getIndexStatus } from '../../api/queries';
 import type { IndexStatus } from '../../api/types';
 
 const ACTIVE_MS = 4000;
-const IDLE_MS = 30000;
+const IDLE_MS = 15000;
 
 export function isIndexing(status: IndexStatus | null): boolean {
   const job = status?.active_job;
@@ -58,7 +60,7 @@ export function useIndexStatus(
           if (cancelled) return;
           setState({ libraryId, status: resp.status });
           const s = resp.status;
-          const value = `${s.present}|${s.missing}|${s.deleted}`;
+          const value = s.revision ?? `${s.present}|${s.missing}|${s.deleted}`;
           const indexing = isIndexing(s);
           const before = lastSignature.current;
           lastSignature.current = { libraryId, value, indexing };

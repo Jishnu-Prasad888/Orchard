@@ -30,12 +30,12 @@ func (s *Server) reconnectMember(ctx context.Context, u *auth.User, lib *library
 	if _, done := s.reconnected.Load(key); done {
 		return
 	}
-	db, err := librarydb.Open(filepath.Join(lib.Root, ".orchard"))
+	db, release, err := librarydb.Acquire(filepath.Join(lib.Root, ".orchard"))
 	if err != nil {
 		s.logger.Warn("reconnect member: open library", "library_id", lib.ID, "error", err)
 		return
 	}
-	defer func() { _ = db.Close() }()
+	defer release()
 
 	users, err := s.auth.ListUsers(ctx)
 	if err != nil {
@@ -85,12 +85,12 @@ func (s *Server) memberSettingsLibrary(r *http.Request, u *auth.User) *library.L
 
 // getMemberSetting reads key from lib's member settings into out.
 func (s *Server) getMemberSetting(ctx context.Context, lib *library.Library, userID, key string, out any) bool {
-	db, err := librarydb.Open(filepath.Join(lib.Root, ".orchard"))
+	db, release, err := librarydb.Acquire(filepath.Join(lib.Root, ".orchard"))
 	if err != nil {
 		s.logger.Warn("open library for member setting", "library_id", lib.ID, "error", err)
 		return false
 	}
-	defer func() { _ = db.Close() }()
+	defer release()
 	found, err := librarydb.GetMemberSetting(ctx, db, userID, key, out)
 	if err != nil {
 		s.logger.Warn("get member setting", "library_id", lib.ID, "key", key, "error", err)
@@ -101,10 +101,10 @@ func (s *Server) getMemberSetting(ctx context.Context, lib *library.Library, use
 
 // setMemberSetting writes key to lib's member settings.
 func (s *Server) setMemberSetting(ctx context.Context, lib *library.Library, userID, key string, value any) error {
-	db, err := librarydb.Open(filepath.Join(lib.Root, ".orchard"))
+	db, release, err := librarydb.Acquire(filepath.Join(lib.Root, ".orchard"))
 	if err != nil {
 		return err
 	}
-	defer func() { _ = db.Close() }()
+	defer release()
 	return librarydb.SetMemberSetting(ctx, db, userID, key, value)
 }

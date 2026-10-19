@@ -57,4 +57,23 @@ describe('useIndexStatus', () => {
     }
     expect(seen).toEqual([]);
   });
+
+  it('announces when the revision moves even though the counts did not', async () => {
+    vi.useFakeTimers();
+    seen.length = 0;
+    window.addEventListener('orchard:library-changed', listener);
+    // A cover arrived, or a file was renamed on another device.
+    statuses.push(
+      { present: 3, revision: '3.0.0.a.1' },
+      { present: 3, revision: '3.0.0.a.1' },
+      { present: 3, revision: '3.0.0.b.1' },
+    );
+    renderHook(() => useIndexStatus('lib1'));
+    for (let i = 0; i < 2; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+    }
+    expect(seen).toEqual(['lib1']);
+  });
 });

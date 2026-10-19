@@ -433,12 +433,12 @@ func (m *Manager) snapshotLibraryDB(ctx context.Context, libDir, libID, orchardD
 	if _, err := os.Stat(dbPath); err != nil {
 		return Entry{}, err
 	}
-	db, err := librarydb.Open(orchardDir)
+	db, release, err := librarydb.Acquire(orchardDir)
 	if err != nil {
 		return Entry{}, err
 	}
 	_, _ = db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
-	_ = db.Close()
+	release()
 	rel := path.Join("libraries", libID, "library.db")
 	return copyFileEntry(dbPath, filepath.Join(libDir, "library.db"), rel, true, encrypted, key)
 }

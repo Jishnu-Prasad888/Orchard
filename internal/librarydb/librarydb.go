@@ -37,23 +37,30 @@ const (
 
 // DB wraps a per-library SQLite connection pool. Use OpenDB to construct one.
 type DB struct {
-	pool *sql.DB
+	pool    *sql.DB
+	release func()
 }
 
 // DB returns the underlying *sql.DB connection pool.
 func (d *DB) DB() *sql.DB { return d.pool }
 
-// Close closes the underlying connection pool.
-func (d *DB) Close() error { return d.pool.Close() }
+// Close releases the pool; the shared pool behind it stays open for others.
+func (d *DB) Close() error {
+	d.release()
+	return nil
+}
 
 // OpenDB opens (creating if necessary) the per-library SQLite database at
 // <orchardDir>/library.db and applies any pending schema migrations.
+//
+// The pool is shared with every other user of the same library (see
+// Acquire); Close releases this handle rather than closing it.
 func OpenDB(orchardDir string) (*DB, error) {
-	pool, err := Open(orchardDir)
+	pool, release, err := Acquire(orchardDir)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{pool: pool}, nil
+	return &DB{pool: pool, release: release}, nil
 }
 
 // Open opens (creating if necessary) the per-library SQLite database at
@@ -81,6 +88,7 @@ func Open(orchardDir string) (*sql.DB, error) {
 		_ = pool.Close()
 		return nil, fmt.Errorf("migrate library database: %w", err)
 	}
+	Optimize(pool)
 	return pool, nil
 }
 
@@ -127,7 +135,89 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := addFTSContent(db, orchardDir); err != nil {
 		return err
 	}
-	return removeNotesFromSearch(db)
+	if err := removeNotesFromSearch(db); err != nil {
+		return err
+	}
+	if err := dropRedundantIndexes(db); err != nil {
+		return err
+	}
+	if err := addFolderIndexes(db); err != nil {
+		return err
+	}
+	return addThumbnails(db)
+}
+
+// addThumbnails creates the record of photo thumbnails (internal/thumbs).
+// path is relative to .orchard and empty for a photo that could not be
+// shrunk; version is the source's mod_time:size when it was rendered.
+func addThumbnails(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS thumbnails (
+		file_id      TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+		path         TEXT NOT NULL DEFAULT '',
+		version      TEXT NOT NULL,
+		generated_at TEXT NOT NULL
+	)`)
+	return err
+}
+
+// Optimize refreshes the query planner's statistics where they are stale,
+// as SQLite recommends for long-lived connections and after bulk changes
+// (a scan). analysis_limit keeps it to a bounded sample on a big library,
+// so it stays cheap on a Raspberry Pi. Failures only cost plan quality.
+func Optimize(db *sql.DB) {
+	_, _ = db.Exec(`PRAGMA analysis_limit = 400`)
+	_, _ = db.Exec(`PRAGMA optimize = 0x10002`)
+}
+
+// addFolderIndexes makes folder listings index lookups. parent_dir is a
+// virtual generated column — computed from rel_path, so it costs no storage
+// and can never disagree with it — holding everything up to and including
+// the last slash ("2024/trip/" for "2024/trip/a.jpg", "" at the root).
+// Listing a folder was a full-table LIKE scan, because SQLite cannot use an
+// index for a case-insensitive LIKE. The (status, mod_time) index serves the
+// library-wide newest-first listing Home shows.
+func addFolderIndexes(db *sql.DB) error {
+	has, err := hiddenColumnExists(db, "indexed_files", "parent_dir")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE indexed_files ADD COLUMN parent_dir TEXT
+			GENERATED ALWAYS AS (rtrim(rel_path, replace(rel_path, '/', ''))) VIRTUAL`); err != nil {
+			return err
+		}
+	}
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS indexed_files_parent_idx ON indexed_files (parent_dir, status)`,
+		`CREATE INDEX IF NOT EXISTS indexed_files_status_mod_idx ON indexed_files (status, mod_time)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hiddenColumnExists is columnExists for columns PRAGMA table_info hides,
+// such as generated columns.
+func hiddenColumnExists(db *sql.DB, table, column string) (bool, error) {
+	var n int
+	err := db.QueryRow(
+		fmt.Sprintf(`SELECT COUNT(*) FROM pragma_table_xinfo('%s') WHERE name = ?`, table), column).Scan(&n)
+	return n > 0, err
+}
+
+// dropRedundantIndexes removes indexes that duplicate others: rel_path is
+// already indexed by its UNIQUE constraint, and status is the leading column
+// of indexed_files_status_type_mod_idx. Each extra index is one more b-tree
+// write on every scanner insert and update.
+func dropRedundantIndexes(db *sql.DB) error {
+	for _, name := range []string{"indexed_files_rel_path_idx", "indexed_files_status_idx"} {
+		if _, err := db.Exec(`DROP INDEX IF EXISTS ` + name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // removeNotesFromSearch takes the retired Notes feature out of content
@@ -457,8 +547,6 @@ CREATE TABLE IF NOT EXISTS indexed_files (
 	indexed_at    TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS indexed_files_rel_path_idx ON indexed_files (rel_path);
-CREATE INDEX IF NOT EXISTS indexed_files_status_idx   ON indexed_files (status);
 CREATE INDEX IF NOT EXISTS indexed_files_hash_idx     ON indexed_files (content_hash)
 	WHERE content_hash IS NOT NULL;
 -- indexed_files_type_idx is deliberately not created here: on a database that

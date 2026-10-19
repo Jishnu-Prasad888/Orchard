@@ -30,7 +30,7 @@ func (s *Server) openMediaService(
 	}
 
 	orchardDir := lib.Root + "/.orchard"
-	db, err := librarydb.Open(orchardDir)
+	db, release, err := librarydb.Acquire(orchardDir)
 	if err != nil {
 		s.logger.Error("open library db", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
@@ -39,7 +39,7 @@ func (s *Server) openMediaService(
 	}
 	store := media.NewFileStore(db, lib.ID)
 	svc := media.NewService(store, lib.Root, media.WithMaxUploadBytes(s.maxUploadBytes))
-	cleanup := func() { _ = db.Close() }
+	cleanup := release
 	return svc, cleanup, true
 }
 
@@ -614,6 +614,9 @@ type fileResponse struct {
 	// ProgressPercent is how far the acting user has read this book
 	// (0-100), set the same way; absent when they have not started it.
 	ProgressPercent float64 `json:"progress_percent,omitempty"`
+	// ThumbnailURL is set, like CoverURL, for a photo whose small grid image
+	// has been rendered; until then a tile loads the original.
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
 }
 
 type folderResponse struct {

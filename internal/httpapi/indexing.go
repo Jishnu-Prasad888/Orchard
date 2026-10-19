@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
 	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
@@ -69,6 +70,7 @@ func (s *Server) handleIndexStatus(w http.ResponseWriter, r *http.Request, u *au
 			CodeInternal, "Failed to retrieve index status.")
 		return
 	}
+	status.Revision += "." + strconv.FormatInt(s.libraryEditCount(lib.ID).Load(), 10)
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"status": status})
 }
 

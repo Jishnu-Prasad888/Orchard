@@ -279,3 +279,74 @@ func TestWorkerPermanentFailure(t *testing.T) {
 		t.Errorf("status = %q, want failed", job.Status)
 	}
 }
+
+// The worker must work through a backlog back to back and pick up a new job
+// as soon as it is enqueued — well inside its 10s idle poll.
+func TestWorkerDrainsBacklogAndWakesOnEnqueue(t *testing.T) {
+	q := newTestQueue(t)
+	w := newTestWorker(t, q)
+	var ran atomic.Int32
+	w.Register("noop", func(context.Context, *jobs.Job) error {
+		ran.Add(1)
+		return nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for range 20 {
+		if _, err := q.Enqueue(ctx, "noop", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	go w.Run(ctx)
+
+	waitFor := func(n int32) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for ran.Load() < n {
+			if time.Now().After(deadline) {
+				t.Fatalf("ran %d jobs, want %d", ran.Load(), n)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitFor(20)
+	if _, err := q.Enqueue(ctx, "noop", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(21)
+}
+
+func TestPruneKeepsRecentAndTheLastOfEachKind(t *testing.T) {
+	q := newTestQueue(t)
+	ctx := context.Background()
+	db := q.RawDB()
+	insert := func(id, kind, status, finished string) {
+		t.Helper()
+		_, err := db.Exec(`INSERT INTO index_jobs
+			(id, kind, status, priority, payload, attempt, max_attempts, created_at, next_run_at, finished_at)
+			VALUES (?, ?, ?, 0, '{}', 1, 3, ?, ?, ?)`, id, kind, status, finished, finished, finished)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().UTC()
+	old := now.Add(-48 * time.Hour).Format(time.RFC3339Nano)
+	older := now.Add(-72 * time.Hour).Format(time.RFC3339Nano)
+	insert("old-scan", jobs.KindIndex, jobs.StatusCompleted, older)
+	insert("last-scan", jobs.KindIndex, jobs.StatusCompleted, old)
+	insert("recent-failure", jobs.KindProcessMedia, jobs.StatusFailed, old)
+	insert("fresh", jobs.KindProcessMedia, jobs.StatusCompleted, now.Format(time.RFC3339Nano))
+
+	n, err := q.Prune(ctx, now)
+	if err != nil || n != 1 {
+		t.Fatalf("pruned %d, %v; want 1", n, err)
+	}
+	for _, id := range []string{"last-scan", "recent-failure", "fresh"} {
+		if j, _ := q.Get(ctx, id); j == nil {
+			t.Errorf("%s was pruned", id)
+		}
+	}
+	if j, _ := q.Get(ctx, "old-scan"); j != nil {
+		t.Error("old-scan survived")
+	}
+}

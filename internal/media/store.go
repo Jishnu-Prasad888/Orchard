@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/Jishnu-Prasad888/Orchard/internal/likeutil"
 )
 
 // FileStore is the read/write repository for files and folders in a per-library
@@ -38,22 +36,9 @@ func (s *FileStore) List(ctx context.Context, opts ListOptions) (*Page, error) {
 	args = append(args, string(opts.Status))
 
 	// Folder filter.
-	if opts.FolderPath != "" && opts.FolderPath != "." {
-		folderPath := filepath.ToSlash(opts.FolderPath)
-		esc := likeutil.Escape(folderPath) + "/%"
-		if opts.Recursive {
-			conditions = append(conditions, "rel_path LIKE ? "+likeutil.EscapeClause)
-			args = append(args, esc)
-		} else {
-			// Direct children only: folder/name (no further slash after folder/).
-			conditions = append(conditions,
-				"rel_path LIKE ? "+likeutil.EscapeClause+" AND rel_path NOT LIKE ? "+likeutil.EscapeClause)
-			args = append(args, esc, likeutil.Escape(folderPath)+"/%/%")
-		}
-	} else if !opts.Recursive && (opts.FolderPath == "" || opts.FolderPath == ".") {
-		// Root-level files only (no slash in rel_path).
-		conditions = append(conditions, "rel_path NOT LIKE '%/%'")
-	}
+	folderConds, folderArgs, hint := folderFilter(opts.FolderPath, opts.Recursive)
+	conditions = append(conditions, folderConds...)
+	args = append(args, folderArgs...)
 
 	// Media type filter. The type is stored on the row by the indexer rather
 	// than read from media_metadata, because only the photo extractor ever
@@ -100,10 +85,10 @@ func (s *FileStore) List(ctx context.Context, opts ListOptions) (*Page, error) {
 	query := fmt.Sprintf(`
 		SELECT id, rel_path, size_bytes, mod_time, content_hash, media_type, status,
 		       first_seen_at, last_seen_at
-		FROM indexed_files
+		FROM indexed_files %s
 		%s
 		ORDER BY %s %s, rel_path ASC
-		LIMIT ?`, where, orderCol, dir)
+		LIMIT ?`, hint, where, orderCol, dir)
 	args = append(args, opts.Limit+1) // fetch one extra to detect next page
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -145,19 +130,9 @@ func (s *FileStore) countFiles(ctx context.Context, opts ListOptions) (int, erro
 	var args []any
 	conditions = append(conditions, "status = ?")
 	args = append(args, string(opts.Status))
-	if opts.FolderPath != "" && opts.FolderPath != "." {
-		folderPath := filepath.ToSlash(opts.FolderPath)
-		if opts.Recursive {
-			conditions = append(conditions, "rel_path LIKE ? "+likeutil.EscapeClause)
-			args = append(args, likeutil.Escape(folderPath)+"/%")
-		} else {
-			conditions = append(conditions,
-				"rel_path LIKE ? "+likeutil.EscapeClause+" AND rel_path NOT LIKE ? "+likeutil.EscapeClause)
-			args = append(args, likeutil.Escape(folderPath)+"/%", likeutil.Escape(folderPath)+"/%/%")
-		}
-	} else if !opts.Recursive {
-		conditions = append(conditions, "rel_path NOT LIKE '%/%'")
-	}
+	folderConds, folderArgs, hint := folderFilter(opts.FolderPath, opts.Recursive)
+	conditions = append(conditions, folderConds...)
+	args = append(args, folderArgs...)
 	// The type filter has to be applied here too, or the count promises a page
 	// of photos the query will never return.
 	if opts.Type != "" {
@@ -167,7 +142,7 @@ func (s *FileStore) countFiles(ctx context.Context, opts ListOptions) (int, erro
 	where := "WHERE " + strings.Join(conditions, " AND ")
 	var n int
 	err := s.db.QueryRowContext(ctx,
-		fmt.Sprintf("SELECT COUNT(*) FROM indexed_files %s", where), args...).Scan(&n)
+		fmt.Sprintf("SELECT COUNT(*) FROM indexed_files %s %s", hint, where), args...).Scan(&n)
 	return n, err
 }
 
@@ -347,10 +322,47 @@ func (s *FileStore) GetFolderByPath(ctx context.Context, relPath string) (*Folde
 // folders table is not maintained by the indexer.
 func (s *FileStore) CountPresentUnder(ctx context.Context, folderPath string) (int, error) {
 	var n int
+	lo, hi := SubtreeRange(folderPath)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM indexed_files WHERE status = ? AND rel_path LIKE ? `+likeutil.EscapeClause,
-		string(FileStatusPresent), likeutil.Escape(filepath.ToSlash(folderPath))+"/%").Scan(&n)
+		`SELECT COUNT(*) FROM indexed_files WHERE rel_path >= ? AND rel_path < ? AND status = ?`,
+		lo, hi, string(FileStatusPresent)).Scan(&n)
 	return n, err
+}
+
+// SubtreeRange returns the bounds [lo, hi) of every rel_path inside folder:
+// "a/b" → ["a/b/", "a/b0"), since '0' is the byte after '/'. Unlike a LIKE
+// prefix match this is an index range scan, and it matches case exactly,
+// as the filesystem does.
+func SubtreeRange(folder string) (lo, hi string) {
+	folder = strings.TrimSuffix(filepath.ToSlash(folder), "/")
+	return folder + "/", folder + "0"
+}
+
+// folderFilter returns the WHERE conditions selecting files in folder: its
+// direct children (by the indexed parent_dir column) or, recursively,
+// everything beneath it. The library root is "" or ".".
+//
+// For direct children it also returns an INDEXED BY hint. Without table
+// statistics SQLite may prefer the (status, mod_time) index to skip a sort,
+// which scans the whole library to list one folder; the hint makes the
+// folder lookup the plan regardless of what ANALYZE has or hasn't seen.
+func folderFilter(folder string, recursive bool) (conds []string, args []any, hint string) {
+	folder = strings.TrimSuffix(filepath.ToSlash(folder), "/")
+	if folder == "." {
+		folder = ""
+	}
+	const byFolder = "INDEXED BY indexed_files_parent_idx"
+	switch {
+	case recursive && folder == "":
+		return nil, nil, ""
+	case recursive:
+		lo, hi := SubtreeRange(folder)
+		return []string{"rel_path >= ? AND rel_path < ?"}, []any{lo, hi}, ""
+	case folder == "":
+		return []string{"parent_dir = ''"}, nil, byFolder
+	default:
+		return []string{"parent_dir = ?"}, []any{folder + "/"}, byFolder
+	}
 }
 
 // CountsByType returns the number of present files per media type in a single

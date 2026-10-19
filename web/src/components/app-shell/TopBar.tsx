@@ -9,7 +9,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
 import { Icon } from '../ui/Icon';
-import { useUploads } from '../upload/UploadProvider';
+import { useUploadActions } from '../upload/UploadProvider';
 import { AccountMenu } from './AccountMenu';
 import { PageFilterSearch } from './PageFilterSearch';
 import { pageSearchMode } from './pageSearch';
@@ -24,7 +24,7 @@ export function TopBar({
   onShowShortcuts: () => void;
 }) {
   const { library } = useLibraries();
-  const { enqueue, target } = useUploads();
+  const { enqueue, target } = useUploadActions();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const canUpload = library !== null && library.status !== 'offline';
   // Upload into the folder on screen (Files registers it), else the root.

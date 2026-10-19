@@ -19,7 +19,7 @@
  */
 
 import { Maximize, Minimize } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
@@ -56,8 +56,6 @@ import { DEFAULT_READER_PREFERENCES, HIGHLIGHT_COLORS } from '../api/types';
 import { ContextMenu, type MenuEntry, type MenuPosition } from '../components/ContextMenu';
 import { downloadUrl, fileExtension } from '../components/media';
 import { BookmarksPanel, QuotesPanel } from '../components/reader/AnnotationPanels';
-import { EpubReader } from '../components/reader/EpubReader';
-import { PdfReader } from '../components/reader/PdfReader';
 import { ReaderSettingsPanel } from '../components/reader/ReaderSettingsPanel';
 import { TextReader } from '../components/reader/TextReader';
 import type {
@@ -71,8 +69,18 @@ import type {
 import { BookPanel } from '../components/viewer/BookPanel';
 import { ErrorState, LoadingState } from '../components/States';
 import { Icon } from '../components/ui/Icon';
+import { lazyPage } from '../lib/lazyPage';
 import { useAppTheme } from '../lib/useAppTheme';
 import './ReaderPage.css';
+
+// pdf.js and epub.js are by far the heaviest code in the app; load only the
+// engine the open book needs, so an EPUB never downloads pdf.js.
+const PdfReader = lazyPage(() =>
+  import('../components/reader/PdfReader').then((m) => ({ default: m.PdfReader })),
+);
+const EpubReader = lazyPage(() =>
+  import('../components/reader/EpubReader').then((m) => ({ default: m.EpubReader })),
+);
 
 const PROGRESS_SAVE_DEBOUNCE_MS = 2500;
 /** How long a "Quoted!" / "Bookmarked!" confirmation stays up. */
@@ -633,40 +641,42 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       <div className="reader-body">
         <div className="reader-surface" onContextMenu={onSurfaceContextMenu}>
           {readerError && <ErrorState message={readerError} title="Couldn't display this page" />}
-          {!readerError && kind === 'pdf' && (
-            <PdfReader
-              ref={readerRef}
-              libraryId={libraryId}
-              fileId={fileId}
-              fileName={file.name}
-              contentUrl={contentUrl}
-              initialLocation={initialLocation}
-              preferences={readerPreferences}
-              onProgress={onProgress}
-              onToc={setToc}
-              onError={setReaderError}
-              onSelectionChange={setSelection}
-              highlights={readerHighlights}
-              onSelectionContextMenu={openSelectionMenu}
-            />
-          )}
-          {!readerError && kind === 'epub' && (
-            <EpubReader
-              ref={readerRef}
-              libraryId={libraryId}
-              fileId={fileId}
-              fileName={file.name}
-              contentUrl={contentUrl}
-              initialLocation={initialLocation}
-              preferences={readerPreferences}
-              onProgress={onProgress}
-              onToc={setToc}
-              onError={setReaderError}
-              onSelectionChange={setSelection}
-              highlights={readerHighlights}
-              onSelectionContextMenu={openSelectionMenu}
-            />
-          )}
+          <Suspense fallback={<LoadingState label="Opening the book…" />}>
+            {!readerError && kind === 'pdf' && (
+              <PdfReader
+                ref={readerRef}
+                libraryId={libraryId}
+                fileId={fileId}
+                fileName={file.name}
+                contentUrl={contentUrl}
+                initialLocation={initialLocation}
+                preferences={readerPreferences}
+                onProgress={onProgress}
+                onToc={setToc}
+                onError={setReaderError}
+                onSelectionChange={setSelection}
+                highlights={readerHighlights}
+                onSelectionContextMenu={openSelectionMenu}
+              />
+            )}
+            {!readerError && kind === 'epub' && (
+              <EpubReader
+                ref={readerRef}
+                libraryId={libraryId}
+                fileId={fileId}
+                fileName={file.name}
+                contentUrl={contentUrl}
+                initialLocation={initialLocation}
+                preferences={readerPreferences}
+                onProgress={onProgress}
+                onToc={setToc}
+                onError={setReaderError}
+                onSelectionChange={setSelection}
+                highlights={readerHighlights}
+                onSelectionContextMenu={openSelectionMenu}
+              />
+            )}
+          </Suspense>
           {!readerError && kind === 'text' && (
             <TextReader
               ref={readerRef}

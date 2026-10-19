@@ -26,14 +26,14 @@ func (s *Server) openQuoteStore(
 			CodeConflict, "Library is offline.")
 		return nil, nil, false
 	}
-	db, err := librarydb.Open(lib.Root + "/.orchard")
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
 	if err != nil {
 		s.logger.Error("open library db for quotes", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Failed to open library database.")
 		return nil, nil, false
 	}
-	return quotes.NewStore(db), func() { _ = db.Close() }, true
+	return quotes.NewStore(db), release, true
 }
 
 // quoteResponse is the API representation of a quote.

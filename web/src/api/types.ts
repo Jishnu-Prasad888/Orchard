@@ -122,6 +122,9 @@ export interface IndexStatus {
   /** The most recently finished scan's summary — independent of whether
    * another scan is active or queued right now. */
   last_scan?: ScanSummary;
+  /** Changes whenever the library's contents may have — files, covers,
+   * edits from any device. Compare it to know when to re-read listings. */
+  revision?: string;
 }
 
 /** One path that failed during a scan, with a short reason. */
@@ -180,6 +183,8 @@ export interface FileSummary {
   /** Set only for a document file with an extracted or uploaded cover —
    * absent otherwise, including for non-document media types. */
   cover_url?: string;
+  /** A photo's small grid image, once the server has rendered it. */
+  thumbnail_url?: string;
   /** How far the signed-in user has read this book, 0-100. Set by file
    * listings only, and absent for a book they have not started. */
   progress_percent?: number;

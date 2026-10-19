@@ -44,6 +44,10 @@ type Server struct {
 	// uploadSlots bounds chunk writes server-wide (uploads.go).
 	uploadLocks sync.Map
 	uploadSlots chan struct{}
+	// libraryEdits counts successful changes made through the API, per
+	// library ID (*atomic.Int64); it is folded into the index status
+	// revision so other open clients notice them (revision.go).
+	libraryEdits sync.Map
 	// ready gates the /ready endpoint: true once startup completes, flipped
 	// false by MarkNotReady before graceful shutdown so proxies drain.
 	ready atomic.Bool
@@ -227,6 +231,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("PATCH /api/v1/libraries/{id}/files/{fileID}/book-metadata",
 			s.withAuth(allowAny, s.handleUpdateBookMetadata))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/cover", s.withAuth(allowAny, s.handleGetCover))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/thumbnail", s.withAuth(allowAny, s.handleGetThumbnail))
 		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/cover", s.withAuth(allowAny, s.handleUploadCover))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/reading-status",
 			s.withAuth(allowAny, s.handleGetReadingStatus))
@@ -355,7 +360,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 
-	return WithMiddleware(s.logger, metricsRecording(s.metrics, mux))
+	return WithMiddleware(s.logger, metricsRecording(s.metrics, s.countLibraryEdits(mux)))
 }
 
 // requireSession wraps a plain http.HandlerFunc with authentication. The

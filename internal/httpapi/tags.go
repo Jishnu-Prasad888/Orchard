@@ -22,14 +22,14 @@ func (s *Server) openTagStore(
 		return nil, nil, false
 	}
 	orchardDir := lib.Root + "/.orchard"
-	db, err := librarydb.Open(orchardDir)
+	db, release, err := librarydb.Acquire(orchardDir)
 	if err != nil {
 		s.logger.Error("open library db for tags", "library_id", lib.ID, "error", err)
 		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
 			CodeInternal, "Failed to open library database.")
 		return nil, nil, false
 	}
-	return tags.NewTagStore(db), func() { _ = db.Close() }, true
+	return tags.NewTagStore(db), release, true
 }
 
 // tagResponse is the API representation of a tag.

@@ -230,13 +230,13 @@ func (s *Server) handleExportBookMetadata(w http.ResponseWriter, r *http.Request
 		if lib.Status == library.StatusOffline {
 			continue
 		}
-		db, err := librarydb.Open(lib.Root + "/.orchard")
+		db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
 		if err != nil {
 			s.logger.Error("open library db for book metadata export", "library_id", lib.ID, "error", err)
 			continue
 		}
 		rows, err := bookmeta.NewStore(db).ListAllWithPaths(r.Context())
-		_ = db.Close()
+		release()
 		if err != nil {
 			s.logger.Error("list book metadata for export", "library_id", lib.ID, "error", err)
 			continue
