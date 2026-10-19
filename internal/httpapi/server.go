@@ -231,6 +231,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("PATCH /api/v1/libraries/{id}/files/{fileID}/book-metadata",
 			s.withAuth(allowAny, s.handleUpdateBookMetadata))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/cover", s.withAuth(allowAny, s.handleGetCover))
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/thumbnail", s.withAuth(allowAny, s.handleGetThumbnail))
 		mux.Handle("PUT /api/v1/libraries/{id}/files/{fileID}/cover", s.withAuth(allowAny, s.handleUploadCover))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/reading-status",
 			s.withAuth(allowAny, s.handleGetReadingStatus))

@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -31,6 +32,41 @@ type MediaProcessor interface {
 // the processor has since learned to derive something it could not before.
 type BackfillingProcessor interface {
 	Pending(ctx context.Context, db *sql.DB) (map[string]string, error)
+}
+
+// Combine runs several processors on each process_media job (each ignores
+// the file types it does not handle) and merges their backfill lists.
+func Combine(processors ...MediaProcessor) MediaProcessor { return combined(processors) }
+
+type combined []MediaProcessor
+
+func (c combined) Handle(ctx context.Context, db *sql.DB, job *jobs.Job) error {
+	var errs []error
+	for _, p := range c {
+		if err := p.Handle(ctx, db, job); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (c combined) Pending(ctx context.Context, db *sql.DB) (map[string]string, error) {
+	out := map[string]string{}
+	var errs []error
+	for _, p := range c {
+		bp, ok := p.(BackfillingProcessor)
+		if !ok {
+			continue
+		}
+		pending, err := bp.Pending(ctx, db)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		for id, rel := range pending {
+			out[id] = rel
+		}
+	}
+	return out, errors.Join(errs...)
 }
 
 // IndexStatus is the current state of a library's index.

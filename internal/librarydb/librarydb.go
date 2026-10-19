@@ -141,7 +141,23 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := dropRedundantIndexes(db); err != nil {
 		return err
 	}
-	return addFolderIndexes(db)
+	if err := addFolderIndexes(db); err != nil {
+		return err
+	}
+	return addThumbnails(db)
+}
+
+// addThumbnails creates the record of photo thumbnails (internal/thumbs).
+// path is relative to .orchard and empty for a photo that could not be
+// shrunk; version is the source's mod_time:size when it was rendered.
+func addThumbnails(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS thumbnails (
+		file_id      TEXT PRIMARY KEY REFERENCES indexed_files(id) ON DELETE CASCADE,
+		path         TEXT NOT NULL DEFAULT '',
+		version      TEXT NOT NULL,
+		generated_at TEXT NOT NULL
+	)`)
+	return err
 }
 
 // Optimize refreshes the query planner's statistics where they are stale,

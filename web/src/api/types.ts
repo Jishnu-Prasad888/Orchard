@@ -183,6 +183,8 @@ export interface FileSummary {
   /** Set only for a document file with an extracted or uploaded cover —
    * absent otherwise, including for non-document media types. */
   cover_url?: string;
+  /** A photo's small grid image, once the server has rendered it. */
+  thumbnail_url?: string;
   /** How far the signed-in user has read this book, 0-100. Set by file
    * listings only, and absent for a book they have not started. */
   progress_percent?: number;

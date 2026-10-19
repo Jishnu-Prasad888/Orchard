@@ -614,6 +614,9 @@ type fileResponse struct {
 	// ProgressPercent is how far the acting user has read this book
 	// (0-100), set the same way; absent when they have not started it.
 	ProgressPercent float64 `json:"progress_percent,omitempty"`
+	// ThumbnailURL is set, like CoverURL, for a photo whose small grid image
+	// has been rendered; until then a tile loads the original.
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
 }
 
 type folderResponse struct {

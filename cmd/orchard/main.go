@@ -28,6 +28,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/logging"
 	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
 	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
+	"github.com/Jishnu-Prasad888/Orchard/internal/thumbs"
 	"github.com/Jishnu-Prasad888/Orchard/internal/version"
 	"github.com/Jishnu-Prasad888/Orchard/internal/webui"
 )
@@ -109,7 +110,7 @@ func run() error {
 	// files via the indexer.MediaProcessor extension point.
 	idxManager := indexer.NewIndexManager(logger)
 	idxManager.SetBaseContext(ctx)
-	idxManager.SetMediaProcessor(bookmeta.NewProcessor(logger))
+	idxManager.SetMediaProcessor(indexer.Combine(bookmeta.NewProcessor(logger), thumbs.NewProcessor(logger)))
 
 	// Recover persisted scan and processing jobs after a restart: start one
 	// job worker per registered library. Offline libraries are skipped and
