@@ -16,6 +16,10 @@ import (
 // orchardDirName is the metadata directory name that must never be indexed.
 const orchardDirName = ".orchard"
 
+// hashFlushBytes is the file size above which pending scan writes are
+// committed before hashing, so the write lock never waits on a long read.
+const hashFlushBytes = 4 << 20
+
 // Scanner walks a library root and reconciles the filesystem against the
 // persisted index. It implements staged identity detection to avoid
 // computing SHA-256 content hashes unless a file's size or modification time
@@ -60,6 +64,14 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 	// can mark unvisited records as missing afterwards.
 	seenIDs := make(map[string]struct{})
 
+	// Group this scan's writes into short transactions.
+	sc.store.BeginBatch()
+	defer func() {
+		if err := sc.store.EndBatch(); err != nil {
+			sc.logger.Warn("finish scan batch", "library_id", libraryID, "error", err)
+		}
+	}()
+
 	walkErr := filepath.WalkDir(root, func(absPath string, d os.DirEntry, walkInErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err // propagate cancellation
@@ -102,7 +114,11 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 			return nil
 		}
 		result.TotalFiles++
-		result.Changes = append(result.Changes, change)
+		if change.Kind != ChangeUnchanged {
+			// Unchanged files need no follow-up; listing them all would
+			// only cost memory on a large library.
+			result.Changes = append(result.Changes, change)
+		}
 		switch change.Kind {
 		case ChangeNew:
 			result.NewFiles++
@@ -159,15 +175,30 @@ func (sc *Scanner) reconcileFile(
 ) (FileChange, error) {
 	existing, known := existingByPath[relPath]
 
-	// Stage 1: unchanged — same path, size, and mtime.
+	// Stage 1: unchanged — same path, size, and mtime. A file that was
+	// already present needs no write at all: rewriting every row on every
+	// scan would be thousands of writes a minute to the Pi's SD card for no
+	// change. (last_seen_at therefore records when a present file's state
+	// last changed, not every scan that saw it.) Only a file coming back
+	// from missing is written.
 	if known && existing.SizeBytes == info.Size() && existing.ModTime.Equal(info.ModTime().UTC()) {
 		seenIDs[existing.ID] = struct{}{}
-		existing.LastSeenAt = now
-		existing.Status = StatusPresent
-		if err := sc.store.Upsert(ctx, existing); err != nil {
-			return FileChange{}, err
+		if existing.Status != StatusPresent {
+			existing.LastSeenAt = now
+			existing.Status = StatusPresent
+			if err := sc.store.Upsert(ctx, existing); err != nil {
+				return FileChange{}, err
+			}
 		}
 		return FileChange{Kind: ChangeUnchanged, File: existing}, nil
+	}
+
+	// Hashing a big file takes a while; commit pending writes first so the
+	// library's write lock is not held across it.
+	if info.Size() > hashFlushBytes {
+		if err := sc.store.Flush(); err != nil {
+			return FileChange{}, err
+		}
 	}
 
 	// Stage 2: size or mtime changed — compute the content hash to distinguish
@@ -259,7 +290,7 @@ func (sc *Scanner) loadExisting(ctx context.Context) (map[string]*IndexedFile, e
 }
 
 // hashFile computes the SHA-256 of a file without loading it into memory.
-// It reads in 32 KiB chunks, keeping peak memory constant regardless of file
+// It reads in fixed-size chunks, keeping peak memory constant regardless of file
 // size. This is safe to call on large video files.
 func hashFile(path string) (string, error) {
 	f, err := os.Open(path)
@@ -269,7 +300,7 @@ func hashFile(path string) (string, error) {
 	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 256*1024) // fewer syscalls on slow USB/SD storage
 	if _, err := io.CopyBuffer(h, f, buf); err != nil {
 		return "", fmt.Errorf("hash read: %w", err)
 	}

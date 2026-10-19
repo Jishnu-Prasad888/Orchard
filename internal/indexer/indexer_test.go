@@ -587,3 +587,58 @@ func TestScannerReconnectedLibraryOnlyProcessesChanges(t *testing.T) {
 		t.Errorf("incremental scan unchanged = %d, want 2", r2.Unchanged)
 	}
 }
+
+// A rescan of an unchanged library must not write: on a Pi's SD card,
+// rewriting every row every minute is constant wear for nothing. A file that
+// returns after going missing is the exception.
+func TestScannerRescanWritesNothingUnlessAFileReturns(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "a.jpg"), "a")
+	writeFile(t, filepath.Join(root, "b.jpg"), "b")
+
+	db := newTestDB(t)
+	store := indexer.NewStateStore(db.DB())
+	scanner := indexer.NewScanner(store, discardLogger())
+	ctx := context.Background()
+	if _, err := scanner.Scan(ctx, "lib1", root); err != nil {
+		t.Fatal(err)
+	}
+	changes := func() int64 {
+		var n int64
+		if err := db.DB().QueryRow(`SELECT total_changes()`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	before := changes()
+	result, err := scanner.Scan(ctx, "lib1", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Unchanged != 2 || len(result.Changes) != 0 {
+		t.Fatalf("rescan = %+v", result)
+	}
+	if after := changes(); after != before {
+		t.Fatalf("unchanged rescan wrote %d rows", after-before)
+	}
+
+	// b goes missing, then comes back: it must be present again.
+	moved := filepath.Join(t.TempDir(), "b.jpg")
+	if err := os.Rename(filepath.Join(root, "b.jpg"), moved); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := scanner.Scan(ctx, "lib1", root); r.Missing != 1 {
+		t.Fatalf("missing = %d, want 1", r.Missing)
+	}
+	if err := os.Rename(moved, filepath.Join(root, "b.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scanner.Scan(ctx, "lib1", root); err != nil {
+		t.Fatal(err)
+	}
+	f, err := store.GetByPath(ctx, "b.jpg")
+	if err != nil || f == nil || f.Status != indexer.StatusPresent {
+		t.Fatalf("returned file = %+v, %v", f, err)
+	}
+}

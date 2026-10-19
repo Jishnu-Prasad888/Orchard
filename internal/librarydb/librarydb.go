@@ -134,7 +134,23 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := addFTSContent(db, orchardDir); err != nil {
 		return err
 	}
-	return removeNotesFromSearch(db)
+	if err := removeNotesFromSearch(db); err != nil {
+		return err
+	}
+	return dropRedundantIndexes(db)
+}
+
+// dropRedundantIndexes removes indexes that duplicate others: rel_path is
+// already indexed by its UNIQUE constraint, and status is the leading column
+// of indexed_files_status_type_mod_idx. Each extra index is one more b-tree
+// write on every scanner insert and update.
+func dropRedundantIndexes(db *sql.DB) error {
+	for _, name := range []string{"indexed_files_rel_path_idx", "indexed_files_status_idx"} {
+		if _, err := db.Exec(`DROP INDEX IF EXISTS ` + name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // removeNotesFromSearch takes the retired Notes feature out of content
@@ -464,8 +480,6 @@ CREATE TABLE IF NOT EXISTS indexed_files (
 	indexed_at    TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS indexed_files_rel_path_idx ON indexed_files (rel_path);
-CREATE INDEX IF NOT EXISTS indexed_files_status_idx   ON indexed_files (status);
 CREATE INDEX IF NOT EXISTS indexed_files_hash_idx     ON indexed_files (content_hash)
 	WHERE content_hash IS NOT NULL;
 -- indexed_files_type_idx is deliberately not created here: on a database that

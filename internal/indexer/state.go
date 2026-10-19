@@ -9,8 +9,92 @@ import (
 
 // StateStore persists and queries indexed file records in the per-library
 // SQLite database. All times are stored as RFC3339Nano UTC strings.
+//
+// During a scan it can batch its writes (BeginBatch/Flush/EndBatch): one
+// transaction per few hundred rows instead of one per row, which on an SD
+// card is most of a scan's cost. A batch is never held open for long, so
+// requests writing to the same library are not kept waiting.
 type StateStore struct {
 	db *sql.DB
+
+	batching bool
+	tx       *sql.Tx
+	txStart  time.Time
+	pending  int
+}
+
+const (
+	// maxBatchRows and maxBatchAge bound one scan transaction.
+	maxBatchRows = 500
+	maxBatchAge  = 250 * time.Millisecond
+)
+
+type dbtx interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// conn is the open batch transaction, if any, so reads see its writes.
+func (s *StateStore) conn() dbtx {
+	if s.tx != nil {
+		return s.tx
+	}
+	return s.db
+}
+
+// BeginBatch starts grouping writes into short transactions.
+func (s *StateStore) BeginBatch() { s.batching = true }
+
+// EndBatch commits outstanding writes and stops batching.
+func (s *StateStore) EndBatch() error {
+	err := s.Flush()
+	s.batching = false
+	return err
+}
+
+// Flush commits outstanding batched writes. Call it before slow work (such
+// as hashing a large file) so the write lock is not held across it.
+func (s *StateStore) Flush() error {
+	if s.tx == nil {
+		return nil
+	}
+	tx := s.tx
+	s.tx, s.pending = nil, 0
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit scan batch: %w", err)
+	}
+	return nil
+}
+
+// BatchAge is how long the current batch has been open (zero if none).
+func (s *StateStore) BatchAge() time.Duration {
+	if s.tx == nil {
+		return 0
+	}
+	return time.Since(s.txStart)
+}
+
+func (s *StateStore) exec(ctx context.Context, query string, args ...any) error {
+	if !s.batching {
+		_, err := s.db.ExecContext(ctx, query, args...)
+		return err
+	}
+	if s.tx == nil {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin scan batch: %w", err)
+		}
+		s.tx, s.txStart = tx, time.Now()
+	}
+	if _, err := s.tx.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	s.pending++
+	if s.pending >= maxBatchRows || time.Since(s.txStart) >= maxBatchAge {
+		return s.Flush()
+	}
+	return nil
 }
 
 // NewStateStore wraps a per-library database connection.
@@ -34,7 +118,7 @@ func (s *StateStore) Upsert(ctx context.Context, f *IndexedFile) error {
 			status        = excluded.status,
 			last_seen_at  = excluded.last_seen_at,
 			indexed_at    = excluded.indexed_at`
-	_, err := s.db.ExecContext(ctx, query,
+	err := s.exec(ctx, query,
 		f.ID, f.RelPath, f.SizeBytes, rfc3339(f.ModTime),
 		nullString(f.ContentHash), string(f.Status),
 		rfc3339(f.FirstSeenAt), rfc3339(f.LastSeenAt), rfc3339(f.IndexedAt),
@@ -48,7 +132,7 @@ func (s *StateStore) Upsert(ctx context.Context, f *IndexedFile) error {
 // GetByPath returns the indexed file record for the given relative path, or
 // (nil, nil) when not found.
 func (s *StateStore) GetByPath(ctx context.Context, relPath string) (*IndexedFile, error) {
-	row := s.db.QueryRowContext(ctx,
+	row := s.conn().QueryRowContext(ctx,
 		`SELECT id, rel_path, size_bytes, mod_time, content_hash, status,
 		        first_seen_at, last_seen_at, indexed_at
 		 FROM indexed_files WHERE rel_path = ?`, relPath)
@@ -59,7 +143,7 @@ func (s *StateStore) GetByPath(ctx context.Context, relPath string) (*IndexedFil
 // Used for move detection: when a new path has the same hash as a missing
 // entry, the file has moved rather than been deleted and re-created.
 func (s *StateStore) GetByHash(ctx context.Context, hash string) ([]*IndexedFile, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.conn().QueryContext(ctx,
 		`SELECT id, rel_path, size_bytes, mod_time, content_hash, status,
 		        first_seen_at, last_seen_at, indexed_at
 		 FROM indexed_files WHERE content_hash = ?`, hash)
@@ -73,7 +157,7 @@ func (s *StateStore) GetByHash(ctx context.Context, hash string) ([]*IndexedFile
 // AllPresent returns all files currently marked as present or missing. This is
 // the set the scanner reconciles at the end of each walk.
 func (s *StateStore) AllPresent(ctx context.Context) ([]*IndexedFile, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.conn().QueryContext(ctx,
 		`SELECT id, rel_path, size_bytes, mod_time, content_hash, status,
 		        first_seen_at, last_seen_at, indexed_at
 		 FROM indexed_files WHERE status IN ('present', 'missing')`)
@@ -117,7 +201,7 @@ func (s *StateStore) MarkMissing(ctx context.Context, seenIDs map[string]struct{
 // UpdatePath updates the relative path of an existing record. Used when a
 // move is detected: the old entry's path is replaced with the new location.
 func (s *StateStore) UpdatePath(ctx context.Context, id, newRelPath string, now time.Time) error {
-	_, err := s.db.ExecContext(ctx,
+	err := s.exec(ctx,
 		`UPDATE indexed_files SET rel_path = ?, last_seen_at = ?, indexed_at = ?,
 		                          status = 'present'
 		 WHERE id = ?`,
@@ -130,7 +214,7 @@ func (s *StateStore) UpdatePath(ctx context.Context, id, newRelPath string, now 
 
 // Counts returns a summary of the current index state.
 func (s *StateStore) Counts(ctx context.Context) (present, missing, deleted int, err error) {
-	rows, queryErr := s.db.QueryContext(ctx,
+	rows, queryErr := s.conn().QueryContext(ctx,
 		`SELECT status, COUNT(*) FROM indexed_files GROUP BY status`)
 	if queryErr != nil {
 		return 0, 0, 0, fmt.Errorf("count indexed files: %w", queryErr)
