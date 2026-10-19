@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -13,6 +14,9 @@ import (
 	"github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/klippa-app/go-pdfium/webassembly"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/experimental"
 )
 
 // PDF covers are rendered by PDFium — the PDF engine Chromium ships — so a
@@ -49,20 +53,53 @@ var (
 	pdfiumOnce    sync.Once
 	pdfiumPool    pdfium.Pool
 	pdfiumInitErr error
+	pdfiumCache   *rendererCache
 )
 
 // pdfiumRenderers returns the process-wide PDFium pool, compiling the
 // embedded module on first use — a server that never indexes a PDF never
-// pays for it.
+// pays for it. The compiled code is reused from the on-disk cache when one
+// is set and verifies (see pdfcache.go).
 func pdfiumRenderers() (pdfium.Pool, error) {
 	pdfiumOnce.Do(func() {
-		pdfiumPool, pdfiumInitErr = webassembly.Init(webassembly.Config{
-			MinIdle:  0,
-			MaxIdle:  1,
-			MaxTotal: 2,
-		})
+		pdfiumPool, pdfiumCache, pdfiumInitErr = startPDFium(rendererCacheBase, rendererCacheLogger)
 	})
 	return pdfiumPool, pdfiumInitErr
+}
+
+// startPDFium starts a renderer pool using the cache under cacheBase (""
+// for none). If wazero refuses the cache, it is wiped and the pool starts
+// without it: a bad cache must never cost a cover.
+func startPDFium(cacheBase string, logger *slog.Logger) (pdfium.Pool, *rendererCache, error) {
+	cache := prepareRendererCache(cacheBase, logger)
+	pool, err := newPDFiumPool(cache)
+	if err != nil && cache != nil {
+		logger.Warn("pdf renderer rejected its cache; compiling afresh", "dir", cache.dir, "error", err)
+		cache.discard()
+		cache = nil
+		pool, err = newPDFiumPool(nil)
+	}
+	return pool, cache, err
+}
+
+func newPDFiumPool(cache *rendererCache) (pdfium.Pool, error) {
+	// The bundled module needs WebAssembly exception handling (go-pdfium's
+	// default config enables it; a custom one must too).
+	cfg := wazero.NewRuntimeConfig().WithCoreFeatures(
+		api.CoreFeaturesV2 | experimental.CoreFeaturesExceptionHandling)
+	if cache != nil {
+		compiled, err := wazero.NewCompilationCacheWithDir(cache.dir)
+		if err != nil {
+			return nil, err
+		}
+		cfg = cfg.WithCompilationCache(compiled)
+	}
+	return webassembly.Init(webassembly.Config{
+		MinIdle:       0,
+		MaxIdle:       1,
+		MaxTotal:      2,
+		RuntimeConfig: cfg,
+	})
 }
 
 // renderPDFCover rasterizes the first non-blank leading page of the PDF at
@@ -110,6 +147,9 @@ func renderPDFCoverImage(pdfPath string) (image.Image, error) {
 	select {
 	case res := <-done:
 		_ = instance.Close()
+		// The renderer ran (whatever this particular PDF did) and the
+		// process survived it: the compiled code is good to keep.
+		pdfiumCache.confirmed()
 		return res.img, res.err
 	case <-time.After(pdfCoverRenderTimeout):
 		// Killing the instance tears down its WebAssembly module, which is
