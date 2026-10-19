@@ -53,6 +53,13 @@ func (s *StateStore) EndBatch() error {
 	return err
 }
 
+// Analyze refreshes planner statistics after a scan changed the library,
+// so folder and newest-first listings keep using the right indexes.
+func (s *StateStore) Analyze() {
+	_, _ = s.db.Exec(`PRAGMA analysis_limit = 400`)
+	_, _ = s.db.Exec(`PRAGMA optimize`)
+}
+
 // Flush commits outstanding batched writes. Call it before slow work (such
 // as hashing a large file) so the write lock is not held across it.
 func (s *StateStore) Flush() error {

@@ -70,6 +70,9 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		if err := sc.store.EndBatch(); err != nil {
 			sc.logger.Warn("finish scan batch", "library_id", libraryID, "error", err)
 		}
+		if result.NewFiles+result.Modified+result.Moved+result.Missing > 0 {
+			sc.store.Analyze()
+		}
 	}()
 
 	walkErr := filepath.WalkDir(root, func(absPath string, d os.DirEntry, walkInErr error) error {

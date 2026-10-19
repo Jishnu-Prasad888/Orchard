@@ -88,6 +88,7 @@ func Open(orchardDir string) (*sql.DB, error) {
 		_ = pool.Close()
 		return nil, fmt.Errorf("migrate library database: %w", err)
 	}
+	Optimize(pool)
 	return pool, nil
 }
 
@@ -137,7 +138,57 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := removeNotesFromSearch(db); err != nil {
 		return err
 	}
-	return dropRedundantIndexes(db)
+	if err := dropRedundantIndexes(db); err != nil {
+		return err
+	}
+	return addFolderIndexes(db)
+}
+
+// Optimize refreshes the query planner's statistics where they are stale,
+// as SQLite recommends for long-lived connections and after bulk changes
+// (a scan). analysis_limit keeps it to a bounded sample on a big library,
+// so it stays cheap on a Raspberry Pi. Failures only cost plan quality.
+func Optimize(db *sql.DB) {
+	_, _ = db.Exec(`PRAGMA analysis_limit = 400`)
+	_, _ = db.Exec(`PRAGMA optimize = 0x10002`)
+}
+
+// addFolderIndexes makes folder listings index lookups. parent_dir is a
+// virtual generated column — computed from rel_path, so it costs no storage
+// and can never disagree with it — holding everything up to and including
+// the last slash ("2024/trip/" for "2024/trip/a.jpg", "" at the root).
+// Listing a folder was a full-table LIKE scan, because SQLite cannot use an
+// index for a case-insensitive LIKE. The (status, mod_time) index serves the
+// library-wide newest-first listing Home shows.
+func addFolderIndexes(db *sql.DB) error {
+	has, err := hiddenColumnExists(db, "indexed_files", "parent_dir")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE indexed_files ADD COLUMN parent_dir TEXT
+			GENERATED ALWAYS AS (rtrim(rel_path, replace(rel_path, '/', ''))) VIRTUAL`); err != nil {
+			return err
+		}
+	}
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS indexed_files_parent_idx ON indexed_files (parent_dir, status)`,
+		`CREATE INDEX IF NOT EXISTS indexed_files_status_mod_idx ON indexed_files (status, mod_time)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hiddenColumnExists is columnExists for columns PRAGMA table_info hides,
+// such as generated columns.
+func hiddenColumnExists(db *sql.DB, table, column string) (bool, error) {
+	var n int
+	err := db.QueryRow(
+		fmt.Sprintf(`SELECT COUNT(*) FROM pragma_table_xinfo('%s') WHERE name = ?`, table), column).Scan(&n)
+	return n > 0, err
 }
 
 // dropRedundantIndexes removes indexes that duplicate others: rel_path is

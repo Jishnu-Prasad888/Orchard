@@ -730,3 +730,47 @@ func TestListDuplicateGroups_None(t *testing.T) {
 		t.Errorf("groups = %+v, want none", groups)
 	}
 }
+
+// Folder listings use the parent_dir index and rel_path ranges rather than
+// LIKE. Siblings that share a prefix, or sort right next to "trip/", must not
+// leak in, and a folder's name matches case exactly, as on disk.
+func TestListFolderBoundaries(t *testing.T) {
+	store, root := newTestStore(t)
+	ctx := context.Background()
+	for _, p := range []string{
+		"top.jpg",
+		"trip/a.jpg", "trip/deeper/b.jpg",
+		"trip2/c.jpg", "trip.v2/d.jpg", "trip x/e.jpg", "trip0/f.jpg", "Trip/g.jpg",
+	} {
+		seedFile(t, store, root, p)
+	}
+	paths := func(opts media.ListOptions) []string {
+		t.Helper()
+		page, err := store.List(ctx, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, f := range page.Files {
+			out = append(out, f.RelPath)
+		}
+		if page.Total != len(out) {
+			t.Errorf("%+v: total %d, listed %d", opts, page.Total, len(out))
+		}
+		return out
+	}
+	check := func(got []string, want ...string) {
+		t.Helper()
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	}
+	check(paths(media.ListOptions{FolderPath: "trip"}), "trip/a.jpg")
+	check(paths(media.ListOptions{FolderPath: "trip", Recursive: true}), "trip/a.jpg", "trip/deeper/b.jpg")
+	check(paths(media.ListOptions{FolderPath: ""}), "top.jpg")
+	check(paths(media.ListOptions{FolderPath: "Trip"}), "Trip/g.jpg")
+
+	if n, err := store.CountPresentUnder(ctx, "trip"); err != nil || n != 2 {
+		t.Errorf("CountPresentUnder(trip) = %d, %v; want 2", n, err)
+	}
+}

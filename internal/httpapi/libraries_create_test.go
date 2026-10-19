@@ -97,15 +97,17 @@ func TestCreateLibrary_QueuesInitialScan(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("index status = %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var status struct {
+	type indexStatus struct {
 		Status struct {
 			ActiveJob *struct {
 				ID     string `json:"id"`
 				Status string `json:"status"`
 			} `json:"active_job"`
-			LastJobID string `json:"last_job_id"`
+			LastJobID string    `json:"last_job_id"`
+			LastScan  *struct{} `json:"last_scan"`
 		} `json:"status"`
 	}
+	var status indexStatus
 	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
 		t.Fatalf("unmarshal index status: %v", err)
 	}
@@ -113,7 +115,8 @@ func TestCreateLibrary_QueuesInitialScan(t *testing.T) {
 	if status.Status.ActiveJob != nil {
 		jobID, jobState = status.Status.ActiveJob.ID, status.Status.ActiveJob.Status
 	}
-	if jobID == "" {
+	// The worker starts at once, so the scan may already be over.
+	if jobID == "" && status.Status.LastScan == nil {
 		t.Fatalf("no index job for the new library: %s", rec.Body.String())
 	}
 	switch jobState {
@@ -132,14 +135,17 @@ func TestCreateLibrary_QueuesInitialScan(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("index status = %d, body=%s", rec.Code, rec.Body.String())
 		}
+		status = indexStatus{} // a field absent from this reply must not linger
 		if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
 			t.Fatalf("unmarshal index status: %v", err)
 		}
 		if status.Status.ActiveJob == nil {
-			if status.Status.LastJobID == "" {
+			if status.Status.LastJobID == "" && status.Status.LastScan == nil {
 				t.Fatalf("index job disappeared without completing")
 			}
-			break
+			if status.Status.LastScan != nil {
+				break
+			}
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("initial index scan did not finish: %s", rec.Body.String())
