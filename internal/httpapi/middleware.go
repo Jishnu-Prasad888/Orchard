@@ -133,6 +133,10 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap exposes the underlying writer to http.ResponseController, which
+// uploads use to extend read deadlines past the server-wide ReadTimeout.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func requestIDOrEmpty(r *http.Request) string {
 	id, _ := RequestIDFrom(r.Context())
 	return id

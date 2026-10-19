@@ -10,6 +10,10 @@
  * library changed, so every open list (Files, Home, search) re-reads itself
  * and the new file appears without a refresh.
  *
+ * Each file goes up through {@link resumableUpload}, which rides out dropped
+ * connections on its own; while it does, the item carries a `notice` saying
+ * what happened, and only failures a person must act on become errors.
+ *
  * The Files page registers the folder it is showing as the upload target, so
  * the top bar's Upload button puts files where the person is looking rather
  * than at the library root.
@@ -27,7 +31,8 @@ import {
 import type { ReactNode } from 'react';
 
 import { notifyLibraryChanged } from '../../api/libraryEvents';
-import { joinRelPath, uploadFileWithProgress } from '../../api/queries';
+import { joinRelPath } from '../../api/queries';
+import { describeUploadError, resumableUpload } from '../../api/resumableUpload';
 import type { FileSummary } from '../../api/types';
 import { useToast } from '../ui/Toast';
 
@@ -43,6 +48,8 @@ export interface UploadItem {
   loaded: number;
   total: number;
   error?: string | undefined;
+  /** A hiccup being recovered from ("Connection lost. Retrying in 4 s…"). */
+  notice?: string | undefined;
   /** The file as the server indexed it, once uploaded. */
   uploaded?: FileSummary | undefined;
 }
@@ -98,22 +105,23 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       started.current.add(item.id);
       const controller = new AbortController();
       controllers.current.set(item.id, controller);
-      patch(item.id, { status: 'uploading', loaded: 0 });
-      uploadFileWithProgress(item.libraryId, item.file, item.dest, {
+      patch(item.id, { status: 'uploading', loaded: 0, notice: undefined });
+      resumableUpload(item.libraryId, item.file, item.dest, {
         signal: controller.signal,
         onProgress: ({ loaded, total }) => patch(item.id, { loaded, total }),
+        onNotice: (notice) => patch(item.id, { notice: notice ?? undefined }),
       })
-        .then((resp) => {
-          patch(item.id, { status: 'done', loaded: item.total, uploaded: resp.file });
+        .then((file) => {
+          patch(item.id, { status: 'done', loaded: item.total, uploaded: file, notice: undefined });
           setCompleted((n) => n + 1);
           notifyLibraryChanged(item.libraryId);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') {
-            patch(item.id, { status: 'cancelled' });
+            patch(item.id, { status: 'cancelled', notice: undefined });
           } else {
-            const reason = error instanceof Error ? error.message : 'The upload failed.';
-            patch(item.id, { status: 'error', error: reason });
+            const reason = describeUploadError(error);
+            patch(item.id, { status: 'error', error: reason, notice: undefined });
             toast({ tone: 'error', message: `Couldn’t upload ${item.file.name}: ${reason}` });
           }
         })

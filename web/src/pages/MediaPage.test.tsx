@@ -265,41 +265,58 @@ describe('MediaPage', () => {
   });
 
   it('uploads a file into the current folder, with progress, and reloads', async () => {
-    // Uploads use XMLHttpRequest (fetch cannot report upload progress).
-    const sent: Array<{ url: string; body: FormData }> = [];
+    // Chunks go up over XMLHttpRequest (fetch cannot report upload progress);
+    // the session is opened and completed over fetch.
+    const sent: Array<{ url: string; offset: string | undefined }> = [];
     class FakeXhr {
-      status = 201;
-      responseText = JSON.stringify({ file: photo });
+      status = 200;
+      responseText = JSON.stringify({ upload: { id: 'u1', offset: 5, size: 5 } });
       upload: { onprogress: ((e: unknown) => void) | null } = { onprogress: null };
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
       onabort: (() => void) | null = null;
       withCredentials = false;
       url = '';
+      headers: Record<string, string> = {};
       open(_method: string, url: string) {
         this.url = url;
       }
-      setRequestHeader() {}
+      setRequestHeader(name: string, value: string) {
+        this.headers[name] = value;
+      }
       abort() {
         this.onabort?.();
       }
-      send(body: FormData) {
-        sent.push({ url: this.url, body });
+      send() {
+        sent.push({ url: this.url, offset: this.headers['Upload-Offset'] });
         this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 5 });
         queueMicrotask(() => this.onload?.());
       }
     }
     vi.stubGlobal('XMLHttpRequest', FakeXhr);
 
-    const fetchMock = setup();
+    const session = { id: 'u1', path: 'beach.jpg', size: 5, offset: 0, chunk_size: 8 << 20 };
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/libraries/lib1/uploads')
+          ? json({ upload: session }, 201)
+          : undefined,
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/uploads/u1/complete')
+          ? json({ file: photo }, 201)
+          : undefined,
+    ]);
     const input = await screen.findByTestId('upload-input');
     const file = new File(['bytes'], 'beach.jpg', { type: 'image/jpeg' });
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
     await waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0]!.url).toContain('/api/v1/libraries/lib1/files/upload');
-    expect(sent[0]!.body.get('path')).toBe('beach.jpg');
+    expect(sent[0]).toEqual({ url: '/api/v1/libraries/lib1/uploads/u1', offset: '0' });
+    expect(bodyOf(fetchMock, 'POST', '/libraries/lib1/uploads')).toEqual({
+      path: 'beach.jpg',
+      size: 5,
+    });
 
     // The tray reports it, and the listing reloads afterwards.
     await waitFor(() => {

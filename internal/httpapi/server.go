@@ -40,6 +40,10 @@ type Server struct {
 	// reconnected remembers which (library, user) pairs this process has
 	// already reconciled with the library's member records (members.go).
 	reconnected sync.Map
+	// uploadLocks holds one mutex per in-progress resumable upload, and
+	// uploadSlots bounds chunk writes server-wide (uploads.go).
+	uploadLocks sync.Map
+	uploadSlots chan struct{}
 	// ready gates the /ready endpoint: true once startup completes, flipped
 	// false by MarkNotReady before graceful shutdown so proxies drain.
 	ready atomic.Bool
@@ -103,6 +107,7 @@ func New(deps Dependencies) *Server {
 		ratelimit:      newRateLimiter(),
 		maxUploadBytes: deps.MaxUploadBytes,
 		metrics:        deps.Metrics,
+		uploadSlots:    make(chan struct{}, maxConcurrentChunkWrites),
 	}
 	if deps.DB != nil {
 		s.settings = serversettings.NewStore(deps.DB)
@@ -204,6 +209,11 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}", s.withAuth(allowAny, s.handleGetFile))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/download", s.withAuth(allowAny, s.handleDownloadFile))
 		mux.Handle("POST /api/v1/libraries/{id}/files/upload", s.withAuth(allowAny, s.handleUploadFile))
+		mux.Handle("POST /api/v1/libraries/{id}/uploads", s.withAuth(allowAny, s.handleCreateUpload))
+		mux.Handle("GET /api/v1/libraries/{id}/uploads/{uploadID}", s.withAuth(allowAny, s.handleGetUpload))
+		mux.Handle("PATCH /api/v1/libraries/{id}/uploads/{uploadID}", s.withAuth(allowAny, s.handlePatchUpload))
+		mux.Handle("POST /api/v1/libraries/{id}/uploads/{uploadID}/complete", s.withAuth(allowAny, s.handleCompleteUpload))
+		mux.Handle("DELETE /api/v1/libraries/{id}/uploads/{uploadID}", s.withAuth(allowAny, s.handleDeleteUpload))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/rename", s.withAuth(allowAny, s.handleRenameFile))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/move", s.withAuth(allowAny, s.handleMoveFile))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/copy", s.withAuth(allowAny, s.handleCopyFile))

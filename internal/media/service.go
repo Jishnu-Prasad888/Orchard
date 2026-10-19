@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/sanitize"
@@ -217,6 +218,55 @@ func (svc *Service) WriteUpload(ctx context.Context, destRelPath string, src io.
 
 	now := time.Now().UTC()
 	if err := svc.store.UpsertFromPath(ctx, safe, written, now); err != nil {
+		return nil, fmt.Errorf("index upload: %w", err)
+	}
+	return svc.store.GetByRelPath(ctx, safe)
+}
+
+// CommitUpload moves an already-received file at srcAbs (somewhere on the
+// library's own disk, such as .orchard/uploads) to destRelPath and indexes
+// it. A rename keeps a large upload from being written twice — on an SD card
+// that is most of the cost. If the destination is on another filesystem (a
+// drive mounted inside the library), it falls back to a streamed copy.
+func (svc *Service) CommitUpload(ctx context.Context, destRelPath, srcAbs string) (*File, error) {
+	safe, err := SafeRelPath(destRelPath)
+	if err != nil {
+		return nil, err
+	}
+	abs, err := svc.absPath(safe)
+	if err != nil {
+		return nil, err
+	}
+	if _, statErr := os.Stat(abs); statErr == nil {
+		return nil, ErrAlreadyExists
+	}
+	info, err := os.Stat(srcAbs)
+	if err != nil {
+		return nil, fmt.Errorf("stat upload: %w", err)
+	}
+	if info.Size() > svc.MaxUploadBytes() {
+		return nil, ErrUploadTooLarge
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return nil, fmt.Errorf("create upload directory: %w", err)
+	}
+	if err := os.Rename(srcAbs, abs); err != nil {
+		var linkErr *os.LinkError
+		if !errors.As(err, &linkErr) || !errors.Is(linkErr.Err, syscall.EXDEV) {
+			return nil, fmt.Errorf("commit upload: %w", err)
+		}
+		src, openErr := os.Open(srcAbs)
+		if openErr != nil {
+			return nil, fmt.Errorf("open upload: %w", openErr)
+		}
+		defer func() { _ = src.Close() }()
+		created, copyErr := svc.WriteUpload(ctx, safe, src)
+		if copyErr == nil {
+			_ = os.Remove(srcAbs)
+		}
+		return created, copyErr
+	}
+	if err := svc.store.UpsertFromPath(ctx, safe, info.Size(), time.Now().UTC()); err != nil {
 		return nil, fmt.Errorf("index upload: %w", err)
 	}
 	return svc.store.GetByRelPath(ctx, safe)

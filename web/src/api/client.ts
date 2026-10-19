@@ -196,56 +196,101 @@ export interface UploadProgress {
   total: number;
 }
 
+/** The connection failed or stalled before the server answered. */
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
 /**
- * A multipart upload that reports progress and can be cancelled.
+ * Send a raw body with progress events, cancellation, and a stall timer.
  *
- * `fetch` cannot report upload progress, so this one request uses
- * XMLHttpRequest. Errors are the same {@link ApiError} every other call
- * throws, and an abort rejects with a `DOMException` named `AbortError`.
+ * `fetch` cannot report upload progress, so this uses XMLHttpRequest. A
+ * request that goes `stallMs` without sending a byte is abandoned — the
+ * browser alone would wait minutes on a dead connection. Errors are the same
+ * {@link ApiError} every other call throws; a lost or stalled connection is a
+ * {@link NetworkError}; an abort rejects with a `DOMException` named
+ * `AbortError`.
  */
-export function apiUploadWithProgress<T>(
+export function apiSendWithProgress<T>(
+  method: string,
   endpoint: string,
-  file: File,
-  path: string | undefined,
-  { onProgress, signal }: { onProgress?: (p: UploadProgress) => void; signal?: AbortSignal } = {},
+  body: Blob,
+  {
+    headers = {},
+    onProgress,
+    signal,
+    stallMs,
+  }: {
+    headers?: Record<string, string>;
+    onProgress?: (p: UploadProgress) => void;
+    signal?: AbortSignal | undefined;
+    stallMs?: number;
+  } = {},
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Upload cancelled.', 'AbortError'));
+      return;
+    }
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_BASE}${endpoint}`);
+    xhr.open(method, `${API_BASE}${endpoint}`);
     xhr.setRequestHeader('Accept', 'application/json');
+    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
     xhr.withCredentials = true;
 
+    let stalled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watch = () => {
+      if (!stallMs) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        stalled = true;
+        xhr.abort();
+      }, stallMs);
+    };
+    const settle = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => xhr.abort();
+
     xhr.upload.onprogress = (event) => {
+      watch();
       if (event.lengthComputable) onProgress?.({ loaded: event.loaded, total: event.total });
     };
     xhr.onload = () => {
+      settle();
       const parsed = parseJson(xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve((xhr.status === 204 ? undefined : parsed) as T);
         return;
       }
       const envelope = parsed as ApiErrorEnvelope | null;
-      const body: ApiErrorBody = envelope?.error?.code
+      const errorBody: ApiErrorBody = envelope?.error?.code
         ? envelope.error
         : { code: 'UNKNOWN', message: `Request failed with status ${xhr.status}.`, request_id: '' };
-      notifyAuthFailure(xhr.status, body);
-      reject(new ApiError(body, xhr.status));
+      notifyAuthFailure(xhr.status, errorBody);
+      reject(new ApiError(errorBody, xhr.status));
     };
-    xhr.onerror = () => reject(new Error('The connection to the server was lost.'));
-    xhr.onabort = () => reject(new DOMException('Upload cancelled.', 'AbortError'));
+    xhr.onerror = () => {
+      settle();
+      reject(new NetworkError('The connection to the server was lost.'));
+    };
+    xhr.onabort = () => {
+      settle();
+      reject(
+        stalled
+          ? new NetworkError('The connection stalled.')
+          : new DOMException('Upload cancelled.', 'AbortError'),
+      );
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
 
-    if (signal) {
-      if (signal.aborted) {
-        reject(new DOMException('Upload cancelled.', 'AbortError'));
-        return;
-      }
-      signal.addEventListener('abort', () => xhr.abort(), { once: true });
-    }
-
-    const form = new FormData();
-    if (path) form.append('path', path);
-    form.append('file', file);
-    xhr.send(form);
+    watch();
+    xhr.send(body);
   });
 }
 

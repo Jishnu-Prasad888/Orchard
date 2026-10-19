@@ -115,6 +115,12 @@
   }
 }
 
+.upload-tray-notice,
+.upload-item.is-uploading.has-notice .upload-item-status {
+  color: var(--color-warning-ink);
+  overflow-wrap: anywhere;
+}
+
 .upload-tray-reason {
   color: var(--color-danger-ink);
   overflow-wrap: anywhere;

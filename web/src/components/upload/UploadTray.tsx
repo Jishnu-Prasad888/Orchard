@@ -35,6 +35,10 @@ function summary(items: UploadItem[]) {
   return { active: active.length, done, failed, fraction: total > 0 ? loaded / total : 0 };
 }
 
+function progressText(item: UploadItem) {
+  return `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`;
+}
+
 function folderQuery(folder: string): string {
   return folder ? `folder=${encodeURIComponent(folder)}&` : '';
 }
@@ -82,6 +86,9 @@ export function UploadTray() {
   const failureReason = firstFailure
     ? `${firstFailure.file.name}: ${firstFailure.error ?? 'The upload failed.'}`
     : null;
+  // Nor should a connection problem being ridden out: say why it paused.
+  const recovering = items.find((i) => i.status === 'uploading' && i.notice);
+  const recoveryNote = recovering ? `${recovering.file.name}: ${recovering.notice}` : null;
 
   const heading = (
     <>
@@ -93,6 +100,11 @@ export function UploadTray() {
         {active > 0 && ` · ${active} remaining`}
         {failed > 0 && ` · ${failed} failed`}
       </span>
+      {recoveryNote && !failureReason && !expanded && (
+        <span className="upload-tray-sub upload-tray-notice" title={recoveryNote}>
+          {recoveryNote}
+        </span>
+      )}
       {failureReason && !expanded && (
         <span className="upload-tray-sub upload-tray-reason" title={failureReason}>
           {failureReason}
@@ -164,7 +176,10 @@ export function UploadTray() {
       {expanded && (
         <ul className="upload-tray-list" id="upload-tray-list">
           {items.map((item) => (
-            <li key={item.id} className={`upload-item is-${item.status}`}>
+            <li
+              key={item.id}
+              className={`upload-item is-${item.status}${item.notice ? ' has-notice' : ''}`}
+            >
               <Icon
                 name={
                   item.status === 'done'
@@ -188,8 +203,7 @@ export function UploadTray() {
                     {item.file.name}
                   </span>
                   <span className="upload-item-status">
-                    {item.status === 'uploading' &&
-                      `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`}
+                    {item.status === 'uploading' && (item.notice ?? progressText(item))}
                     {item.status === 'queued' && 'Waiting'}
                     {item.status === 'done' && 'Uploaded'}
                     {item.status === 'cancelled' && 'Cancelled'}
@@ -202,8 +216,7 @@ export function UploadTray() {
                     {item.file.name}
                   </span>
                   <span className="upload-item-status">
-                    {item.status === 'uploading' &&
-                      `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`}
+                    {item.status === 'uploading' && (item.notice ?? progressText(item))}
                     {item.status === 'queued' && 'Waiting'}
                     {item.status === 'done' && 'Uploaded'}
                     {item.status === 'cancelled' && 'Cancelled'}
