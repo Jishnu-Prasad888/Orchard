@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // StateStore persists and queries indexed file records in the per-library
@@ -112,14 +114,20 @@ func NewStateStore(db *sql.DB) *StateStore {
 // Upsert inserts or updates an indexed file record. It uses INSERT OR REPLACE
 // so that a re-scan that finds the same file simply refreshes last_seen_at and
 // status without changing first_seen_at.
+//
+// It classifies the media type from the extension. That used to be left to a
+// backfill that librarydb ran on every database open — which, opened once per
+// request, quietly fixed each new row; with one shared pool per library it
+// runs once per process, so the scanner must set the type itself.
 func (s *StateStore) Upsert(ctx context.Context, f *IndexedFile) error {
 	const query = `
 		INSERT INTO indexed_files
-			(id, rel_path, size_bytes, mod_time, content_hash, status,
+			(id, rel_path, size_bytes, mod_time, content_hash, media_type, status,
 			 first_seen_at, last_seen_at, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(rel_path) DO UPDATE SET
 			size_bytes    = excluded.size_bytes,
+			media_type    = excluded.media_type,
 			mod_time      = excluded.mod_time,
 			content_hash  = excluded.content_hash,
 			status        = excluded.status,
@@ -127,7 +135,7 @@ func (s *StateStore) Upsert(ctx context.Context, f *IndexedFile) error {
 			indexed_at    = excluded.indexed_at`
 	err := s.exec(ctx, query,
 		f.ID, f.RelPath, f.SizeBytes, rfc3339(f.ModTime),
-		nullString(f.ContentHash), string(f.Status),
+		nullString(f.ContentHash), string(media.DetectMediaType(f.RelPath)), string(f.Status),
 		rfc3339(f.FirstSeenAt), rfc3339(f.LastSeenAt), rfc3339(f.IndexedAt),
 	)
 	if err != nil {
@@ -209,10 +217,10 @@ func (s *StateStore) MarkMissing(ctx context.Context, seenIDs map[string]struct{
 // move is detected: the old entry's path is replaced with the new location.
 func (s *StateStore) UpdatePath(ctx context.Context, id, newRelPath string, now time.Time) error {
 	err := s.exec(ctx,
-		`UPDATE indexed_files SET rel_path = ?, last_seen_at = ?, indexed_at = ?,
+		`UPDATE indexed_files SET rel_path = ?, media_type = ?, last_seen_at = ?, indexed_at = ?,
 		                          status = 'present'
 		 WHERE id = ?`,
-		newRelPath, rfc3339(now), rfc3339(now), id)
+		newRelPath, string(media.DetectMediaType(newRelPath)), rfc3339(now), rfc3339(now), id)
 	if err != nil {
 		return fmt.Errorf("update path for %s: %w", id, err)
 	}

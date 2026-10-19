@@ -642,3 +642,25 @@ func TestScannerRescanWritesNothingUnlessAFileReturns(t *testing.T) {
 		t.Fatalf("returned file = %+v, %v", f, err)
 	}
 }
+
+// A scanned file must carry its media type at once, not only after the
+// database is next reopened (the Photos page filters on it).
+func TestScannerClassifiesMediaTypeWithoutAReopen(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "a.jpg"), "a")
+	writeFile(t, filepath.Join(root, "b.pdf"), "b")
+	db := newTestDB(t)
+	scanner := indexer.NewScanner(indexer.NewStateStore(db.DB()), discardLogger())
+	if _, err := scanner.Scan(context.Background(), "lib1", root); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{"a.jpg": "photo", "b.pdf": "document"} {
+		var got string
+		if err := db.DB().QueryRow(`SELECT media_type FROM indexed_files WHERE rel_path = ?`, path).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s media_type = %q, want %q", path, got, want)
+		}
+	}
+}
