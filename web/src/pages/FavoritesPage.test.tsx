@@ -209,4 +209,30 @@ describe('FavoritesPage', () => {
 
     expect(await screen.findByTestId('no-libraries')).toBeInTheDocument();
   });
+
+  it('tags a file from its right-click menu', async () => {
+    const tag = { id: 't1', name: 'beach', color: '' };
+    const fn = setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/tags')
+          ? json({ tag })
+          : undefined,
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/files/f1/tags') ? noContent() : undefined,
+      (url) => (url.endsWith('/files/f1/tags') ? json({ tags: [] }) : undefined),
+      (url) => (url.endsWith('/api/v1/libraries/lib1/tags') ? json({ tags: [] }) : undefined),
+    ]);
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    fireEvent.click(await screen.findByTestId('menu-tags'));
+
+    const dialog = await screen.findByTestId('tags-dialog');
+    const input = within(dialog).getByLabelText('Add a tag');
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: 'beach' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(bodyOf(fn, 'POST', '/files/f1/tags')).toEqual({ tag_id: 't1' }));
+    expect(bodyOf(fn, 'POST', '/libraries/lib1/tags')).toEqual({ name: 'beach' });
+  });
 });

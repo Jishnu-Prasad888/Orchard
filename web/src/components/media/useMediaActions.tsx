@@ -221,6 +221,15 @@ export function useMediaActions({
         onSelect: () => void setFavorite([file], !favorite),
       });
     }
+    if (can.edit && ops) {
+      items.push({
+        id: 'tags',
+        label: 'Tags…',
+        icon: 'tag',
+        onSelect: () => ops.openTags(file),
+        testId: 'menu-tags',
+      });
+    }
     if (onShowInFolder) {
       items.push({
         id: 'folder',
