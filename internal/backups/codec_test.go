@@ -24,26 +24,24 @@ import (
 // testKey is the fixed 32-byte key used by codec tests.
 var testKey = []byte("0123456789abcdef0123456789abcdef")
 
-// roundTrip writes plaintext through a sink into a bytes.Buffer-backed file,
+// roundTrip writes plaintext through a sink into a file,
 // then reads it back through openPayload, asserting integrity and content.
 func roundTrip(t *testing.T, payload []byte, compress, encrypted bool) {
 	t.Helper()
-
-	sink, err := newPayloadSink(compress, encrypted, testKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sink.abort()
 
 	dstFile := filepath.Join(t.TempDir(), "out")
 	dst, err := os.Create(dstFile)
 	if err != nil {
 		t.Fatal(err)
 	}
+	sink, err := newPayloadSink(dst, compress, encrypted, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := sink.Write(payload); err != nil {
 		t.Fatal(err)
 	}
-	h, err := sink.Materialize(dst)
+	h, err := sink.Finish()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,20 +145,19 @@ func TestAEADChunkBoundaries(t *testing.T) {
 		name := fmt.Sprintf("plaintext_%d", size)
 		t.Run(name, func(t *testing.T) {
 			payload := pseudoRandom(rng, size)
-			sink, err := newPayloadSink(false, true, testKey)
+			dstFile := filepath.Join(t.TempDir(), "out")
+			dst, err := os.Create(dstFile)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer sink.abort()
-			dstFile := filepath.Join(t.TempDir(), "out")
-			dst, err := os.Create(dstFile)
+			sink, err := newPayloadSink(dst, false, true, testKey)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if _, err := sink.Write(payload); err != nil {
 				t.Fatal(err)
 			}
-			h, err := sink.Materialize(dst)
+			h, err := sink.Finish()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -201,20 +198,19 @@ func TestAEADChunkBoundaries(t *testing.T) {
 // garbage.
 func TestAEADRejectsWrongKey(t *testing.T) {
 	payload := pseudoRandom(mrand.New(mrand.NewSource(1)), aeadChunkSize+10)
-	sink, err := newPayloadSink(false, true, testKey)
+	fn := filepath.Join(t.TempDir(), "p")
+	dst, err := os.Create(fn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sink.abort()
-	fn := filepath.Join(t.TempDir(), "p")
-	dst, err := os.Create(fn)
+	sink, err := newPayloadSink(dst, false, true, testKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sink.Write(payload); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sink.Materialize(dst); err != nil {
+	if _, err := sink.Finish(); err != nil {
 		t.Fatal(err)
 	}
 	_ = dst.Close()
@@ -238,20 +234,19 @@ func TestAEADRejectsWrongKey(t *testing.T) {
 // requires the tampering to be rejected (at open or on read) by GCM
 // authentication.
 func TestAEADDetectsTampering(t *testing.T) {
-	sink, err := newPayloadSink(true, true, testKey)
+	fn := filepath.Join(t.TempDir(), "p")
+	dst, err := os.Create(fn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sink.abort()
-	fn := filepath.Join(t.TempDir(), "p")
-	dst, err := os.Create(fn)
+	sink, err := newPayloadSink(dst, true, true, testKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sink.Write(pseudoRandom(mrand.New(mrand.NewSource(7)), 2*aeadChunkSize+500)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sink.Materialize(dst); err != nil {
+	if _, err := sink.Finish(); err != nil {
 		t.Fatal(err)
 	}
 	_ = dst.Close()
@@ -367,20 +362,19 @@ func TestLegacyCTRPayloadStillReads(t *testing.T) {
 
 func TestPayloadDetectsCorruption(t *testing.T) {
 	testKey := []byte("0123456789abcdef0123456789abcdef")
-	sink, err := newPayloadSink(true, true, testKey)
+	fn := filepath.Join(t.TempDir(), "p")
+	dst, err := os.Create(fn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sink.abort()
-	fn := filepath.Join(t.TempDir(), "p")
-	dst, err := os.Create(fn)
+	sink, err := newPayloadSink(dst, true, true, testKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sink.Write([]byte(strings.Repeat("a", 5000))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sink.Materialize(dst); err != nil {
+	if _, err := sink.Finish(); err != nil {
 		t.Fatal(err)
 	}
 	_ = dst.Close()
@@ -412,20 +406,19 @@ func TestPayloadDetectsCorruption(t *testing.T) {
 }
 
 func TestPayloadRejectsTruncation(t *testing.T) {
-	sink, err := newPayloadSink(false, false, nil)
+	fn := filepath.Join(t.TempDir(), "p")
+	dst, err := os.Create(fn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sink.abort()
-	fn := filepath.Join(t.TempDir(), "p")
-	dst, err := os.Create(fn)
+	sink, err := newPayloadSink(dst, false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sink.Write([]byte(strings.Repeat("b", 2000))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sink.Materialize(dst); err != nil {
+	if _, err := sink.Finish(); err != nil {
 		t.Fatal(err)
 	}
 	_ = dst.Close()
