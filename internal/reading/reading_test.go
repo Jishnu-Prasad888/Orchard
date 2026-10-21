@@ -143,3 +143,29 @@ func TestValid(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletedAmong_OnlyCompletedForThatUser(t *testing.T) {
+	store, seed := newTestStore(t)
+	seed("f1", "a.epub")
+	seed("f2", "b.epub")
+	seed("f3", "c.epub")
+	ctx := context.Background()
+
+	if err := store.Set(ctx, "u1", "f1", reading.StatusCompleted); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(ctx, "u1", "f2", reading.StatusReading); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(ctx, "u2", "f3", reading.StatusCompleted); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.CompletedAmong(ctx, "u1", []string{"f1", "f2", "f3"})
+	if err != nil {
+		t.Fatalf("CompletedAmong: %v", err)
+	}
+	if len(got) != 1 || !got["f1"] {
+		t.Errorf("CompletedAmong = %v, want only f1", got)
+	}
+}

@@ -179,6 +179,10 @@ func (s *Server) Handler() http.Handler {
 	// Home regardless of which library is currently active.
 	mux.Handle("GET /api/v1/settings/home-layout", s.withAuth(allowAny, s.handleGetHomeLayout))
 	mux.Handle("PUT /api/v1/settings/home-layout", s.withAuth(allowAny, s.handleSetHomeLayout))
+	// Whether listings hide the files the user marked completed: one
+	// account-wide checkbox, shown at the top of every page.
+	mux.Handle("GET /api/v1/settings/hide-completed", s.withAuth(allowAny, s.handleGetHideCompleted))
+	mux.Handle("PUT /api/v1/settings/hide-completed", s.withAuth(allowAny, s.handleSetHideCompleted))
 
 	// Library surface. Listing is open to any session and filtered by the
 	// caller's read capability, so a member can find the libraries it was

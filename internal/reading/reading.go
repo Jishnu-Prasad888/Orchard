@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -77,4 +78,35 @@ func (s *Store) Clear(ctx context.Context, userID, fileID string) error {
 		return fmt.Errorf("clear reading status: %w", err)
 	}
 	return nil
+}
+
+// CompletedAmong returns which of fileIDs the given user has marked
+// completed, in one query — a listing calls it once for its whole page.
+func (s *Store) CompletedAmong(ctx context.Context, userID string, fileIDs []string) (map[string]bool, error) {
+	out := make(map[string]bool)
+	if len(fileIDs) == 0 {
+		return out, nil
+	}
+	placeholders := strings.Repeat("?,", len(fileIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, 0, len(fileIDs)+2)
+	args = append(args, userID, string(StatusCompleted))
+	for _, id := range fileIDs {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT file_id FROM reading_status
+		 WHERE user_id = ? AND status = ? AND file_id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list completed files: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan completed file: %w", err)
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
 }

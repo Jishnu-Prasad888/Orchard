@@ -259,6 +259,18 @@
   margin-left: auto;
 }
 
+.topbar-hide-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .account-button {
   display: grid;
   place-items: center;
@@ -485,6 +497,11 @@
 
   .topbar-upload {
     width: var(--touch-target);
+    padding: 0;
+  }
+
+  .topbar-hide-completed {
+    gap: var(--space-1);
     padding: 0;
   }
 }

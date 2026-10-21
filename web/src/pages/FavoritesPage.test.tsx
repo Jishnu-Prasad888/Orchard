@@ -14,6 +14,7 @@ import {
   renderPage,
 } from '../test/harness';
 import type { RouteHandler } from '../test/harness';
+import { HideCompletedProvider } from '../components/media/useHideCompleted';
 import FavoritesPage from './FavoritesPage';
 
 const photo = fileFixture();
@@ -234,5 +235,71 @@ describe('FavoritesPage', () => {
 
     await waitFor(() => expect(bodyOf(fn, 'POST', '/files/f1/tags')).toEqual({ tag_id: 't1' }));
     expect(bodyOf(fn, 'POST', '/libraries/lib1/tags')).toEqual({ name: 'beach' });
+  });
+
+  it('marks a file completed from its right-click menu and re-reads the list', async () => {
+    const fn = setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/files/f1/reading-status')
+          ? json({ status: 'completed' })
+          : undefined,
+    ]);
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    fireEvent.click(await screen.findByTestId('menu-complete'));
+
+    await waitFor(() =>
+      expect(bodyOf(fn, 'PUT', '/files/f1/reading-status')).toEqual({ status: 'completed' }),
+    );
+    await waitFor(() =>
+      expect(
+        fn.mock.calls.filter(([u]) => String(u).includes('/libraries/lib1/favorites')).length,
+      ).toBeGreaterThanOrEqual(2),
+    );
+  });
+
+  it('offers to un-complete a completed file', async () => {
+    const fn = setup([
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/favorites')
+          ? json({ files: [{ ...photo, completed: true }, video] })
+          : undefined,
+      (url, init) =>
+        init?.method === 'DELETE' && url.endsWith('/files/f1/reading-status')
+          ? noContent()
+          : undefined,
+    ]);
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    const item = await screen.findByTestId('menu-complete');
+    expect(item).toHaveTextContent('Mark as not completed');
+    fireEvent.click(item);
+
+    await waitFor(() =>
+      expect(called(fn, 'DELETE', '/api/v1/libraries/lib1/files/f1/reading-status')).toBe(true),
+    );
+  });
+
+  it('leaves out completed files while "Hide completed" is on', async () => {
+    mockApi(
+      apiRules([
+        (url) =>
+          url.includes('/api/v1/settings/hide-completed')
+            ? json({ hide_completed: true })
+            : undefined,
+        (url) =>
+          url.includes('/api/v1/libraries/lib1/favorites')
+            ? json({ files: [{ ...photo, completed: true }, video] })
+            : undefined,
+      ]),
+    );
+    renderPage(
+      <HideCompletedProvider>
+        <FavoritesPage />
+      </HideCompletedProvider>,
+    );
+
+    expect(await screen.findByText('clip.mp4')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('IMG_0001.png')).not.toBeInTheDocument());
   });
 });

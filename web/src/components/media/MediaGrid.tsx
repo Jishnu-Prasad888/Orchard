@@ -59,6 +59,10 @@ export interface MediaGridProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** How many files have been fetched, counting any the page hides (Hide
+   * completed). A fetched page that added nothing visible still moves this,
+   * so infinite scroll asks for the next one. Defaults to `files.length`. */
+  loadedCount?: number;
   /** Accessible name for the grid region ("Photos", "Album: Summer"). */
   label: string;
   testId?: string;
@@ -78,6 +82,7 @@ export function MediaGrid({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loadedCount,
   label,
   testId = 'media-grid',
   revealed,
@@ -150,6 +155,7 @@ export function MediaGrid({
   }, [updateRange]);
 
   // Infinite scroll: ask for the next page as the end comes into view.
+  const loaded = loadedCount ?? files.length;
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel || !hasMore || !onLoadMore || typeof IntersectionObserver === 'undefined') {
@@ -163,7 +169,7 @@ export function MediaGrid({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, onLoadMore, files.length]);
+  }, [hasMore, onLoadMore, loaded]);
 
   // Bring the first revealed file to the middle of the screen. Its row may
   // not be mounted yet (only rows near the viewport are), so this scrolls by

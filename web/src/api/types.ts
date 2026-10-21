@@ -188,6 +188,9 @@ export interface FileSummary {
   /** How far the signed-in user has read this book, 0-100. Set by file
    * listings only, and absent for a book they have not started. */
   progress_percent?: number;
+  /** Whether the signed-in user has marked this file completed. Set by file
+   * listings only; absent means not completed. */
+  completed?: boolean;
 }
 
 export interface FileEnvelope {

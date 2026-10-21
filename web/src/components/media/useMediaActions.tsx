@@ -1,8 +1,8 @@
 /**
  * What can be done to media, from a selection or a single tile's menu.
  *
- * Every grid offers the same core actions — download, favorite, rename/move/
- * copy, move to trash — and pages add their own (Trash adds Restore). Keeping
+ * Every grid offers the same core actions — download, favorite, mark as
+ * completed, rename/move/copy, move to trash — and pages add their own (Trash adds Restore). Keeping
  * them here means the wording, the confirmations, and the toasts are
  * identical everywhere.
  *
@@ -13,7 +13,7 @@
 
 import { type ReactElement, useCallback, useState } from 'react';
 
-import { softDeleteFile } from '../../api/queries';
+import { clearReadingStatus, setReadingStatus, softDeleteFile } from '../../api/queries';
 import type { FileSummary } from '../../api/types';
 import { ConfirmDialog } from '../Dialog';
 import type { FileOperations } from '../FileOperations';
@@ -34,7 +34,7 @@ export interface MediaActionOptions {
   /** Something changed on the server; reload the listing. */
   onChanged: () => void;
   /** Which of the standard actions this page offers. Defaults to all. */
-  allow?: Partial<Record<'download' | 'favorite' | 'trash' | 'edit', boolean>>;
+  allow?: Partial<Record<'download' | 'favorite' | 'complete' | 'trash' | 'edit', boolean>>;
   /** Page-specific selection actions, shown before the standard ones. */
   extra?: SelectionAction[];
   /** Page-specific items for a single file's menu. */
@@ -90,6 +90,7 @@ export function useMediaActions({
   const can = {
     download: allow.download ?? true,
     favorite: (allow.favorite ?? true) && favorites !== undefined,
+    complete: allow.complete ?? true,
     trash: allow.trash ?? true,
     edit: (allow.edit ?? true) && ops !== undefined,
   };
@@ -122,6 +123,31 @@ export function useMediaActions({
     [favorites, toast],
   );
 
+  const setCompleted = useCallback(
+    async (files: FileSummary[], value: boolean) => {
+      const results = await Promise.allSettled(
+        files.map((f) =>
+          value
+            ? setReadingStatus(libraryId, f.id, 'completed')
+            : clearReadingStatus(libraryId, f.id),
+        ),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed) {
+        toast({ message: `Couldn't update ${plural(failed, 'file', 'files')}`, tone: 'error' });
+      } else {
+        const what = files.length === 1 ? 'Marked' : `${files.length} marked`;
+        toast({
+          message: value ? `${what} as completed` : `${what} as not completed`,
+          tone: 'success',
+        });
+      }
+      // The listing carries each file's completed flag, and may now hide it.
+      onChanged();
+    },
+    [libraryId, onChanged, toast],
+  );
+
   const confirmTrash = async () => {
     if (!trashing) return;
     setBusy(true);
@@ -150,6 +176,7 @@ export function useMediaActions({
   const files = selection.selectedFiles;
   const allFavorite =
     favorites !== undefined && files.length > 0 && files.every((f) => favorites.has(f.id));
+  const allCompleted = files.length > 0 && files.every((f) => f.completed);
 
   const selectionActions: SelectionAction[] = [
     ...extra,
@@ -178,6 +205,20 @@ export function useMediaActions({
             icon: 'star' as const,
             onClick: () => void setFavorite(files, !allFavorite),
             testId: 'selection-favorite',
+          },
+        ]
+      : []),
+    ...(can.complete
+      ? [
+          {
+            id: 'complete',
+            label: allCompleted ? 'Mark as not completed' : 'Mark as completed',
+            icon: 'check' as const,
+            onClick: () => {
+              void setCompleted(files, !allCompleted);
+              selection.clear();
+            },
+            testId: 'selection-complete',
           },
         ]
       : []),
@@ -219,6 +260,15 @@ export function useMediaActions({
         label: favorite ? 'Remove from favorites' : 'Add to favorites',
         icon: 'star',
         onSelect: () => void setFavorite([file], !favorite),
+      });
+    }
+    if (can.complete) {
+      items.push({
+        id: 'complete',
+        label: file.completed ? 'Mark as not completed' : 'Mark as completed',
+        icon: 'check',
+        onSelect: () => void setCompleted([file], !file.completed),
+        testId: 'menu-complete',
       });
     }
     if (can.edit && ops) {

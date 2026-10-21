@@ -12,6 +12,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
 import { notifyLibraryChanged } from '../../api/libraryEvents';
+import { HideCompletedProvider } from '../media/useHideCompleted';
 import { UploadTray } from '../upload/UploadTray';
 import { MobileNav } from './MobileNav';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -104,32 +105,34 @@ export default function AppShell() {
   }, [navigate]);
 
   return (
-    <div className="app-shell" data-testid="app-shell">
-      <a className="skip-link" href="#main-content">
-        Skip to content
-      </a>
+    <HideCompletedProvider>
+      <div className="app-shell" data-testid="app-shell">
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
 
-      {drawerOpen && (
-        <div className="app-drawer-backdrop" onClick={closeDrawer} data-testid="nav-backdrop" />
-      )}
+        {drawerOpen && (
+          <div className="app-drawer-backdrop" onClick={closeDrawer} data-testid="nav-backdrop" />
+        )}
 
-      <Sidebar open={drawerOpen} onNavigate={closeDrawer} />
+        <Sidebar open={drawerOpen} onNavigate={closeDrawer} />
 
-      <div className="app-main">
-        <TopBar searchRef={searchRef} onShowShortcuts={() => setShortcutsOpen(true)} />
-        <div className="app-content" id="main-content" tabIndex={-1}>
-          <Outlet />
+        <div className="app-main">
+          <TopBar searchRef={searchRef} onShowShortcuts={() => setShortcutsOpen(true)} />
+          <div className="app-content" id="main-content" tabIndex={-1}>
+            <Outlet />
+          </div>
         </div>
+
+        <MobileNav
+          moreOpen={drawerOpen}
+          onMore={() => setDrawerOpen((open) => !open)}
+          moreRef={moreRef}
+        />
+
+        <UploadTray />
+        <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       </div>
-
-      <MobileNav
-        moreOpen={drawerOpen}
-        onMore={() => setDrawerOpen((open) => !open)}
-        moreRef={moreRef}
-      />
-
-      <UploadTray />
-      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-    </div>
+    </HideCompletedProvider>
   );
 }
