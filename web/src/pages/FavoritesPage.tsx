@@ -7,12 +7,13 @@ import { useCallback, useState } from 'react';
 
 import { useLibraryResource } from '../api/resources';
 import { listFavorites } from '../api/queries';
-import type { Library } from '../api/types';
+import type { FileSummary, Library } from '../api/types';
 import { useFileOperations } from '../components/FileOperations';
 import { LibraryGatePage } from '../components/LibraryGatePage';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useFavorites } from '../components/media/useFavorites';
+import { useVisibleFiles } from '../components/media/useHideCompleted';
 import { useMediaActions } from '../components/media/useMediaActions';
 import { useSelection } from '../components/media/useSelection';
 import { EmptyState, ErrorState, LibraryOfflineNotice, PageHeader } from '../components/States';
@@ -27,13 +28,15 @@ export default function FavoritesPage() {
   );
 }
 
+const NO_FILES: FileSummary[] = [];
+
 function Favorites({ library }: { library: Library }) {
   const libraryId = library.id;
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
   const favorites = useLibraryResource(
     useCallback(async (id: string) => (await listFavorites(id)).files ?? [], []),
   );
-  const files = favorites.data ?? [];
+  const files = useVisibleFiles(favorites.data ?? NO_FILES);
 
   const starred = useFavorites(libraryId, files.length);
   const selection = useSelection(files, libraryId);

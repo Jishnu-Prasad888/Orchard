@@ -18,6 +18,7 @@ import { useAuth } from '../auth/authContext';
 import { useFileLabels } from '../api/fileLabels';
 import { useLibraryResource } from '../api/resources';
 import {
+  clearReadingStatus,
   getHomeLayout,
   listCollections,
   listFavorites,
@@ -26,6 +27,7 @@ import {
   listLibraryQuotes,
   listRecentlyOpened,
   setHomeLayout,
+  setReadingStatus,
 } from '../api/queries';
 import type {
   Collection,
@@ -41,10 +43,12 @@ import { useFileOperations } from '../components/FileOperations';
 import { LibraryGatePage } from '../components/LibraryGatePage';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { gridMetrics } from '../components/media/layout';
+import { useVisibleFiles } from '../components/media/useHideCompleted';
 import { EmptyState, ErrorState, LibraryOfflineNotice } from '../components/States';
 import { downloadUrl } from '../components/media';
 import { Icon } from '../components/ui/Icon';
 import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
+import { useToast } from '../components/ui/Toast';
 import { useUploadActions } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
 import { greeting } from '../lib/dates';
@@ -52,6 +56,8 @@ import { isIndexing, useIndexStatus } from '../components/app-shell/useIndexStat
 import './HomePage.css';
 
 const RECENT_LIMIT = 40;
+const NO_FILES: FileSummary[] = [];
+const NO_IN_PROGRESS: InProgressFile[] = [];
 /** Home shows a taste, not the library: two rows. */
 const HOME_ROWS = 2;
 const PHOTO_GAP = 4;
@@ -191,6 +197,25 @@ function Home({ library }: { library: Library }) {
   // Right-click on any tile: the same short menu in every section.
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
   const { openViewer, openProperties, openTags } = ops;
+  const toast = useToast();
+  const reloadHome = home.reload;
+  const setCompleted = useCallback(
+    (file: FileSummary, value: boolean) => {
+      (value
+        ? setReadingStatus(libraryId, file.id, 'completed')
+        : clearReadingStatus(libraryId, file.id)
+      )
+        .then(() => {
+          toast({
+            message: value ? 'Marked as completed' : 'Marked as not completed',
+            tone: 'success',
+          });
+          reloadHome();
+        })
+        .catch(() => toast({ message: "Couldn't update the file", tone: 'error' }));
+    },
+    [libraryId, reloadHome, toast],
+  );
   const openMenu = useCallback(
     (file: FileSummary, x: number, y: number) =>
       setMenu({
@@ -211,6 +236,13 @@ function Home({ library }: { library: Library }) {
             testId: 'menu-tags',
           },
           {
+            id: 'complete',
+            label: file.completed ? 'Mark as not completed' : 'Mark as completed',
+            icon: 'check',
+            onSelect: () => setCompleted(file, !file.completed),
+            testId: 'menu-complete',
+          },
+          {
             id: 'properties',
             label: 'Properties',
             icon: 'settings',
@@ -219,9 +251,16 @@ function Home({ library }: { library: Library }) {
           },
         ],
       }),
-    [libraryId, openViewer, openProperties, openTags],
+    [libraryId, openViewer, openProperties, openTags, setCompleted],
   );
   const data = home.data;
+  // With "Hide completed" on, every section leaves out what the user has
+  // finished. Emptiness below still goes by the unfiltered list: a library
+  // whose recent files are all completed is not "empty".
+  const visibleRecent = useVisibleFiles(data?.recent ?? NO_FILES);
+  const visibleOpened = useVisibleFiles(data?.recentlyOpened ?? NO_FILES);
+  const visibleInProgress = useVisibleFiles(data?.inProgress ?? NO_IN_PROGRESS);
+  const visibleFavorites = useVisibleFiles(data?.favorites ?? NO_FILES);
 
   // A freshly added library is empty until its first scan has run. The shell
   // already watches the index and makes this page re-read as files arrive;
@@ -238,26 +277,26 @@ function Home({ library }: { library: Library }) {
 
   const [recentRef, recentWidth] = useWidth();
   const photoColumns = gridMetrics(recentWidth, PHOTO_GAP).columns;
-  const recent = data ? data.recent.slice(0, cleanRows(data.recent.length, photoColumns)) : [];
+  const recent = visibleRecent.slice(0, cleanRows(visibleRecent.length, photoColumns));
 
   const [openedRef, openedWidth] = useWidth();
   const openedColumns = gridMetrics(openedWidth, PHOTO_GAP).columns;
-  const recentlyOpened = data
-    ? data.recentlyOpened.slice(0, cleanRows(data.recentlyOpened.length, openedColumns))
-    : [];
+  const recentlyOpened = visibleOpened.slice(0, cleanRows(visibleOpened.length, openedColumns));
 
   const [inProgressRef, inProgressWidth] = useWidth();
   const inProgressColumns = gridMetrics(inProgressWidth, PHOTO_GAP).columns;
-  const inProgressFiles = data
-    ? data.inProgress.slice(0, cleanRows(data.inProgress.length, inProgressColumns))
-    : [];
+  const inProgressFiles = visibleInProgress.slice(
+    0,
+    cleanRows(visibleInProgress.length, inProgressColumns),
+  );
   const inProgressMap = new Map(inProgressFiles.map((f) => [f.id, f.percent]));
 
   const [favoritesRef, favoritesWidth] = useWidth();
   const favoritesColumns = gridMetrics(favoritesWidth, PHOTO_GAP).columns;
-  const favoriteFiles = data
-    ? data.favorites.slice(0, cleanRows(data.favorites.length, favoritesColumns))
-    : [];
+  const favoriteFiles = visibleFavorites.slice(
+    0,
+    cleanRows(visibleFavorites.length, favoritesColumns),
+  );
 
   const quoteFileIds = (data?.recentQuotes ?? []).map((q) => q.file_id);
   const quoteLabels = useFileLabels(libraryId, quoteFileIds);

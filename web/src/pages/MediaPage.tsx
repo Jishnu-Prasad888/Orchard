@@ -31,6 +31,7 @@ import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useFavorites } from '../components/media/useFavorites';
 import { type ListingQuery, useFileListing } from '../components/media/useFileListing';
+import { useVisibleFiles } from '../components/media/useHideCompleted';
 import { useMediaActions } from '../components/media/useMediaActions';
 import { useSelection } from '../components/media/useSelection';
 import {
@@ -258,7 +259,8 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   // A finished upload announces a library change, which re-reads this list
   // behind what is on screen (see useFileListing) — no flash, no lost scroll.
   const listing = useFileListing(libraryId, query, { enabled: !offline });
-  const { files, folders, total } = listing;
+  const { folders, total } = listing;
+  const files = useVisibleFiles(listing.files);
 
   // Once a revealed file has had its two blinks, stop pointing at it; give a
   // file that never shows up (deleted since, or further down the list) a
@@ -722,6 +724,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
                 hasMore={listing.hasMore}
                 loadingMore={listing.loadingMore}
                 onLoadMore={listing.loadMore}
+                loadedCount={listing.files.length}
                 label={config.title}
                 testId="file-grid"
                 revealed={revealed}

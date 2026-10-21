@@ -287,6 +287,12 @@ export const setHomeLayout = (sections: HomeLayoutSection[], libraryId?: string)
     sections,
   });
 
+export const getHideCompleted = () =>
+  apiGet<{ hide_completed: boolean }>('/settings/hide-completed');
+
+export const setHideCompleted = (hide: boolean) =>
+  apiPut<{ hide_completed: boolean }>('/settings/hide-completed', { hide_completed: hide });
+
 /* ------------------------- reader preferences --------------------------- */
 
 /** Reading preferences, stored like the Home layout: on the account and in

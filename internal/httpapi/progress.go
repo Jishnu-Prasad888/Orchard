@@ -197,7 +197,7 @@ func (s *Server) handleListInProgress(w http.ResponseWriter, r *http.Request, u 
 	for _, e := range entries {
 		files = append(files, e.File)
 	}
-	extras := s.fileExtrasFor(r.Context(), lib, "", files)
+	extras := s.fileExtrasFor(r.Context(), lib, u.ID, files)
 
 	out := make([]inProgressFileResponse, 0, len(entries))
 	for _, e := range entries {
@@ -212,6 +212,7 @@ func (s *Server) handleListInProgress(w http.ResponseWriter, r *http.Request, u 
 		if url, ok := extras.covers[e.File.ID]; ok {
 			resp.CoverURL = url
 		}
+		resp.Completed = extras.completed[e.File.ID]
 		out = append(out, resp)
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": out})

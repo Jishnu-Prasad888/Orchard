@@ -18,6 +18,7 @@ import { ConfirmDialog, PromptDialog } from '../components/Dialog';
 import { MediaGrid } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useMediaActions } from '../components/media/useMediaActions';
+import { useVisibleFiles } from '../components/media/useHideCompleted';
 import { useSelection } from '../components/media/useSelection';
 import { useFileOperations } from '../components/FileOperations';
 import {
@@ -65,7 +66,7 @@ export default function TagsPage() {
     files.reload();
     tags.reload();
   });
-  const tagFiles = files.data ?? NO_FILES;
+  const tagFiles = useVisibleFiles(files.data ?? NO_FILES);
   const selection = useSelection(tagFiles, activeTag?.id ?? '');
   const libraryIdOrEmpty = gate.kind === 'ready' ? gate.libraryId : '';
   const untag = async (targets: FileSummary[]) => {

@@ -2,7 +2,16 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { admin, member, mockApi, noContent, originalFetch, renderPage } from '../../test/harness';
+import {
+  admin,
+  bodyOf,
+  json,
+  member,
+  mockApi,
+  noContent,
+  originalFetch,
+  renderPage,
+} from '../../test/harness';
 import Providers from '../../test/Providers';
 import AppShell from './AppShell';
 import { usePageQuery } from './pageSearch';
@@ -213,5 +222,26 @@ describe('AppShell', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: /Appearance: System/ }));
     expect(document.documentElement.dataset.theme).toBe('light');
     document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('shows the saved "Hide completed" choice and saves a change to the server', async () => {
+    const fn = mockApi([
+      (url, init) =>
+        url.includes('/api/v1/settings/hide-completed')
+          ? json({ hide_completed: init?.method === 'PUT' ? false : true })
+          : undefined,
+    ]);
+    shell('/files');
+
+    const box = screen.getByTestId('hide-completed');
+    await waitFor(() => expect(box).toBeChecked());
+
+    fireEvent.click(box);
+    expect(box).not.toBeChecked();
+    await waitFor(() =>
+      expect(bodyOf(fn, 'PUT', '/api/v1/settings/hide-completed')).toEqual({
+        hide_completed: false,
+      }),
+    );
   });
 });

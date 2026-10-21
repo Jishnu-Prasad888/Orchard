@@ -8,6 +8,7 @@ import { useRef, type RefObject } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { useLibraries } from '../../api/libraries';
+import { useHideCompleted } from '../media/useHideCompleted';
 import { Icon } from '../ui/Icon';
 import { useUploadActions } from '../upload/UploadProvider';
 import { AccountMenu } from './AccountMenu';
@@ -31,6 +32,7 @@ export function TopBar({
   const uploadFolder = library && target?.libraryId === library.id ? target.folder : '';
   const { pathname } = useLocation();
   const mode = pageSearchMode(pathname);
+  const { hideCompleted, setHideCompleted } = useHideCompleted();
 
   return (
     <header className="topbar" data-sticky-top>
@@ -53,6 +55,15 @@ export function TopBar({
       </div>
 
       <div className="topbar-actions">
+        <label className="topbar-hide-completed" title="Hide files you have marked completed">
+          <input
+            type="checkbox"
+            checked={hideCompleted}
+            onChange={(event) => setHideCompleted(event.target.checked)}
+            data-testid="hide-completed"
+          />
+          <span>Hide completed</span>
+        </label>
         {canUpload && (
           <>
             <button

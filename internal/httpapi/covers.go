@@ -16,15 +16,18 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 	"github.com/Jishnu-Prasad888/Orchard/internal/progress"
+	"github.com/Jishnu-Prasad888/Orchard/internal/reading"
 	"github.com/Jishnu-Prasad888/Orchard/internal/thumbs"
 )
 
 // fileExtras is what a file listing shows on a book's tile beyond the file
-// itself: its cover, and how far the acting user has read.
+// itself: its cover, how far the acting user has read, and whether they have
+// marked it completed.
 type fileExtras struct {
 	covers     map[string]string  // file ID -> cover URL
 	progress   map[string]float64 // file ID -> percent read (0-100)
 	thumbnails map[string]string  // file ID -> photo thumbnail URL
+	completed  map[string]bool    // file ID -> marked completed by the user
 }
 
 // thumbnailURL is the address of a photo's thumbnail; version names the
@@ -52,13 +55,15 @@ func coverVersion(lib *library.Library, coverPath string) int64 {
 }
 
 // fileExtrasFor looks up covers and the acting user's reading progress for
-// every document file in files, in one batch query each — a grid-listing
+// every document file in files, and which files of any kind they have marked
+// completed, in one batch query each — a grid-listing
 // handler calls this once for its whole page rather than per file.
 // Best-effort: a failure to open the database or read either table just
 // means tiles go without that detail this time, never a failed listing.
 func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID string, files []*media.File) fileExtras {
-	var ids, photos []string
+	var ids, photos, all []string
 	for _, f := range files {
+		all = append(all, f.ID)
 		switch f.MediaType {
 		case media.MediaTypeDocument:
 			ids = append(ids, f.ID)
@@ -66,7 +71,9 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 			photos = append(photos, f.ID)
 		}
 	}
-	if len(ids) == 0 && len(photos) == 0 {
+	// Completion applies to any file, so only an anonymous listing of
+	// neither books nor photos can skip the database.
+	if len(ids) == 0 && len(photos) == 0 && (userID == "" || len(all) == 0) {
 		return fileExtras{}
 	}
 	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
@@ -76,6 +83,12 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 	defer release()
 
 	var extras fileExtras
+	if userID != "" {
+		extras.completed, err = reading.NewStore(db).CompletedAmong(ctx, userID, all)
+		if err != nil {
+			s.logger.Error("list completed files", "library_id", lib.ID, "error", err)
+		}
+	}
 	if len(photos) > 0 {
 		versions, err := thumbs.Versions(ctx, db, photos)
 		if err != nil {
@@ -107,8 +120,8 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 	return extras
 }
 
-// attachFileExtras sets CoverURL, ProgressPercent and ThumbnailURL on each response whose
-// file has one, per fileExtrasFor.
+// attachFileExtras sets CoverURL, ProgressPercent, ThumbnailURL and Completed
+// on each response whose file has one, per fileExtrasFor.
 func attachFileExtras(resp []fileResponse, extras fileExtras) {
 	for i := range resp {
 		if url, ok := extras.covers[resp[i].ID]; ok {
@@ -120,6 +133,7 @@ func attachFileExtras(resp []fileResponse, extras fileExtras) {
 		if url, ok := extras.thumbnails[resp[i].ID]; ok {
 			resp[i].ThumbnailURL = url
 		}
+		resp[i].Completed = extras.completed[resp[i].ID]
 	}
 }
 

@@ -617,6 +617,9 @@ type fileResponse struct {
 	// ThumbnailURL is set, like CoverURL, for a photo whose small grid image
 	// has been rendered; until then a tile loads the original.
 	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	// Completed is whether the acting user has marked this file completed,
+	// set the same way; absent when they have not.
+	Completed bool `json:"completed,omitempty"`
 }
 
 type folderResponse struct {
