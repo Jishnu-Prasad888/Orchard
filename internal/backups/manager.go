@@ -308,15 +308,24 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 	rec.Destination = dest
 
 	encrypted := m.cfg.Passphrase != ""
+	// An encrypted backup keeps the previous one's salt (and so its key) when
+	// that backup opens with the current passphrase, so unchanged payloads can
+	// be hard-linked rather than re-encrypted. Every sealed chunk carries its
+	// own random nonce, so sharing the key across backups is safe.
+	prev := m.loadPrevious(ctx, dest)
 	var key []byte
 	salt := hex.EncodeToString(newSalt())
 	if encrypted {
-		kb, err := hex.DecodeString(salt)
-		if err != nil {
-			m.fail(ctx, rec, fmt.Errorf("backup salt: %w", err))
-			return rec, nil
+		if prev != nil {
+			salt, key = prev.salt, prev.key
+		} else {
+			kb, err := hex.DecodeString(salt)
+			if err != nil {
+				m.fail(ctx, rec, fmt.Errorf("backup salt: %w", err))
+				return rec, nil
+			}
+			key = deriveKey(m.cfg.Passphrase, kb)
 		}
-		key = deriveKey(m.cfg.Passphrase, kb)
 	}
 	if err := writeHeader(dest, encrypted, salt); err != nil {
 		m.fail(ctx, rec, fmt.Errorf("write backup header: %w", err))
@@ -352,7 +361,6 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 		m.fail(ctx, rec, fmt.Errorf("list libraries: %w", err))
 		return rec, nil
 	}
-	prev := m.loadPrevious(ctx, dest)
 	for _, lib := range libs {
 		lf, err := m.backupLibrary(ctx, dest, lib, encrypted, key, prev)
 		if err != nil {
@@ -505,11 +513,12 @@ func (m *Manager) backupLibrary(ctx context.Context, dest string, lib library.Li
 
 // copyFile writes one media file into the backup, hard-linking from the
 // previous backup when the source is byte-for-byte unchanged (same size and
-// mtime, previous run unencrypted).
+// mtime). loadPrevious only returns a backup this run can share payloads
+// with: same encryption mode and, when encrypted, the same key.
 func (m *Manager) copyFile(srcPath, destBase, logical string, fi fs.FileInfo, encrypted bool, key []byte, prev *prevBackup) (Entry, error) {
 	if prev != nil {
-		if pe, ok := findPrev(prev.mf, logical); ok &&
-			pe.Size == fi.Size() && pe.MTime.Equal(fi.ModTime()) && !encrypted {
+		if pe, ok := prev.files[logical]; ok &&
+			pe.Size == fi.Size() && pe.MTime.Equal(fi.ModTime()) && pe.Encrypted == encrypted {
 			prevPath := filepath.Join(prev.dir, filepath.FromSlash(logical))
 			dstPath := filepath.Join(destBase, filepath.FromSlash(logical))
 			if err := os.MkdirAll(filepath.Dir(dstPath), 0o700); err == nil {
@@ -521,6 +530,7 @@ func (m *Manager) copyFile(srcPath, destBase, logical string, fi fs.FileInfo, en
 						MTime:      fi.ModTime(),
 						SHA256:     pe.SHA256,
 						Compressed: pe.Compressed,
+						Encrypted:  pe.Encrypted,
 					}
 					m.logger.Debug("backup reused unchanged file", "logical", logical)
 					m.skipped.Add(1)
@@ -533,13 +543,13 @@ func (m *Manager) copyFile(srcPath, destBase, logical string, fi fs.FileInfo, en
 	return copyFileEntry(srcPath, dstPath, logical, shouldCompress(logical), encrypted, key)
 }
 
-// loadPrevious finds the most recent completed, reusable backup for
-// incremental hard-linking. Encrypted backups are never reused (a fresh nonce
-// re-encrypts everything each run).
+// loadPrevious finds the most recent completed backup for incremental
+// hard-linking. It is only reusable when its encryption mode matches this
+// run's and, if encrypted, its manifest opens with the current passphrase;
+// otherwise (no previous backup, encryption toggled, or passphrase changed)
+// the run makes a full copy.
 func (m *Manager) loadPrevious(ctx context.Context, currentDest string) *prevBackup {
-	if m.cfg.Passphrase != "" {
-		return nil
-	}
+	encrypted := m.cfg.Passphrase != ""
 	recs, err := m.store.List(ctx, 50)
 	if err != nil {
 		return nil
@@ -551,19 +561,39 @@ func (m *Manager) loadPrevious(ctx context.Context, currentDest string) *prevBac
 		if _, err := os.Stat(filepath.Join(r.Destination, manifestFilename)); err != nil {
 			continue
 		}
-		mf, err := readManifest(r.Destination, nil)
+		meta, err := readHeader(r.Destination)
+		if err != nil || meta.Encrypted != encrypted {
+			return nil
+		}
+		var key []byte
+		if encrypted {
+			sb, err := hex.DecodeString(meta.Salt)
+			if err != nil || len(sb) == 0 {
+				return nil
+			}
+			key = deriveKey(m.cfg.Passphrase, sb)
+		}
+		mf, err := readManifest(r.Destination, key)
 		if err != nil {
 			m.logger.Debug("previous backup manifest unreadable; full copy", "backup_id", r.ID, "error", err)
 			return nil
 		}
-		return &prevBackup{dir: r.Destination, mf: mf}
+		files := make(map[string]Entry)
+		for _, lb := range mf.Libraries {
+			for _, e := range lb.Files {
+				files[e.Logical] = e
+			}
+		}
+		return &prevBackup{dir: r.Destination, files: files, salt: meta.Salt, key: key}
 	}
 	return nil
 }
 
 type prevBackup struct {
-	dir string
-	mf  *Manifest
+	dir   string
+	files map[string]Entry // by logical path
+	salt  string           // hex; only when encrypted
+	key   []byte           // derived from salt; only when encrypted
 }
 
 // verifySample runs the restore-a-sample stream verification and updates the
@@ -780,17 +810,16 @@ func copyFileEntry(srcPath, dstPath, logical string, compress, encrypted bool, k
 	if err != nil {
 		return Entry{}, err
 	}
-	sink, err := newPayloadSink(compress, encrypted, key)
+	sink, err := newPayloadSink(dst, compress, encrypted, key)
 	if err != nil {
 		_ = dst.Close()
 		return Entry{}, err
 	}
-	defer sink.abort()
 	if _, err := io.Copy(sink, src); err != nil {
 		_ = dst.Close()
 		return Entry{}, err
 	}
-	hh, err := sink.Materialize(dst)
+	hh, err := sink.Finish()
 	if err != nil {
 		_ = dst.Close()
 		return Entry{}, err
@@ -860,6 +889,10 @@ var alreadyCompressedExt = map[string]bool{
 	".wma": true, ".m4a": true, ".wav": true, ".aiff": true,
 	".zip": true, ".gz": true, ".gzip": true, ".7z": true, ".rar": true,
 	".tar": true, ".zst": true, ".tgz": true, ".xz": true, ".bz2": true,
+	// Books and documents that are ZIP containers or carry compressed streams.
+	".epub": true, ".cbz": true, ".cbr": true, ".cb7": true, ".pdf": true,
+	".mobi": true, ".azw3": true, ".docx": true, ".xlsx": true, ".pptx": true,
+	".odt": true, ".jxl": true,
 }
 
 // shouldCompress reports whether gzip is worth applying. Already-compressed
@@ -870,18 +903,6 @@ func shouldCompress(name string) bool {
 		ext = strings.ToLower(fi)
 	}
 	return !alreadyCompressedExt[ext]
-}
-
-// findPrev looks up a logical path in a previous backup's manifest.
-func findPrev(mf *Manifest, logical string) (Entry, bool) {
-	for _, lb := range mf.Libraries {
-		for _, e := range lb.Files {
-			if e.Logical == logical {
-				return e, true
-			}
-		}
-	}
-	return Entry{}, false
 }
 
 // dirBytes sums the on-disk size of everything under dir (compressed and/or
@@ -942,16 +963,17 @@ func writeManifest(dest string, mf *Manifest, encrypted bool, key []byte) error 
 		return err
 	}
 	defer func() { _ = out.Close() }()
-	sink, err := newPayloadSink(true, encrypted, key)
+	sink, err := newPayloadSink(out, true, encrypted, key)
 	if err != nil {
 		return err
 	}
-	defer sink.abort()
 	if _, err := sink.Write(b); err != nil {
 		return err
 	}
-	_, err = sink.Materialize(out)
-	return err
+	if _, err := sink.Finish(); err != nil {
+		return err
+	}
+	return out.Close()
 }
 
 // readManifest reads and decodes a backup manifest.

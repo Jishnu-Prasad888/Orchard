@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"os"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
@@ -110,42 +109,56 @@ func deriveKey(passphrase string, salt []byte) []byte {
 	return argon2.IDKey([]byte(passphrase), salt, 1, 64*1024, 4, 32)
 }
 
-// payloadSink writes one stored payload. Plaintext is hashed and optionally
-// gzip'd into a temp file as it arrives; Materialize then streams the temp
-// content into the final destination with the fixed header in front. When
-// encryption is enabled the temp content is sealed in aeadChunkSize chunks with
+// payloadSink writes one stored payload straight into its destination. A
+// placeholder header is written first; plaintext is then hashed, optionally
+// gzip'd, and (when encryption is enabled) sealed in aeadChunkSize chunks with
 // the shared AEAD kernel (crypto.NewKeysFromKey derived from the caller's
-// argon2id-derived key), so memory stays bounded by one chunk and the whole
-// body is a sequence of authenticated sealed blobs. The header's StoredSize
-// reflects the sealed size; the legacy CTR path that preceded Phase 14 is
-// retained read-only for old backups.
+// argon2id-derived key) as it arrives. Finish seeks back and fills in the real
+// header once the hash and sizes are known, so each payload is written once,
+// with no temp copy, and memory stays bounded by one chunk. The header's
+// StoredSize reflects the sealed size; the legacy CTR path that preceded
+// Phase 14 is retained read-only for old backups.
 type payloadSink struct {
-	tmp       *os.File
+	dst       io.WriteSeeker
+	start     int64 // offset of the header within dst
+	body      *bufio.Writer
 	hasher    hash.Hash
 	gz        *gzip.Writer
 	compress  bool
 	encrypted bool
-	key       []byte
-	nbytes    int64
+	keys      *crypto.Keys
+	chunk     []byte // pending plaintext (or gzip output) awaiting sealing
+	nbytes    int64  // plaintext bytes accepted
+	stored    int64  // body bytes written after the header
 }
 
-// newPayloadSink prepares a sink. compress applies deterministic gzip (no mtime)
-// so byte-identical unchanged files are hard-linkable across backups; encrypted
-// requires a 32-byte key.
-func newPayloadSink(compress, encrypted bool, key []byte) (*payloadSink, error) {
-	tmp, err := os.CreateTemp("", "orchard-payload-*")
+// newPayloadSink prepares a sink writing at dst's current offset. compress
+// applies deterministic gzip (no mtime) so byte-identical unchanged files are
+// hard-linkable across backups; encrypted requires a 32-byte key.
+func newPayloadSink(dst io.WriteSeeker, compress, encrypted bool, key []byte) (*payloadSink, error) {
+	start, err := dst.Seek(0, io.SeekCurrent)
 	if err != nil {
-		return nil, fmt.Errorf("create payload temp file: %w", err)
+		return nil, fmt.Errorf("payload destination: %w", err)
+	}
+	// The zeroed placeholder has no magic, so a payload abandoned mid-write
+	// never reads back as valid.
+	if _, err := dst.Write(make([]byte, headerSize)); err != nil {
+		return nil, fmt.Errorf("write payload header: %w", err)
 	}
 	s := &payloadSink{
-		tmp:       tmp,
+		dst:       dst,
+		start:     start,
+		body:      bufio.NewWriterSize(dst, aeadChunkSize),
 		hasher:    sha256.New(),
 		compress:  compress,
 		encrypted: encrypted,
-		key:       key,
+	}
+	if encrypted {
+		s.keys = crypto.NewKeysFromKey(key)
+		s.chunk = make([]byte, 0, aeadChunkSize)
 	}
 	if compress {
-		s.gz = gzip.NewWriter(tmp)
+		s.gz = gzip.NewWriter(bodyWriter{s})
 		s.gz.ModTime = time.Time{}
 	}
 	return s, nil
@@ -160,22 +173,62 @@ func (s *payloadSink) Write(p []byte) (int, error) {
 	if s.gz != nil {
 		return s.gz.Write(p)
 	}
-	return s.tmp.Write(p)
+	return s.writeBody(p)
 }
 
-// Materialize writes the finalized payload into dst and returns the header for
-// the manifest. It must be called exactly once; the temp file is removed.
-func (s *payloadSink) Materialize(dst io.Writer) (fileHeader, error) {
+// bodyWriter feeds gzip output into the sink's body.
+type bodyWriter struct{ s *payloadSink }
+
+func (w bodyWriter) Write(p []byte) (int, error) { return w.s.writeBody(p) }
+
+// writeBody writes (possibly compressed) bytes after the header, sealing them
+// in full aeadChunkSize chunks when encrypted. aeadReader relies on every chunk
+// but the last holding exactly aeadChunkSize bytes.
+func (s *payloadSink) writeBody(p []byte) (int, error) {
+	if !s.encrypted {
+		n, err := s.body.Write(p)
+		s.stored += int64(n)
+		return n, err
+	}
+	total := len(p)
+	for len(p) > 0 {
+		n := copy(s.chunk[len(s.chunk):cap(s.chunk)], p)
+		s.chunk = s.chunk[:len(s.chunk)+n]
+		p = p[n:]
+		if len(s.chunk) == aeadChunkSize {
+			if err := s.sealChunk(); err != nil {
+				return total - len(p), err
+			}
+		}
+	}
+	return total, nil
+}
+
+func (s *payloadSink) sealChunk() error {
+	sealed := s.keys.Seal(s.chunk)
+	s.chunk = s.chunk[:0]
+	n, err := s.body.Write(sealed)
+	s.stored += int64(n)
+	return err
+}
+
+// Finish flushes the body, writes the real header over the placeholder, and
+// returns it for the manifest. It must be called exactly once; dst is left
+// positioned at the end of the payload.
+func (s *payloadSink) Finish() (fileHeader, error) {
 	if s.gz != nil {
 		if err := s.gz.Close(); err != nil {
 			return fileHeader{}, fmt.Errorf("flush gzip: %w", err)
 		}
 	}
-	stat, err := s.tmp.Stat()
-	if err != nil {
+	if s.encrypted && len(s.chunk) > 0 {
+		if err := s.sealChunk(); err != nil {
+			return fileHeader{}, err
+		}
+	}
+	if err := s.body.Flush(); err != nil {
 		return fileHeader{}, err
 	}
-	storedSize := stat.Size()
 
 	h := fileHeader{
 		Compressed:    s.compress,
@@ -183,62 +236,18 @@ func (s *payloadSink) Materialize(dst io.Writer) (fileHeader, error) {
 		AEADSealed:    s.encrypted,
 		SHA256Hex:     hex.EncodeToString(s.hasher.Sum(nil)),
 		PlaintextSize: uint64(s.nbytes),
+		StoredSize:    uint64(s.stored),
 	}
-	if s.encrypted {
-		// The sealed body is larger than the (possibly compressed) plaintext:
-		// every chunk gains the sealed-blob header (magic+version+nonce) and a
-		// GCM tag. The header must record the sealed size so readers know the
-		// exact body length. The math below mirrors the chunking performed by
-		// the sealing loop.
-		nChunks := (stat.Size() + int64(aeadChunkSize) - 1) / int64(aeadChunkSize)
-		storedSize = stat.Size() + nChunks*int64(crypto.SealHeaderLen()+crypto.SealTagLen())
-	}
-	h.StoredSize = uint64(storedSize)
-
-	if _, err := dst.Write(h.encode()); err != nil {
+	if _, err := s.dst.Seek(s.start, io.SeekStart); err != nil {
 		return fileHeader{}, err
 	}
-
-	if _, err := s.tmp.Seek(0, io.SeekStart); err != nil {
+	if _, err := s.dst.Write(h.encode()); err != nil {
 		return fileHeader{}, err
 	}
-
-	if !s.encrypted {
-		if _, err := io.Copy(dst, bufio.NewReader(s.tmp)); err != nil {
-			return fileHeader{}, err
-		}
-		if err := os.Remove(s.tmp.Name()); err != nil {
-			return fileHeader{}, fmt.Errorf("remove payload temp: %w", err)
-		}
-		return h, nil
-	}
-
-	keys := crypto.NewKeysFromKey(s.key)
-	var buf [aeadChunkSize]byte
-	for {
-		n, rerr := s.tmp.Read(buf[:])
-		if n > 0 {
-			sealed := keys.Seal(buf[:n])
-			if _, werr := dst.Write(sealed); werr != nil {
-				return fileHeader{}, werr
-			}
-		}
-		if rerr == io.EOF {
-			break
-		}
-		if rerr != nil {
-			return fileHeader{}, rerr
-		}
-	}
-	if err := os.Remove(s.tmp.Name()); err != nil {
-		return fileHeader{}, fmt.Errorf("remove payload temp: %w", err)
+	if _, err := s.dst.Seek(s.start+headerSize+s.stored, io.SeekStart); err != nil {
+		return fileHeader{}, err
 	}
 	return h, nil
-}
-
-// idempotentCleanup lets callers remove the temp file on error paths.
-func (s *payloadSink) abort() {
-	_ = os.Remove(s.tmp.Name())
 }
 
 // payloadReader streams a stored payload back into plaintext, verifying the

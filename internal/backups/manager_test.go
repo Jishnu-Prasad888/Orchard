@@ -223,6 +223,87 @@ func TestBackupIncremental(t *testing.T) {
 	}
 }
 
+// TestBackupEncryptedIncremental verifies encrypted runs reuse unchanged
+// payloads while the passphrase stays the same, and fall back to a full copy
+// under a fresh salt when it changes or encryption is turned off.
+func TestBackupEncryptedIncremental(t *testing.T) {
+	pool, serverPath := tempServerDB(t)
+	backupDir := filepath.Join(t.TempDir(), "backups")
+
+	m := newManager(t, pool, serverPath, backupDir, "hunter2", 10)
+	lib := registerLibrary(t, library.NewManager(pool, testLogger(), audit.New(pool, testLogger()), crypto.NewKeys("")), filepath.Join(t.TempDir(), "india"))
+	rel := filepath.Join("libraries", lib.ID, "files", "holiday", "beach.jpg")
+	orig, _ := os.ReadFile(filepath.Join(lib.Root, "holiday", "beach.jpg"))
+
+	salt := func(rec *Record) string {
+		t.Helper()
+		meta, err := readHeader(rec.Destination)
+		if err != nil {
+			t.Fatalf("read header: %v", err)
+		}
+		return meta.Salt
+	}
+	restored := func(m *Manager, rec *Record) {
+		t.Helper()
+		dst := t.TempDir()
+		if _, err := m.Restore(context.Background(), rec.ID, dst); err != nil {
+			t.Fatalf("restore %s: %v", rec.ID, err)
+		}
+		got, err := os.ReadFile(filepath.Join(dst, rel))
+		if err != nil || !bytes.Equal(got, orig) {
+			t.Fatalf("restored media differs from source (err %v)", err)
+		}
+	}
+
+	first, err := m.Run(context.Background())
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	second, err := m.Run(context.Background())
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if second.FilesSkipped != 1 {
+		t.Fatalf("FilesSkipped = %d, want 1 (the unchanged media file)", second.FilesSkipped)
+	}
+	if salt(first) != salt(second) {
+		t.Fatal("same passphrase should keep the previous backup's salt")
+	}
+	if second.VerifyErrors != 0 {
+		t.Fatalf("reused payloads failed verification: %d", second.VerifyErrors)
+	}
+	restored(m, second)
+
+	// A new passphrase cannot open the previous backup: full copy, new salt.
+	time.Sleep(5 * time.Millisecond)
+	rotated := newManager(t, pool, serverPath, backupDir, "correct-horse", 10)
+	third, err := rotated.Run(context.Background())
+	if err != nil {
+		t.Fatalf("third run: %v", err)
+	}
+	if third.FilesSkipped != 0 {
+		t.Fatalf("FilesSkipped after passphrase change = %d, want 0", third.FilesSkipped)
+	}
+	if salt(third) == salt(second) {
+		t.Fatal("passphrase change should start a fresh salt")
+	}
+	restored(rotated, third)
+
+	// Turning encryption off must never link sealed payloads into a
+	// plaintext backup.
+	time.Sleep(5 * time.Millisecond)
+	plain := newManager(t, pool, serverPath, backupDir, "", 10)
+	fourth, err := plain.Run(context.Background())
+	if err != nil {
+		t.Fatalf("fourth run: %v", err)
+	}
+	if fourth.FilesSkipped != 0 || fourth.Encrypted {
+		t.Fatalf("plaintext run after encrypted: skipped=%d encrypted=%v", fourth.FilesSkipped, fourth.Encrypted)
+	}
+	restored(plain, fourth)
+}
+
 func TestBackupEncrypted(t *testing.T) {
 	pool, serverPath := tempServerDB(t)
 	backupDir := filepath.Join(t.TempDir(), "backups")
