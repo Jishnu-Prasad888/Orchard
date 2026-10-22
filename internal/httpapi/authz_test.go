@@ -272,7 +272,7 @@ func TestAuthz_PublicShareFlow(t *testing.T) {
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/shares",
 		map[string]any{
-			"key":      authz.FolderKey(libID, "photos"),
+			"target":   map[string]any{"kind": "folder", "path": "photos"},
 			"caps":     []string{"read", "download"},
 			"password": "sekrit-pass",
 		})
@@ -325,8 +325,8 @@ func TestAuthz_PublicShareReadOnlyHasNoDownload(t *testing.T) {
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/shares",
 		map[string]any{
-			"key":  authz.FolderKey(libID, "photos"),
-			"caps": []string{"read"},
+			"target": map[string]any{"kind": "folder", "path": "photos"},
+			"caps":   []string{"read"},
 		})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create share = %d, body=%s", rec.Code, rec.Body.String())
@@ -353,8 +353,8 @@ func TestAuthz_RevokedShareIsImmediatelyDead(t *testing.T) {
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/shares",
 		map[string]any{
-			"key":  authz.FolderKey(libID, "photos"),
-			"caps": []string{"read"},
+			"target": map[string]any{"kind": "folder", "path": "photos"},
+			"caps":   []string{"read"},
 		})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create share = %d, body=%s", rec.Code, rec.Body.String())

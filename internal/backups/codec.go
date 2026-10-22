@@ -46,6 +46,11 @@ const (
 	flagCompressed = 1 << 0
 	flagEncrypted  = 1 << 1
 	flagAEADSealed = 1 << 2
+	// flagStreamed marks a payload written front to back with no seek: its
+	// hash and plaintext size were known before writing (the file was hashed
+	// first), and StoredSize is left 0 — readers take the body to the end of
+	// the stream. That is what lets a payload go straight to an FTP upload.
+	flagStreamed = 1 << 3
 )
 
 // fileHeader describes one stored payload.
@@ -53,6 +58,7 @@ type fileHeader struct {
 	Compressed    bool
 	Encrypted     bool
 	AEADSealed    bool
+	Streamed      bool
 	SHA256Hex     string
 	PlaintextSize uint64
 	StoredSize    uint64
@@ -70,6 +76,9 @@ func (h fileHeader) encode() []byte {
 	}
 	if h.AEADSealed {
 		flags |= flagAEADSealed
+	}
+	if h.Streamed {
+		flags |= flagStreamed
 	}
 	buf = append(buf, flags)
 	sum, err := hex.DecodeString(h.SHA256Hex)
@@ -95,6 +104,7 @@ func decodeHeader(b []byte) (fileHeader, error) {
 	h.Compressed = flags&flagCompressed != 0
 	h.Encrypted = flags&flagEncrypted != 0
 	h.AEADSealed = flags&flagAEADSealed != 0
+	h.Streamed = flags&flagStreamed != 0
 	h.SHA256Hex = hex.EncodeToString(b[9:41])
 	h.PlaintextSize = binary.BigEndian.Uint64(b[41:49])
 	h.StoredSize = binary.BigEndian.Uint64(b[49:57])
@@ -119,17 +129,21 @@ func deriveKey(passphrase string, salt []byte) []byte {
 // StoredSize reflects the sealed size; the legacy CTR path that preceded
 // Phase 14 is retained read-only for old backups.
 type payloadSink struct {
-	dst       io.WriteSeeker
-	start     int64 // offset of the header within dst
-	body      *bufio.Writer
-	hasher    hash.Hash
-	gz        *gzip.Writer
-	compress  bool
-	encrypted bool
-	keys      *crypto.Keys
-	chunk     []byte // pending plaintext (or gzip output) awaiting sealing
-	nbytes    int64  // plaintext bytes accepted
-	stored    int64  // body bytes written after the header
+	dst   io.WriteSeeker // nil for a streamed sink
+	start int64          // offset of the header within dst
+	// For a streamed sink, the hash and size the header already promised.
+	streamed   bool
+	expectSHA  string
+	expectSize int64
+	body       *bufio.Writer
+	hasher     hash.Hash
+	gz         *gzip.Writer
+	compress   bool
+	encrypted  bool
+	keys       *crypto.Keys
+	chunk      []byte // pending plaintext (or gzip output) awaiting sealing
+	nbytes     int64  // plaintext bytes accepted
+	stored     int64  // body bytes written after the header
 }
 
 // newPayloadSink prepares a sink writing at dst's current offset. compress
@@ -163,6 +177,42 @@ func newPayloadSink(dst io.WriteSeeker, compress, encrypted bool, key []byte) (*
 	}
 	return s, nil
 }
+
+// newStreamSink prepares a sink that writes dst front to back, never seeking:
+// the caller has hashed the plaintext already, so the header is complete
+// before the body. Finish fails if what arrived is not what was hashed (the
+// file changed in between), and the caller discards the upload.
+func newStreamSink(dst io.Writer, sha256Hex string, size int64, compress, encrypted bool, key []byte) (*payloadSink, error) {
+	h := fileHeader{
+		Compressed: compress, Encrypted: encrypted, AEADSealed: encrypted, Streamed: true,
+		SHA256Hex: sha256Hex, PlaintextSize: uint64(size),
+	}
+	if _, err := dst.Write(h.encode()); err != nil {
+		return nil, fmt.Errorf("write payload header: %w", err)
+	}
+	s := &payloadSink{
+		streamed:   true,
+		expectSHA:  sha256Hex,
+		expectSize: size,
+		body:       bufio.NewWriterSize(dst, aeadChunkSize),
+		hasher:     sha256.New(),
+		compress:   compress,
+		encrypted:  encrypted,
+	}
+	if encrypted {
+		s.keys = crypto.NewKeysFromKey(key)
+		s.chunk = make([]byte, 0, aeadChunkSize)
+	}
+	if compress {
+		s.gz = gzip.NewWriter(bodyWriter{s})
+		s.gz.ModTime = time.Time{}
+	}
+	return s, nil
+}
+
+// errChangedWhileWriting is a streamed payload whose source changed between
+// being hashed and being written.
+var errChangedWhileWriting = errors.New("file changed while it was being backed up")
 
 // Write accepts plaintext.
 func (s *payloadSink) Write(p []byte) (int, error) {
@@ -238,6 +288,13 @@ func (s *payloadSink) Finish() (fileHeader, error) {
 		PlaintextSize: uint64(s.nbytes),
 		StoredSize:    uint64(s.stored),
 	}
+	if s.streamed {
+		if h.SHA256Hex != s.expectSHA || s.nbytes != s.expectSize {
+			return fileHeader{}, errChangedWhileWriting
+		}
+		h.Streamed = true
+		return h, nil
+	}
 	if _, err := s.dst.Seek(s.start, io.SeekStart); err != nil {
 		return fileHeader{}, err
 	}
@@ -291,7 +348,11 @@ func openPayload(r io.Reader, key []byte) (*payloadReader, error) {
 		// were ever set inconsistently.
 		peek, _ := br.Peek(9)
 		if h.AEADSealed || crypto.IsSealed(peek) {
-			body = newAEADReader(br, key, int64(h.StoredSize))
+			stored := int64(h.StoredSize)
+			if h.Streamed {
+				stored = -1 // read sealed chunks to the end of the stream
+			}
+			body = newAEADReader(br, key, stored)
 		} else {
 			nonce := make([]byte, nonceSize)
 			if _, err := io.ReadFull(br, nonce); err != nil {
@@ -329,7 +390,7 @@ func openPayload(r io.Reader, key []byte) (*payloadReader, error) {
 type aeadReader struct {
 	r         *bufio.Reader
 	keys      *crypto.Keys
-	remaining int64  // sealed bytes not yet consumed
+	remaining int64  // sealed bytes not yet consumed; -1 reads to EOF
 	buf       []byte // leftover decrypted bytes beyond the most recent Read
 	err       error
 }
@@ -358,6 +419,9 @@ func (a *aeadReader) Read(p []byte) (int, error) {
 	if a.remaining == 0 {
 		a.err = io.EOF
 		return 0, io.EOF
+	}
+	if a.remaining < 0 {
+		return a.readToEOF(p)
 	}
 
 	headerLen := crypto.SealHeaderLen()
@@ -407,6 +471,53 @@ func (a *aeadReader) Read(p []byte) (int, error) {
 		a.buf = append(a.buf[:0], plain[n:]...)
 	}
 	return n, nil
+}
+
+// readToEOF reads the next sealed chunk of a streamed payload, whose length
+// is not recorded: every chunk is full except the last, so a short read
+// marks the last one, and a clean end before a chunk header ends the body.
+func (a *aeadReader) readToEOF(p []byte) (int, error) {
+	headerLen := crypto.SealHeaderLen()
+	head := make([]byte, headerLen)
+	n, err := io.ReadFull(a.r, head)
+	if err == io.EOF && n == 0 {
+		a.err = io.EOF
+		return 0, io.EOF
+	}
+	if err != nil {
+		a.err = fmt.Errorf("%w: reading sealed header: %v", crypto.ErrCorrupt, err)
+		return 0, a.err
+	}
+	if !crypto.IsSealed(head) {
+		a.err = fmt.Errorf("%w: sealed payload missing AEAD magic", crypto.ErrCorrupt)
+		return 0, a.err
+	}
+	ct := make([]byte, aeadChunkSize+crypto.SealTagLen())
+	m, err := io.ReadFull(a.r, ct)
+	if err == io.ErrUnexpectedEOF || err == io.EOF {
+		ct = ct[:m]
+		a.remaining = 0 // that was the last chunk
+	} else if err != nil {
+		a.err = fmt.Errorf("%w: reading sealed chunk: %v", crypto.ErrCorrupt, err)
+		return 0, a.err
+	}
+	if len(ct) < crypto.SealTagLen() {
+		a.err = fmt.Errorf("%w: truncated sealed chunk", crypto.ErrCorrupt)
+		return 0, a.err
+	}
+	blob := make([]byte, headerLen+len(ct))
+	copy(blob, head)
+	copy(blob[headerLen:], ct)
+	plain, err := a.keys.Open(blob)
+	if err != nil {
+		a.err = err
+		return 0, a.err
+	}
+	k := copy(p, plain)
+	if k < len(plain) {
+		a.buf = append(a.buf[:0], plain[k:]...)
+	}
+	return k, nil
 }
 
 // Read returns decrypted, decompressed plaintext.

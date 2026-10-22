@@ -17,6 +17,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 	"github.com/Jishnu-Prasad888/Orchard/internal/progress"
 	"github.com/Jishnu-Prasad888/Orchard/internal/reading"
+	"github.com/Jishnu-Prasad888/Orchard/internal/tags"
 	"github.com/Jishnu-Prasad888/Orchard/internal/thumbs"
 )
 
@@ -24,10 +25,12 @@ import (
 // itself: its cover, how far the acting user has read, and whether they have
 // marked it completed.
 type fileExtras struct {
-	covers     map[string]string  // file ID -> cover URL
-	progress   map[string]float64 // file ID -> percent read (0-100)
-	thumbnails map[string]string  // file ID -> photo thumbnail URL
-	completed  map[string]bool    // file ID -> marked completed by the user
+	covers     map[string]string   // file ID -> cover URL
+	progress   map[string]float64  // file ID -> percent read (0-100)
+	thumbnails map[string]string   // file ID -> photo thumbnail URL
+	completed  map[string]bool     // file ID -> marked completed by the user
+	titles     map[string]string   // file ID -> book title, when known
+	tags       map[string][]string // file ID -> tag names
 }
 
 // thumbnailURL is the address of a photo's thumbnail; version names the
@@ -71,9 +74,8 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 			photos = append(photos, f.ID)
 		}
 	}
-	// Completion applies to any file, so only an anonymous listing of
-	// neither books nor photos can skip the database.
-	if len(ids) == 0 && len(photos) == 0 && (userID == "" || len(all) == 0) {
+	// Tags and completion apply to any kind of file.
+	if len(all) == 0 {
 		return fileExtras{}
 	}
 	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
@@ -83,6 +85,10 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 	defer release()
 
 	var extras fileExtras
+	extras.tags, err = tags.NewTagStore(db).NamesForFiles(ctx, all)
+	if err != nil {
+		s.logger.Error("list file tags", "library_id", lib.ID, "error", err)
+	}
 	if userID != "" {
 		extras.completed, err = reading.NewStore(db).CompletedAmong(ctx, userID, all)
 		if err != nil {
@@ -111,6 +117,10 @@ func (s *Server) fileExtrasFor(ctx context.Context, lib *library.Library, userID
 			extras.covers[id] = coverURL(lib.ID, id, coverVersion(lib, coverPath))
 		}
 	}
+	extras.titles, err = bookmeta.NewStore(db).Titles(ctx, ids)
+	if err != nil {
+		s.logger.Error("list book titles", "library_id", lib.ID, "error", err)
+	}
 	if userID != "" {
 		extras.progress, err = progress.NewStore(db).Percents(ctx, userID, ids)
 		if err != nil {
@@ -134,6 +144,8 @@ func attachFileExtras(resp []fileResponse, extras fileExtras) {
 			resp[i].ThumbnailURL = url
 		}
 		resp[i].Completed = extras.completed[resp[i].ID]
+		resp[i].Title = extras.titles[resp[i].ID]
+		resp[i].Tags = extras.tags[resp[i].ID]
 	}
 }
 

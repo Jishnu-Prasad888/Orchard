@@ -33,6 +33,9 @@ type Entry struct {
 	SHA256     string    `json:"sha256"`
 	Compressed bool      `json:"compressed"`
 	Encrypted  bool      `json:"encrypted"`
+	// Object is where a network repository keeps the contents (repo.go);
+	// empty in a local backup, which keeps them at Logical.
+	Object string `json:"object,omitempty"`
 }
 
 // headerMetadata is the always-plaintext backup-level header (header.json).

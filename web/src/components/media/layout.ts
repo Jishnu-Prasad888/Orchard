@@ -56,6 +56,9 @@ export interface GridMetrics {
   /** Side of a square tile in px. */
   tileSize: number;
   gap: number;
+  /** Height of the band under each row's tiles for book titles; 0 when
+   * the grid shows no books. */
+  titleHeight?: number;
 }
 
 /** The tile size a grid aims for at a given container width. */
@@ -110,7 +113,7 @@ export function layoutGrid(groups: readonly MediaGroup[], metrics: GridMetrics):
   const rows: GridRow[] = [];
   const itemCount = groups.reduce((n, g) => n + g.items.length, 0);
   const rowOfItem = new Int32Array(itemCount);
-  const rowHeight = metrics.tileSize + metrics.gap;
+  const rowHeight = metrics.tileSize + (metrics.titleHeight ?? 0) + metrics.gap;
   let top = 0;
 
   groups.forEach((group, groupIndex) => {

@@ -223,4 +223,36 @@ describe('useSelection', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByRole('button')).toHaveTextContent('f1,f3');
   });
+
+  it('puts a book title under its cover, and its tags in the caption', () => {
+    const books = [
+      fileFixture({
+        id: 'b1',
+        name: 'dune_v2.epub',
+        rel_path: 'dune_v2.epub',
+        media_type: 'document',
+        title: 'Dune',
+        tags: ['classics', 'sci-fi'],
+      }),
+      fileFixture({
+        id: 'b2',
+        name: 'untitled-notes.pdf',
+        rel_path: 'untitled-notes.pdf',
+        media_type: 'document',
+      }),
+    ];
+    render(<MediaGrid libraryId="lib1" files={books} onOpen={() => {}} label="Books" />);
+
+    expect(screen.getByText('Dune')).toHaveClass('media-tile-title');
+    // No title in the metadata: the file name, without its extension.
+    expect(screen.getByText('untitled-notes')).toHaveClass('media-tile-title');
+    expect(screen.getByTestId('media-tile-tags')).toHaveTextContent('classics · sci-fi');
+    // The name is below the cover already, so the caption does not repeat it.
+    expect(screen.queryByText('dune_v2.epub')).not.toBeInTheDocument();
+  });
+
+  it('keeps a photo grid edge to edge, with no title band', () => {
+    render(<Harness />);
+    expect(document.querySelector('.media-tile-title')).toBeNull();
+  });
 });

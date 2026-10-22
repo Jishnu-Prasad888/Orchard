@@ -104,6 +104,23 @@ func (svc *Service) ListFolders(ctx context.Context, parent string) ([]*Folder, 
 	return out, nil
 }
 
+// FolderExists reports whether relPath is a visible folder in the library:
+// a directory on disk with no hidden segment (those are never listed, and
+// one is Orchard's own data folder).
+func (svc *Service) FolderExists(relPath string) bool {
+	for _, seg := range strings.Split(relPath, "/") {
+		if seg == "" || strings.HasPrefix(seg, ".") {
+			return false
+		}
+	}
+	abs, err := svc.absPath(relPath)
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(abs)
+	return err == nil && info.IsDir()
+}
+
 // CreateFolder makes the directory at relPath, with any missing parents, so a
 // folder exists on disk as soon as it is created rather than only once a file
 // is put in it. Creating a folder that already exists succeeds. Hidden

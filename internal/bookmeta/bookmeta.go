@@ -294,6 +294,36 @@ func (s *Store) CoverPaths(ctx context.Context, fileIDs []string) (map[string]st
 	return out, rows.Err()
 }
 
+// Titles returns the known title for each of fileIDs that has one, in one
+// query — a grid shows it under the cover instead of the file name.
+func (s *Store) Titles(ctx context.Context, fileIDs []string) (map[string]string, error) {
+	out := make(map[string]string, len(fileIDs))
+	if len(fileIDs) == 0 {
+		return out, nil
+	}
+	placeholders := strings.Repeat("?,", len(fileIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(fileIDs))
+	for i, id := range fileIDs {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT file_id, title FROM book_metadata WHERE title != '' AND file_id IN (`+placeholders+`)`,
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("list titles: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, title string
+		if err := rows.Scan(&id, &title); err != nil {
+			return nil, fmt.Errorf("scan title: %w", err)
+		}
+		out[id] = title
+	}
+	return out, rows.Err()
+}
+
 // RecordCoverAttempt notes that the cover extractor at the given version
 // has run for a file, and fills in coverRelPath when the row has no cover
 // yet. It is separate from Upsert because it also applies to a row a person

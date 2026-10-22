@@ -16,6 +16,9 @@ import { useCallback, useState } from 'react';
 
 import { useAuth } from '../auth/authContext';
 import { useResource } from '../api/resources';
+import { BACKUP_TRIGGER_LABEL } from '../api/types';
+import { BackupRemote } from '../components/backups/BackupRemote';
+import { BackupWhen } from '../components/backups/BackupWhen';
 import {
   exportBookMetadataUrl,
   getBackup,
@@ -25,8 +28,16 @@ import {
   runBackup,
   setBackupDir,
   verifyBackup,
+  getBackupPolicy,
+  listBackupDrives,
 } from '../api/queries';
-import type { BackupConfig, BackupRecord } from '../api/types';
+import type {
+  BackupConfig,
+  BackupRecord,
+  BackupPolicy,
+  BackupDrive,
+  BackupDriveStatus,
+} from '../api/types';
 import { formatBytes } from '../api/types';
 import { ConfirmDialog, Dialog, PromptDialog } from '../components/Dialog';
 import { EmptyState, ErrorState, LoadingState, PageHeader } from '../components/States';
@@ -34,12 +45,14 @@ import './BackupsPage.css';
 
 const STATUS_LABEL: Record<string, string> = {
   running: 'Running',
-  ok: 'Completed',
+  completed: 'Completed',
   failed: 'Failed',
+  pruned: 'Removed (old)',
+  restoring: 'Restoring',
 };
 
 function StatusBadge({ record }: { record: BackupRecord }) {
-  const ok = record.status === 'ok';
+  const ok = record.status === 'completed';
   const failed = record.status === 'failed';
   return (
     <span
@@ -64,6 +77,29 @@ const DIR_SOURCE_NOTE: Record<string, string> = {
     "Orchard's default, inside its data directory. Pick a folder on another drive to protect against losing this one.",
 };
 
+/** Which drive the folder is on, and whether it is there. */
+function DriveLine({ drive }: { drive: BackupDriveStatus }) {
+  if (!drive.connected) {
+    return (
+      <p
+        className="error-text backup-drive-missing"
+        role="alert"
+        data-testid="backup-drive-problem"
+      >
+        {drive.problem}
+      </p>
+    );
+  }
+  return (
+    <p className="muted backup-location-note" data-testid="backup-drive">
+      {drive.system
+        ? 'On the system disk — a separate drive protects against losing this one.'
+        : `On ${drive.mount} (${drive.device}, ${drive.fs_type})`}
+      {drive.total > 0 && ` · ${formatBytes(drive.free)} free of ${formatBytes(drive.total)}`}
+    </p>
+  );
+}
+
 /** Where backups are written, with a way to change it. */
 function BackupLocation({
   config,
@@ -74,6 +110,7 @@ function BackupLocation({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [drives, setDrives] = useState<BackupDrive[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,6 +138,12 @@ function BackupLocation({
             {config?.dir_source && (
               <p className="muted backup-location-note">{DIR_SOURCE_NOTE[config.dir_source]}</p>
             )}
+            {config?.dir && config.drive && <DriveLine drive={config.drive} />}
+            {config?.destination === 'remote' && (
+              <p className="muted backup-location-note" data-testid="backup-dir-unused">
+                Not in use: backups go to the network destination below.
+              </p>
+            )}
           </>
         )}
         {editing && (
@@ -125,6 +168,37 @@ function BackupLocation({
             <p className="muted backup-location-note">
               Created if it doesn't exist. Earlier backups stay where they are.
             </p>
+            {drives && drives.length > 0 && (
+              <div className="backup-drives">
+                <p className="backup-drives-title">Mounted drives</p>
+                <ul data-testid="backup-drives">
+                  {drives.map((d) => (
+                    <li key={d.path}>
+                      <button
+                        type="button"
+                        className="backup-drive"
+                        onClick={() =>
+                          setDraft(
+                            `${d.path === '/' ? '/srv' : d.path.replace(/\/$/, '')}/orchard-backups`,
+                          )
+                        }
+                      >
+                        <span className="backup-drive-path">{d.path}</span>
+                        <span className="muted">
+                          {d.system ? 'System disk' : `${d.device} · ${d.fs_type}`}
+                          {d.total > 0 &&
+                            ` · ${formatBytes(d.free)} free of ${formatBytes(d.total)}`}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="muted backup-location-note">
+                  Orchard remembers which drive you pick, and won't write backups to the system disk
+                  in its place while it is unplugged.
+                </p>
+              </div>
+            )}
             {error && (
               <p className="error-text" role="alert">
                 {error}
@@ -158,6 +232,9 @@ function BackupLocation({
             setDraft(config?.dir ?? '');
             setError(null);
             setEditing(true);
+            listBackupDrives()
+              .then(setDrives)
+              .catch(() => setDrives([]));
           }}
           data-testid="change-backup-dir"
         >
@@ -207,7 +284,7 @@ function BackupDetailDialog({
               type="button"
               className="button"
               onClick={verify}
-              disabled={busy || shown.status !== 'ok'}
+              disabled={busy || shown.status !== 'completed'}
               data-testid="verify-backup"
             >
               {busy ? 'Verifying…' : 'Verify'}
@@ -216,7 +293,7 @@ function BackupDetailDialog({
               type="button"
               className="button primary-button"
               onClick={() => setRestoring(true)}
-              disabled={busy || shown.status !== 'ok'}
+              disabled={busy || shown.status !== 'completed'}
               data-testid="open-restore-backup"
             >
               Restore…
@@ -341,6 +418,13 @@ export default function BackupsPage() {
     isAdmin,
   );
   const [savedConfig, setSavedConfig] = useState<BackupConfig | null>(null);
+  const policy = useResource(
+    useCallback(() => getBackupPolicy(), []),
+    [],
+    isAdmin,
+  );
+  const [savedPolicy, setSavedPolicy] = useState<BackupPolicy | null>(null);
+  const shownPolicy = savedPolicy ?? policy.data;
   const [detailId, setDetailId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
@@ -379,11 +463,14 @@ export default function BackupsPage() {
         setConfirmRun(false);
         setRunning(false);
         setNotice(
-          rec.status === 'ok'
+          rec.status === 'completed'
             ? `Backed up ${rec.files} files (${formatBytes(rec.stored_bytes)}) to ${rec.destination}.`
             : `Backup finished with status "${rec.status}".`,
         );
         backups.reload();
+        // What is pending, and when the schedule next runs, both moved.
+        setSavedPolicy(null);
+        policy.reload();
       })
       .catch((e: unknown) => {
         // The dialog stays open on failure, with the reason inside it, so the
@@ -435,6 +522,25 @@ export default function BackupsPage() {
         }}
       />
 
+      {(savedConfig ?? config.data) && (
+        <BackupRemote
+          config={(savedConfig ?? config.data)!}
+          onChanged={(next, message) => {
+            setSavedConfig(next);
+            setNotice(message);
+          }}
+        />
+      )}
+
+      {shownPolicy && (
+        <BackupWhen
+          // A fresh policy from the server starts the form over.
+          key={JSON.stringify(shownPolicy)}
+          policy={shownPolicy}
+          onSaved={setSavedPolicy}
+        />
+      )}
+
       {/* While the confirm dialog is open it owns the error, so a screen reader
           is not told about the same failure twice. */}
       {error && !confirmRun && (
@@ -477,6 +583,7 @@ export default function BackupsPage() {
             <tr>
               <th scope="col">Started</th>
               <th scope="col">Status</th>
+              <th scope="col">Why</th>
               <th scope="col">Destination</th>
               <th scope="col">Files</th>
               <th scope="col">Stored</th>
@@ -493,6 +600,9 @@ export default function BackupsPage() {
                 </th>
                 <td>
                   <StatusBadge record={record} />
+                </td>
+                <td className="backup-trigger">
+                  {BACKUP_TRIGGER_LABEL[record.trigger ?? 'manual'] ?? 'By hand'}
                 </td>
                 <td className="backup-destination">
                   <code>{record.destination}</code>

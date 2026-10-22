@@ -1,0 +1,146 @@
+/* The share form: what to share, how, and the one-time link. Used on the
+   Sharing page, in the viewer, and from right-click menus. */
+
+.share-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.share-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Side by side, a field is at least 200px wide. (On the field itself, in a
+   column, that basis became a 200px height and left a gap under it.) */
+.share-form-row > .share-field {
+  flex: 1 1 200px;
+}
+
+.share-field > span {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.share-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.share-input:focus-visible {
+  border-color: var(--color-primary-ink);
+}
+
+.share-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.share-hint code {
+  padding: 1px 5px;
+  font-size: 0.85em;
+  background: var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.share-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.share-target {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.share-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.share-pick legend {
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.share-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.share-kind,
+.share-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-sm);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.share-warning {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger-ink);
+}
+
+.share-field-error {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger-ink);
+}
+
+.share-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.share-created-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.share-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.share-link-row .share-input {
+  flex: 1 1 240px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.share-done {
+  align-self: flex-end;
+}

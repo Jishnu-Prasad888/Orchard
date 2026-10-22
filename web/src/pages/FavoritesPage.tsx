@@ -3,7 +3,7 @@
  * else sees your favorites.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { useLibraryResource } from '../api/resources';
 import { listFavorites } from '../api/queries';
@@ -32,13 +32,17 @@ const NO_FILES: FileSummary[] = [];
 
 function Favorites({ library }: { library: Library }) {
   const libraryId = library.id;
-  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
+  const [menu, setMenu] = useState<{
+    anchor: MenuAnchor;
+    items: MenuEntry[];
+    header?: ReactNode;
+  } | null>(null);
   const favorites = useLibraryResource(
     useCallback(async (id: string) => (await listFavorites(id)).files ?? [], []),
   );
   const files = useVisibleFiles(favorites.data ?? NO_FILES);
 
-  const starred = useFavorites(libraryId, files.length);
+  const starred = useFavorites(libraryId, favorites.data?.length ?? 0);
   const selection = useSelection(files, libraryId);
   const ops = useFileOperations(libraryId, favorites.reload);
   const actions = useMediaActions({
@@ -92,7 +96,11 @@ function Favorites({ library }: { library: Library }) {
           selection={selection}
           favorites={starred.ids}
           onContextMenu={(file, x, y) =>
-            setMenu({ anchor: { x, y }, items: actions.menuFor(file) })
+            setMenu({
+              anchor: { x, y },
+              items: actions.menuFor(file),
+              header: actions.headerFor(file),
+            })
           }
           label="Favorites"
           testId="file-grid"
@@ -114,6 +122,7 @@ function Favorites({ library }: { library: Library }) {
         <Menu
           anchor={menu.anchor}
           items={menu.items}
+          header={menu.header}
           onClose={() => setMenu(null)}
           label="Photo actions"
         />

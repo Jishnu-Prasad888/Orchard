@@ -1,0 +1,134 @@
+/* The share link's viewer: a full-window dark stage, like the app's own
+   viewer, with a slim bar on top and arrows at the sides. */
+
+.share-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  color: var(--viewer-ink);
+  background: var(--viewer-background);
+  outline: none;
+}
+
+.share-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  padding-top: max(var(--space-2), env(safe-area-inset-top));
+  background: var(--viewer-surface);
+  border-bottom: 1px solid var(--viewer-line);
+}
+
+.share-viewer-bar .icon-button {
+  color: var(--viewer-ink);
+}
+
+.share-viewer-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.share-viewer-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-viewer-meta {
+  font-size: var(--font-size-sm);
+  color: var(--viewer-ink-muted);
+}
+
+.share-viewer-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.share-viewer-media {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* A book or a text needs the whole stage, on its own reading surface. */
+.share-viewer-reader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  color: var(--color-text-primary);
+  background: var(--color-background);
+}
+
+.share-viewer-audio,
+.share-viewer-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--viewer-ink-muted);
+}
+
+.share-viewer-none p {
+  margin: 0;
+}
+
+.share-viewer-none .muted {
+  color: var(--viewer-ink-muted);
+}
+
+.share-viewer-step {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0;
+  color: var(--viewer-ink);
+  background: var(--viewer-surface);
+  border: 1px solid var(--viewer-line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.share-viewer-prev {
+  left: var(--space-3);
+}
+
+.share-viewer-next {
+  right: var(--space-3);
+}
+
+/* Text and Markdown read in a centred column with room around it, as on
+   the reader page. */
+.share-viewer-text .share-viewer-reader > * {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+}
+
+/* Over a book the arrows would sit on the text; the reader pages itself. */
+.share-viewer:has(.share-viewer-reader) .share-viewer-step {
+  top: auto;
+  bottom: var(--space-3);
+  transform: none;
+}

@@ -144,7 +144,13 @@ func run() error {
 		Keep:       cfg.BackupKeep,
 		Passphrase: cfg.BackupPassphrase,
 		Interval:   time.Duration(cfg.BackupIntervalMinutes) * time.Minute,
+		// The key that seals a network destination's password lives beside
+		// the server database, not in it.
+		SecretKeyFile: filepath.Join(cfg.DataDir, "secret.key"),
 	}, cfg.DatabasePath())
+	if err := backupMgr.LoadPolicy(ctx, serversettings.NewStore(pool)); err != nil {
+		logger.Error("load backup schedule", "error", err)
+	}
 	backupMgr.Start(ctx)
 
 	// Frontend: the embedded build by default, an on-disk build in development.

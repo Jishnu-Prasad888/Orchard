@@ -284,6 +284,19 @@ select:hover {
   border-color: color-mix(in srgb, var(--color-text-muted) 60%, var(--color-border));
 }
 
+/*
+ * The chevron and the room for it, again, one notch more specific: a form's
+ * own field class (`.grant-input`, `.share-input`…) often sets `background`
+ * or `padding` for its text inputs, and either shorthand used to wipe the
+ * arrow off its dropdowns, leaving a box that did not look like a menu.
+ */
+select:not([multiple]) {
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23a59488' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1.5 1.5 4.5 4.5 4.5-4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
 select option {
   color: var(--color-text-primary);
   background: var(--color-surface-elevated);

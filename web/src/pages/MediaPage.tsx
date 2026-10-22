@@ -11,7 +11,7 @@
  * file — lives in the URL, so Back, reload, and sharing a link all work.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
@@ -19,7 +19,7 @@ import { useLibraryGate } from '../api/libraries';
 import { useLibraryResource } from '../api/resources';
 import { copyFile, createFolder, listCollections, moveFile } from '../api/queries';
 import type { FileSort, MediaFilter, SortOrder } from '../api/queries';
-import type { FileSummary, Library } from '../api/types';
+import type { FileSummary, Folder, Library } from '../api/types';
 import { PromptDialog } from '../components/Dialog';
 import { useFileOperations } from '../components/FileOperations';
 import { Breadcrumbs } from '../components/files/Breadcrumbs';
@@ -27,6 +27,7 @@ import { FileTable } from '../components/files/FileTable';
 import { FilterPanel } from '../components/files/FilterPanel';
 import { EMPTY_RANGE, hasRangeFilters, type RangeFilters } from '../components/files/filters';
 import { FolderGrid } from '../components/files/FolderGrid';
+import { ShareDialog } from '../components/ShareDialog';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useFavorites } from '../components/media/useFavorites';
@@ -43,7 +44,7 @@ import {
   PageHeader,
 } from '../components/States';
 import { Icon, type IconName } from '../components/ui/Icon';
-import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
+import { Menu, menuGroups, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { useToast } from '../components/ui/Toast';
 import { useFileDrop } from '../components/upload/useFileDrop';
 import { useUploadActions } from '../components/upload/UploadProvider';
@@ -158,6 +159,8 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const toast = useToast();
   const uploads = useUploadActions();
   const offline = library.status === 'offline';
+  const canShare = library.can_share ?? false;
+  const [sharingFolder, setSharingFolder] = useState<Folder | null>(null);
   const folderMode = config.showFolders ?? false;
   const showTypeFilter = config.showTypeFilter ?? config.type === undefined;
 
@@ -190,7 +193,11 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const [clipboard, setClipboard] = useState<Clipboard | null>(null);
   const [pasting, setPasting] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
+  const [menu, setMenu] = useState<{
+    anchor: MenuAnchor;
+    items: MenuEntry[];
+    header?: ReactNode;
+  } | null>(null);
 
   const setView = (next: 'grid' | 'list') => {
     setViewState(next);
@@ -395,12 +402,12 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     }
   };
 
-  const { menuFor } = actions;
+  const { menuFor, headerFor } = actions;
   const openMenu = useCallback(
     (file: FileSummary, x: number, y: number) => {
-      setMenu({ anchor: { x, y }, items: menuFor(file) });
+      setMenu({ anchor: { x, y }, items: menuFor(file), header: headerFor(file) });
     },
-    [menuFor],
+    [menuFor, headerFor],
   );
 
   // Keyboard shortcuts, in the spirit of a desktop file manager / Google Drive.
@@ -693,6 +700,32 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
           folders={folders}
           onOpen={(f) => openFolder(f.rel_path)}
           onDropFile={(e, p) => void moveInto(e, p)}
+          onContextMenu={(f, x, y) =>
+            setMenu({
+              anchor: { x, y },
+              items: menuGroups(
+                [
+                  {
+                    id: 'open',
+                    label: 'Open',
+                    icon: 'folder',
+                    onSelect: () => openFolder(f.rel_path),
+                  },
+                ],
+                canShare
+                  ? [
+                      {
+                        id: 'share',
+                        label: 'Share…',
+                        icon: 'share',
+                        onSelect: () => setSharingFolder(f),
+                        testId: 'menu-share-folder',
+                      },
+                    ]
+                  : [],
+              ),
+            })
+          }
         />
       )}
 
@@ -780,6 +813,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
         <Menu
           anchor={menu.anchor}
           items={menu.items}
+          header={menu.header}
           onClose={() => setMenu(null)}
           label="File actions"
         />
@@ -787,6 +821,19 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
 
       {ops.dialogs}
       {actions.dialogs}
+      <ShareDialog
+        libraryId={libraryId}
+        open={sharingFolder !== null}
+        fixed={
+          sharingFolder
+            ? {
+                target: { kind: 'folder', path: sharingFolder.rel_path },
+                name: sharingFolder.name,
+              }
+            : undefined
+        }
+        onClose={() => setSharingFolder(null)}
+      />
 
       <PromptDialog
         open={newFolderOpen}

@@ -78,4 +78,8 @@ export interface ReaderProps {
    * (an EPUB chapter lives in its own iframe); the PDF and text readers'
    * DOM is the page's own, so it catches those directly. */
   onSelectionContextMenu?: (point: ReaderPoint) => void;
+  /** Ctrl/⌘ with +, − or 0 pressed inside the reader's own frame (an EPUB
+   * chapter is an iframe, so the page never sees those keys): 1 zooms in,
+   * −1 out, 0 back to the default size. */
+  onZoomKey?: (direction: 1 | -1 | 0) => void;
 }

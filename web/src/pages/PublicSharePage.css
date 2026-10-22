@@ -33,6 +33,71 @@
   overflow-wrap: anywhere;
 }
 
+.share-view-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.share-view-kind {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.share-view-path {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.share-view-path .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-folder-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.share-folder:hover {
+  background: var(--color-fill-hover);
+}
+
+.share-folder .share-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ------------------------------ the gate ------------------------------ */
 
 .share-gate {
@@ -94,6 +159,27 @@
 }
 
 /* -------------------------------- files ------------------------------- */
+
+/* The whole row (icon, name, size) opens the file in the viewer. */
+.share-file-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.share-file-open:hover .share-file-name {
+  text-decoration: underline;
+}
 
 .share-file-list {
   display: flex;

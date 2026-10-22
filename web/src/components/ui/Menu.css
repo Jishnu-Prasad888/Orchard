@@ -114,3 +114,42 @@
 .menu-header {
   padding: var(--space-2) var(--space-3);
 }
+
+.menu-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-item .menu-item-check {
+  margin-left: var(--space-2);
+  color: var(--color-primary-ink);
+}
+
+.menu-dark .menu-item .menu-item-check {
+  color: var(--viewer-ink);
+}
+
+/* A file's menu names the file it acts on, quietly, above the actions. */
+.menu-file-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 260px;
+}
+
+.menu-file-name {
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-file-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

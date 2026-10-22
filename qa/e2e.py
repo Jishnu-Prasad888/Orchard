@@ -448,7 +448,7 @@ def main():
         REPORT.check("S11", "bob lacks download capability -> 403", s == 403, f"{s}")
 
         # ---- S12 sharing ---------------------------------------------------
-        s, body, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/shares", {"key": lib_id, "caps": ["read", "download"]})
+        s, body, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/shares", {"target": {"kind": "library"}, "caps": ["read", "download"]})
         token = (body or {}).get("token")
         REPORT.check("S12", "share created, raw token returned once", s == 201 and token, f"{s}")
         A = Client(main_srv.base)  # anonymous jar
@@ -456,7 +456,7 @@ def main():
         REPORT.check("S12", "public share info without session", s == 200, f"{s}")
         s, body, _ = A.json("GET", f"/api/v1/shares/{token}/files?limit=5")
         REPORT.check("S12", "public share file list without session", s == 200 and len((body or {}).get("files", [])) > 0, f"{s} files={len((body or {}).get('files', []))}")
-        s, body, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/shares", {"key": lib_id, "caps": ["read"], "password": "share-secret-9"})
+        s, body, _ = C.json("POST", f"/api/v1/libraries/{lib_id}/shares", {"target": {"kind": "library"}, "caps": ["read"], "password": "share-secret-9"})
         token2 = (body or {}).get("token")
         REPORT.check("S12", "password-protected share created", s == 201 and token2, f"{s}")
         s, _, _ = A.json("GET", f"/api/v1/shares/{token2}/files")

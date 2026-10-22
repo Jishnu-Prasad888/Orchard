@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"net/http"
+	"path/filepath"
 	"testing"
+
+	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 )
 
 func TestHideCompleted_DefaultsOffThenRoundTrips(t *testing.T) {
@@ -85,6 +88,63 @@ func TestFileListing_MarksCompletedFiles(t *testing.T) {
 	for id, w := range want {
 		if c, ok := got[id]; !ok || c != w {
 			t.Errorf("file %s completed = %v (listed %v), want %v", id, c, ok, w)
+		}
+	}
+}
+
+func TestFileListing_CarriesBookTitlesAndTagNames(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	for _, f := range []struct{ id, path string }{{"f1", "dune_v2.epub"}, {"f2", "beach.png"}} {
+		if err := seedLibraryFile(t, libRoot, f.id, f.path, 10); err != nil {
+			t.Fatalf("seed file: %v", err)
+		}
+	}
+	ldb, err := librarydb.Open(filepath.Join(libRoot, ".orchard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ldb.Exec(`INSERT INTO book_metadata (file_id, title, extracted_at) VALUES ('f1', 'Dune', '')`); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+	_ = ldb.Close()
+
+	for _, name := range []string{"sci-fi", "classics"} {
+		rec := client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/tags", map[string]any{"name": name})
+		var created struct {
+			Tag struct {
+				ID string `json:"id"`
+			} `json:"tag"`
+		}
+		jsonUnmarshalRec(t, rec, &created)
+		rec = client.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/files/f1/tags",
+			map[string]any{"tag_id": created.Tag.ID})
+		if rec.Code/100 != 2 {
+			t.Fatalf("tag file status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	}
+
+	rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/files?recursive=true", nil)
+	var body struct {
+		Files []struct {
+			ID    string   `json:"id"`
+			Title string   `json:"title"`
+			Tags  []string `json:"tags"`
+		} `json:"files"`
+	}
+	jsonUnmarshalRec(t, rec, &body)
+	for _, f := range body.Files {
+		switch f.ID {
+		case "f1":
+			if f.Title != "Dune" {
+				t.Errorf("book title = %q, want Dune", f.Title)
+			}
+			if len(f.Tags) != 2 || f.Tags[0] != "classics" || f.Tags[1] != "sci-fi" {
+				t.Errorf("book tags = %v, want [classics sci-fi]", f.Tags)
+			}
+		case "f2":
+			if f.Title != "" || len(f.Tags) != 0 {
+				t.Errorf("photo = %+v, want no title and no tags", f)
+			}
 		}
 	}
 }

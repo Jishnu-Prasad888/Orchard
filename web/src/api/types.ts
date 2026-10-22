@@ -66,6 +66,9 @@ export interface Library {
   schema_version: number;
   created_at: string;
   updated_at: string;
+  /** Whether the signed-in user may create share links here. Set by the
+   * library list. */
+  can_share?: boolean;
 }
 
 export interface LibraryListResponse {
@@ -191,6 +194,10 @@ export interface FileSummary {
   /** Whether the signed-in user has marked this file completed. Set by file
    * listings only; absent means not completed. */
   completed?: boolean;
+  /** A book's own title, from its metadata. Set by file listings only. */
+  title?: string;
+  /** Names of the file's tags. Set by file listings only. */
+  tags?: string[];
 }
 
 export interface FileEnvelope {
@@ -480,6 +487,9 @@ export interface PermissionGrant {
   id: string;
   user_id: string;
   resource_key: string;
+  /** What the grant applies to, in words: kind and path. */
+  scope_kind: ShareTargetKind;
+  scope_path?: string;
   capabilities: Capability[];
   effect: GrantEffect;
   created_at: string;
@@ -497,9 +507,31 @@ export interface GrantEnvelope {
  * Sharing
  * ------------------------------------------------------------------ */
 
+/** What a share link exposes. The server builds the link's scope from this
+ * and checks that the thing exists; nothing else is accepted. */
+export type ShareTarget =
+  | { kind: 'library' }
+  | { kind: 'folder'; path: string }
+  | { kind: 'file'; id: string }
+  | { kind: 'tag'; id: string }
+  | { kind: 'collection'; id: string };
+
+export type ShareTargetKind = ShareTarget['kind'];
+
+export const SHARE_KIND_LABEL: Record<ShareTargetKind, string> = {
+  library: 'Library',
+  folder: 'Folder',
+  file: 'File',
+  tag: 'Tag',
+  collection: 'Collection',
+};
+
 export interface Share {
   id: string;
   resource_key: string;
+  /** What the link exposes, in words. */
+  target_kind: ShareTargetKind;
+  target_name: string;
   capabilities: Capability[];
   has_password: boolean;
   expires_at?: string;
@@ -523,10 +555,23 @@ export interface ShareListResponse {
  * ids, only the scope and the label a visitor would see.
  */
 export interface PublicShareInfo {
-  resource_key: string;
+  kind: ShareTargetKind;
+  /** The shared thing's name: a folder, file, tag or collection. */
+  name: string;
   library?: string;
   has_password: boolean;
   expires_at?: string;
+  /** Whether the link lets visitors download, not only see the list. */
+  can_download: boolean;
+  /** For a folder share: the folder browsing starts in. */
+  folder?: string;
+}
+
+/** A share's listing: files, and for a library or folder share the
+ * sub-folders of the folder being shown. */
+export interface PublicShareListing extends FileListResponse {
+  folders?: Folder[];
+  folder?: string;
 }
 
 export interface PublicShareInfoResponse {
@@ -537,7 +582,10 @@ export interface PublicShareInfoResponse {
  * Backups
  * ------------------------------------------------------------------ */
 
-export type BackupStatus = 'running' | 'ok' | 'failed' | string;
+/** As the server sends it. (`ok` was never one: the page used to look for
+ * it, which drew every good backup as unfinished and kept Verify and Restore
+ * disabled.) */
+export type BackupStatus = 'running' | 'completed' | 'failed' | 'pruned' | 'restoring';
 
 /** Where backups are written, and how they're kept. */
 export interface BackupConfig {
@@ -548,6 +596,55 @@ export interface BackupConfig {
   keep: number;
   interval_minutes: number;
   encrypted: boolean;
+  /** The folder's drive, and whether it is plugged in right now. */
+  drive?: BackupDriveStatus;
+  /** Where backups go: the folder above, or the network server. */
+  destination?: 'local' | 'remote';
+  remote?: { config: BackupRemoteConfig; has_secret: boolean };
+}
+
+/** A network destination's settings. Never holds a password. */
+export interface BackupRemoteConfig {
+  kind: 'sftp' | 'ftp' | 'smb';
+  host: string;
+  port?: number;
+  user?: string;
+  path: string;
+  share?: string;
+  domain?: string;
+  ftp_security?: 'explicit' | 'implicit' | 'none';
+  /** The confirmed server identity: SSH host key, or a self-signed cert. */
+  fingerprint?: string;
+}
+
+export interface BackupRemoteSecret {
+  password?: string;
+  private_key?: string;
+  key_passphrase?: string;
+}
+
+export interface BackupDriveStatus {
+  mount?: string;
+  device?: string;
+  fs_type?: string;
+  /** On the disk the system runs from (a Pi's SD card). */
+  system: boolean;
+  free: number;
+  total: number;
+  connected: boolean;
+  /** Why backups cannot be written there now. */
+  problem?: string;
+}
+
+/** A mounted drive a backup folder could go on. */
+export interface BackupDrive {
+  path: string;
+  device: string;
+  fs_type: string;
+  uuid?: string;
+  total: number;
+  free: number;
+  system: boolean;
 }
 
 export interface BackupRecord {
@@ -569,6 +666,42 @@ export interface BackupRecord {
   verify_errors?: number;
   error_msg?: string;
   created_at: string;
+  /** Why it ran. */
+  trigger?: BackupTrigger;
+}
+
+export type BackupTrigger = 'manual' | 'scheduled' | 'catch-up' | 'size';
+
+export const BACKUP_TRIGGER_LABEL: Record<BackupTrigger, string> = {
+  manual: 'By hand',
+  scheduled: 'Scheduled',
+  'catch-up': 'Missed schedule',
+  size: 'New data',
+};
+
+/** When backups run by the clock. `at` is "HH:MM" in the server's time. */
+export interface BackupSchedule {
+  kind: 'off' | 'interval' | 'daily' | 'weekly';
+  every_minutes?: number;
+  at?: string;
+  /** 0 = Sunday. */
+  weekday?: number;
+  since?: string;
+}
+
+/** Back up once new data since the last backup adds up to `bytes`. */
+export interface BackupSizeTrigger {
+  enabled: boolean;
+  bytes: number;
+  quiet_minutes: number;
+}
+
+export interface BackupPolicy {
+  schedule: BackupSchedule;
+  size_trigger: BackupSizeTrigger;
+  next_run?: string;
+  timezone: string;
+  pending: { files: number; bytes: number; last_change?: string };
 }
 
 /* ------------------------------------------------------------------ *

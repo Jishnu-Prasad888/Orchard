@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -84,6 +85,26 @@ func (s *TagStore) List(ctx context.Context) ([]*Tag, error) {
 	return s.scanTags(rows)
 }
 
+// Rename changes a tag's name, keeping its files. Returns ErrNotFound for an
+// unknown tag and ErrAlreadyExists if another tag has the name
+// (case-insensitive); changing only the capitals of its own name is fine.
+func (s *TagStore) Rename(ctx context.Context, id, name string) (*Tag, error) {
+	if name == "" {
+		return nil, fmt.Errorf("tag name must not be empty")
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE tags SET name = ? WHERE id = ?`, name, id)
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return nil, ErrAlreadyExists
+		}
+		return nil, fmt.Errorf("rename tag: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
+	}
+	return s.GetByID(ctx, id)
+}
+
 // Delete removes a tag and all its file associations.
 func (s *TagStore) Delete(ctx context.Context, id string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM tags WHERE id = ?`, id)
@@ -136,6 +157,39 @@ func (s *TagStore) ListByFile(ctx context.Context, fileID string) ([]*Tag, error
 	}
 	defer func() { _ = rows.Close() }()
 	return s.scanTags(rows)
+}
+
+// NamesForFiles returns the names of the tags on each of fileIDs that has
+// any, sorted by name, in one query — a grid listing calls it once per page.
+func (s *TagStore) NamesForFiles(ctx context.Context, fileIDs []string) (map[string][]string, error) {
+	out := make(map[string][]string)
+	if len(fileIDs) == 0 {
+		return out, nil
+	}
+	placeholders := strings.Repeat("?,", len(fileIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(fileIDs))
+	for i, id := range fileIDs {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT ft.file_id, t.name
+		 FROM file_tags ft
+		 JOIN tags t ON t.id = ft.tag_id
+		 WHERE ft.file_id IN (`+placeholders+`)
+		 ORDER BY t.name COLLATE NOCASE`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list tag names for files: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, fmt.Errorf("scan tag name: %w", err)
+		}
+		out[id] = append(out[id], name)
+	}
+	return out, rows.Err()
 }
 
 // ListByTag returns the IDs of all files associated with a tag.

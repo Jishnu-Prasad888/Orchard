@@ -10,6 +10,11 @@
  * The password travels in the `X-Orchard-Share-Password` header on every request
  * and is kept in component state only; it is never written to storage, because
  * putting a share credential in localStorage outlives the decision to share.
+ *
+ * A folder or library link opens at its own folder and can be browsed down
+ * into sub-folders (the folder is kept in `?folder=`, so Back works), never
+ * above it — the server refuses that anyway. A file, tag or collection link
+ * is a flat list.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -17,12 +22,14 @@ import { useParams, useSearchParams } from 'react-router-dom';
 
 import { ApiError } from '../api/client';
 import { downloadPublicShareFile, getPublicShare, listPublicShareFiles } from '../api/queries';
-import type { FileSummary, PublicShareInfo } from '../api/types';
+import type { FileSummary, Folder, PublicShareInfo } from '../api/types';
+import { SHARE_KIND_LABEL } from '../api/types';
 import { formatBytes } from '../api/types';
 import { mediaTypeIcon } from '../components/media';
 import { Icon } from '../components/ui/Icon';
 import { EmptyState, ErrorState, LoadingState } from '../components/States';
 import './PublicSharePage.css';
+import { PublicShareViewer } from './PublicShareViewer';
 
 type ShareState =
   | { kind: 'loading' }
@@ -31,15 +38,23 @@ type ShareState =
 
 export default function PublicSharePage() {
   const { token = '' } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [password, setPassword] = useState('');
   const [unlocked, setUnlocked] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  // A share can be scoped to a subfolder; the link the owner copies carries it.
+  // Where the visitor has browsed to inside a folder share. Absent means the
+  // share's own folder, which is where every link opens.
   const folder = searchParams.get('folder') ?? '';
+  const openFolder = (path: string | null) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (path === null) next.delete('folder');
+      else next.set('folder', path);
+      return next;
+    });
 
   // Both requests are tagged with what they were for, so a new token or a new
   // password invalidates the previous answer by comparison. That is what keeps
@@ -94,7 +109,12 @@ export default function PublicSharePage() {
   const [settledFiles, setSettledFiles] = useState<
     | {
         key: string;
-        value: { files: FileSummary[]; next?: string | undefined };
+        value: {
+          files: FileSummary[];
+          folders: Folder[];
+          folder: string;
+          next?: string | undefined;
+        };
       }
     | { key: string; error: string }
     | null
@@ -106,12 +126,20 @@ export default function PublicSharePage() {
   useEffect(() => {
     if (filesKey === null) return;
     let cancelled = false;
-    listPublicShareFiles(token, unlocked ? password : undefined, { folder, limit: 200 })
+    listPublicShareFiles(token, unlocked ? password : undefined, {
+      ...(folder ? { folder } : {}),
+      limit: 200,
+    })
       .then((page) => {
         if (cancelled) return;
         setSettledFiles({
           key: filesKey,
-          value: { files: page.files ?? [], next: page.next_cursor },
+          value: {
+            files: page.files ?? [],
+            folders: page.folders ?? [],
+            folder: page.folder ?? '',
+            next: page.next_cursor,
+          },
         });
         setExtra([]);
         setCursor(page.next_cursor);
@@ -131,6 +159,16 @@ export default function PublicSharePage() {
     ...extra,
   ];
   const filesError = currentFiles && 'error' in currentFiles ? currentFiles.error : null;
+  const listing = currentFiles && 'value' in currentFiles ? currentFiles.value : null;
+  const subFolders = listing?.folders ?? [];
+  // The folder on screen, and where the share itself starts: Up goes no
+  // higher than that.
+  const shownFolder = listing?.folder ?? '';
+  const rootFolder = state.kind === 'unlocked' ? (state.share.folder ?? '') : '';
+  const insideRoot = shownFolder !== rootFolder;
+  const parentFolder = shownFolder.includes('/')
+    ? shownFolder.slice(0, shownFolder.lastIndexOf('/'))
+    : '';
   const filesLoading = (filesKey !== null && currentFiles === null) || loadingMore;
 
   const loadMore = useCallback(async () => {
@@ -138,7 +176,7 @@ export default function PublicSharePage() {
     setLoadingMore(true);
     try {
       const page = await listPublicShareFiles(token, unlocked ? password : undefined, {
-        folder,
+        ...(folder ? { folder } : {}),
         limit: 200,
         cursor,
       });
@@ -155,6 +193,9 @@ export default function PublicSharePage() {
     event.preventDefault();
     setUnlocked(true);
   };
+
+  // The file open in the viewer, by its place in the list.
+  const [viewing, setViewing] = useState<number | null>(null);
 
   const download = async (file: FileSummary) => {
     setDownloading(file.id);
@@ -210,10 +251,27 @@ export default function PublicSharePage() {
 
       {state.kind === 'unlocked' && (
         <>
-          <h1 className="share-view-title">
-            {state.share.resource_key}
-            {folder && <span className="muted"> — {folder}</span>}
-          </h1>
+          <div className="share-view-heading">
+            <p className="share-view-kind">{SHARE_KIND_LABEL[state.share.kind] ?? 'Share'}</p>
+            <h1 className="share-view-title">{state.share.name}</h1>
+          </div>
+          {insideRoot && (
+            <nav className="share-view-path" aria-label="Folder">
+              <button
+                type="button"
+                className="button ghost-button"
+                onClick={() =>
+                  openFolder(parentFolder.length <= rootFolder.length ? null : parentFolder)
+                }
+                data-testid="share-up"
+              >
+                ← Up
+              </button>
+              <span className="muted">
+                {shownFolder.slice(rootFolder ? rootFolder.length + 1 : 0)}
+              </span>
+            </nav>
+          )}
           {state.share.expires_at && (
             <p className="muted">
               This link expires on{' '}
@@ -232,7 +290,27 @@ export default function PublicSharePage() {
           )}
           {filesLoading && files.length === 0 && <LoadingState label="Loading files…" />}
 
-          {files.length === 0 && !filesLoading && !filesError && (
+          {subFolders.length > 0 && (
+            <ul className="share-folder-list" aria-label="Folders" data-testid="share-folders">
+              {subFolders.map((f) => (
+                <li key={f.rel_path}>
+                  <button
+                    type="button"
+                    className="share-folder"
+                    onClick={() => openFolder(f.rel_path)}
+                  >
+                    <Icon name="folder" />
+                    <span className="share-file-name">{f.name}</span>
+                    <span className="muted">
+                      {f.file_count} {f.file_count === 1 ? 'item' : 'items'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {files.length === 0 && subFolders.length === 0 && !filesLoading && !filesError && (
             <EmptyState title="Nothing here" testId="share-empty">
               <p className="muted">This share is empty, or everything in it has been removed.</p>
             </EmptyState>
@@ -244,27 +322,49 @@ export default function PublicSharePage() {
             <ul className="share-file-list" data-testid="share-file-list">
               {files.map((file) => (
                 <li key={file.id} className="share-file">
-                  <span className="share-file-glyph" aria-hidden="true">
-                    <Icon name={mediaTypeIcon(file.media_type)} />
-                  </span>
-                  <div className="share-file-meta">
-                    <span className="share-file-name">{file.name}</span>
-                    <span className="muted">
-                      {file.media_type} · {formatBytes(file.size_bytes)}
-                    </span>
-                  </div>
                   <button
                     type="button"
-                    className="button"
-                    onClick={() => void download(file)}
-                    disabled={downloading === file.id}
-                    data-testid={`download-${file.id}`}
+                    className="share-file-open"
+                    onClick={() => setViewing(files.indexOf(file))}
+                    data-testid={`open-${file.id}`}
                   >
-                    {downloading === file.id ? 'Downloading…' : 'Download'}
+                    <span className="share-file-glyph" aria-hidden="true">
+                      <Icon name={mediaTypeIcon(file.media_type)} />
+                    </span>
+                    <span className="share-file-meta">
+                      <span className="share-file-name">{file.name}</span>
+                      <span className="muted">
+                        {file.media_type} · {formatBytes(file.size_bytes)}
+                      </span>
+                    </span>
                   </button>
+                  {state.share.can_download && (
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() => void download(file)}
+                      disabled={downloading === file.id}
+                      data-testid={`download-${file.id}`}
+                    >
+                      {downloading === file.id ? 'Downloading…' : 'Download'}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
+          )}
+
+          {viewing !== null && files[viewing] && (
+            <PublicShareViewer
+              token={token}
+              files={files}
+              index={viewing}
+              canDownload={state.share.can_download}
+              downloading={downloading === files[viewing].id}
+              onNavigate={setViewing}
+              onDownload={(file) => void download(file)}
+              onClose={() => setViewing(null)}
+            />
           )}
 
           {cursor && (

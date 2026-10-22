@@ -18,6 +18,7 @@ import type { Book, Contents, NavItem, Rendition } from 'epubjs';
 import { Icon } from '../ui/Icon';
 import { drawPageMarks, watchPageMarks, type PageLocations } from './epubPageMarks';
 import type { ReaderHandle, ReaderHighlight, ReaderProps, SearchMatch, TocEntry } from './types';
+import { zoomDirection } from './zoom';
 
 /** Fill colors for saved highlights, painted by epub.js as an SVG overlay
  * (the PDF/text readers use `::highlight()` rules for the same palette). */
@@ -79,6 +80,19 @@ function pageLabelFor(
   return null;
 }
 
+/** A reading theme that wins over the book's own text colours. */
+function themeRules(text: string, background: string, link: string) {
+  return {
+    body: { color: `${text} !important`, background: `${background} !important` },
+    'body *': {
+      color: `${text} !important`,
+      'background-color': 'transparent !important',
+      'border-color': `${text} !important`,
+    },
+    'a, a *': { color: `${link} !important` },
+  };
+}
+
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
@@ -95,6 +109,7 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
     onSelectionChange,
     highlights,
     onSelectionContextMenu,
+    onZoomKey,
   },
   ref,
 ) {
@@ -118,6 +133,10 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
   useEffect(() => {
     contextMenuRef.current = onSelectionContextMenu;
   }, [onSelectionContextMenu]);
+  const onZoomKeyRef = useRef(onZoomKey);
+  useEffect(() => {
+    onZoomKeyRef.current = onZoomKey;
+  }, [onZoomKey]);
 
   // The two layout preferences decide how epub.js lays the book out, which
   // it only takes at creation — so they rebuild the rendition (not the
@@ -143,9 +162,13 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
     });
     renditionRef.current = rendition;
 
+    // The light theme keeps a book's own colours. Dark and sepia replace
+    // them: most books colour their paragraphs black in their own CSS, which
+    // beats a colour set on <body> and left dark mode as black text on a
+    // dark page. Links stay distinguishable.
     rendition.themes.register('light', { body: { color: '#1a1a1a', background: '#ffffff' } });
-    rendition.themes.register('dark', { body: { color: '#e4e4e4', background: '#1a1a1a' } });
-    rendition.themes.register('sepia', { body: { color: '#3a2e1f', background: '#f4ecd8' } });
+    rendition.themes.register('dark', themeRules('#e4e4e4', '#1a1a1a', '#9cc0ff'));
+    rendition.themes.register('sepia', themeRules('#3a2e1f', '#f4ecd8', '#6b4a1f'));
 
     rendition.on(
       'relocated',
@@ -213,6 +236,16 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
     };
     rendition.on('keydown', onKey);
     window.addEventListener('keydown', onKey);
+    // Ctrl/⌘ +, − and 0 pressed in the book's frame never reach the page,
+    // which zooms the text; hand them up (and keep the browser's own zoom,
+    // which would scale the whole reader instead, out of it).
+    rendition.on('keydown', (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const direction = zoomDirection(event.key);
+      if (direction === null) return;
+      event.preventDefault();
+      onZoomKeyRef.current?.(direction);
+    });
 
     let cancelled = false;
     book.ready

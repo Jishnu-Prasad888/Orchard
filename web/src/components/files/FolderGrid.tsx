@@ -15,10 +15,13 @@ export function FolderGrid({
   folders,
   onOpen,
   onDropFile,
+  onContextMenu,
 }: {
   folders: Folder[];
   onOpen: (folder: Folder) => void;
   onDropFile?: (event: React.DragEvent, folderPath: string) => void;
+  /** Right-click menu for a folder. */
+  onContextMenu?: ((folder: Folder, x: number, y: number) => void) | undefined;
 }) {
   const [over, setOver] = useState<string | null>(null);
   if (folders.length === 0) return null;
@@ -31,6 +34,11 @@ export function FolderGrid({
             type="button"
             className={over === folder.rel_path ? 'folder-tile is-drop-target' : 'folder-tile'}
             onClick={() => onOpen(folder)}
+            onContextMenu={(event) => {
+              if (!onContextMenu) return;
+              event.preventDefault();
+              onContextMenu(folder, event.clientX, event.clientY);
+            }}
             onDragOver={(event) => {
               if (!onDropFile || !event.dataTransfer.types.includes('application/orchard-file'))
                 return;

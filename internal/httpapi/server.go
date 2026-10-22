@@ -33,6 +33,7 @@ type Server struct {
 	keys           *crypto.Keys
 	secureCookies  bool
 	ratelimit      *rateLimiter
+	shareSessions  *shareSessions
 	maxUploadBytes int64
 	metrics        *metrics.Registry
 	settings       *serversettings.Store
@@ -109,6 +110,7 @@ func New(deps Dependencies) *Server {
 		keys:           deps.Keys,
 		secureCookies:  deps.SecureCookies,
 		ratelimit:      newRateLimiter(),
+		shareSessions:  newShareSessions(),
 		maxUploadBytes: deps.MaxUploadBytes,
 		metrics:        deps.Metrics,
 		uploadSlots:    make(chan struct{}, maxConcurrentChunkWrites),
@@ -283,6 +285,7 @@ func (s *Server) Handler() http.Handler {
 		// Tags.
 		mux.Handle("GET /api/v1/libraries/{id}/tags", s.withAuth(allowAny, s.handleListTags))
 		mux.Handle("POST /api/v1/libraries/{id}/tags", s.withAuth(allowAny, s.handleCreateTag))
+		mux.Handle("PATCH /api/v1/libraries/{id}/tags/{tagID}", s.withAuth(allowAny, s.handleRenameTag))
 		mux.Handle("DELETE /api/v1/libraries/{id}/tags/{tagID}", s.withAuth(allowAny, s.handleDeleteTag))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/tags", s.withAuth(allowAny, s.handleListFileTags))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/tags", s.withAuth(allowAny, s.handleAddFileTag))
@@ -333,6 +336,15 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("GET /api/v1/backups", s.withAuth(allowAdmin, s.handleListBackups))
 			mux.Handle("GET /api/v1/backups/config", s.withAuth(allowAdmin, s.handleGetBackupConfig))
 			mux.Handle("PUT /api/v1/backups/config", s.withAuth(allowAdmin, s.handleSetBackupConfig))
+			// When backups run on their own: a schedule that survives
+			// restarts, and a trigger on how much new data has piled up.
+			mux.Handle("GET /api/v1/backups/drives", s.withAuth(allowAdmin, s.handleListBackupDrives))
+			// A network destination (SFTP, FTP(S), SMB) instead of a folder.
+			mux.Handle("POST /api/v1/backups/remote/test", s.withAuth(allowAdmin, s.handleTestBackupRemote))
+			mux.Handle("PUT /api/v1/backups/remote", s.withAuth(allowAdmin, s.handleSetBackupRemote))
+			mux.Handle("POST /api/v1/backups/use-local", s.withAuth(allowAdmin, s.handleUseLocalBackups))
+			mux.Handle("GET /api/v1/backups/policy", s.withAuth(allowAdmin, s.handleGetBackupPolicy))
+			mux.Handle("PUT /api/v1/backups/policy", s.withAuth(allowAdmin, s.handleSetBackupPolicy))
 			mux.Handle("GET /api/v1/backups/{id}", s.withAuth(allowAdmin, s.handleGetBackup))
 			mux.Handle("POST /api/v1/backups/{id}/verify", s.withAuth(allowAdmin, s.handleVerifyBackup))
 			mux.Handle("POST /api/v1/backups/{id}/restore", s.withAuth(allowAdmin, s.handleRestoreBackup))
@@ -350,6 +362,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /api/v1/shares/{token}/files", s.handlePublicShareListFiles)
 		mux.HandleFunc("GET /api/v1/shares/{token}/files/{fileID}", s.handlePublicShareGetFile)
 		mux.HandleFunc("GET /api/v1/shares/{token}/files/{fileID}/download", s.handlePublicShareDownload)
+		// The file's bytes for viewing in the page (images, video, the
+		// readers): needs only view, unlike download.
+		mux.HandleFunc("GET /api/v1/shares/{token}/files/{fileID}/content", s.handlePublicShareContent)
 		mux.HandleFunc("POST /api/v1/shares/{token}/authenticate", s.handlePublicShareAuthenticate)
 	}
 

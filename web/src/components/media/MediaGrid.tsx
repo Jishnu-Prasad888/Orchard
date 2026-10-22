@@ -38,6 +38,8 @@ import './MediaGrid.css';
 const FALLBACK_WIDTH = 1024;
 /** Rows rendered beyond the viewport, in px, so fast scrolling stays filled. */
 const OVERSCAN = 800;
+/** The band under a row of covers that holds one line of title. */
+const TITLE_HEIGHT = 30;
 /** Start fetching the next page this far before the end. */
 const PREFETCH_MARGIN = '1200px';
 
@@ -95,9 +97,16 @@ export function MediaGrid({
   const pendingFocus = useRef<number | null>(null);
 
   const groups = useMemo(() => groupFiles(files, grouping), [files, grouping]);
+  // Books get their title under the cover; a grid of only photos stays edge
+  // to edge with no band.
+  const hasBooks = useMemo(() => files.some(showsTitle), [files]);
   const layout = useMemo(
-    () => layoutGrid(groups, gridMetrics(box.width || FALLBACK_WIDTH, box.gap)),
-    [groups, box],
+    () =>
+      layoutGrid(groups, {
+        ...gridMetrics(box.width || FALLBACK_WIDTH, box.gap),
+        titleHeight: hasBooks ? TITLE_HEIGHT : 0,
+      }),
+    [groups, box, hasBooks],
   );
 
   // Scroll handlers read the latest layout through a ref, synced before the
@@ -310,17 +319,22 @@ export function MediaGrid({
             <div
               key={row.key}
               className="media-row"
-              style={{ transform: `translateY(${row.top}px)`, height: tileSize }}
+              style={{
+                transform: `translateY(${row.top}px)`,
+                height: tileSize + (layout.metrics.titleHeight ?? 0),
+              }}
             >
               {row.items.map((file, j) => {
                 const index = row.startIndex + j;
-                return (
+                const left = j * (tileSize + gap);
+                const title = showsTitle(file) ? bookTitle(file) : null;
+                return [
                   <MediaTile
                     key={file.id}
                     libraryId={libraryId}
                     file={file}
                     index={index}
-                    style={{ width: tileSize, height: tileSize, left: j * (tileSize + gap) }}
+                    style={{ width: tileSize, height: tileSize, left }}
                     selected={selection?.isSelected(file.id) ?? false}
                     selectable={selectable}
                     selecting={selecting}
@@ -332,8 +346,21 @@ export function MediaGrid({
                     onFocusTile={setFocusIndex}
                     onContextMenu={onContextMenu}
                     revealed={revealed?.has(file.id) ?? false}
-                  />
-                );
+                    titled={title !== null}
+                  />,
+                  title !== null && (
+                    // The tile's button is already named for screen readers.
+                    <span
+                      key={`${file.id}:title`}
+                      className="media-tile-title"
+                      style={{ left, top: tileSize, width: tileSize }}
+                      title={title}
+                      aria-hidden="true"
+                    >
+                      {title}
+                    </span>
+                  ),
+                ];
               })}
             </div>
           ),
@@ -382,4 +409,16 @@ export function MediaGridSkeleton({ count = 18 }: { count?: number }) {
       </div>
     </div>
   );
+}
+
+/** Books show their title under the cover. */
+function showsTitle(file: FileSummary): boolean {
+  return file.media_type === 'document';
+}
+
+/** A book's own title, or its file name without the extension. */
+function bookTitle(file: FileSummary): string {
+  if (file.title) return file.title;
+  const dot = file.name.lastIndexOf('.');
+  return dot > 0 ? file.name.slice(0, dot) : file.name;
 }

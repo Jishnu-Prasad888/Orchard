@@ -14,7 +14,6 @@ import {
   renderPage,
 } from '../test/harness';
 import type { RouteHandler } from '../test/harness';
-import { HideCompletedProvider } from '../components/media/useHideCompleted';
 import FavoritesPage from './FavoritesPage';
 
 const photo = fileFixture();
@@ -52,6 +51,10 @@ function setup(overrides: RouteHandler[] = [], options = {}) {
   renderPage(<FavoritesPage />, options);
   return fn;
 }
+
+/** How many times the favorites list has been fetched so far. */
+const listCalls = (fn: ReturnType<typeof setup>) =>
+  fn.mock.calls.filter(([u]) => String(u).includes('/libraries/lib1/favorites')).length;
 
 describe('FavoritesPage', () => {
   afterEach(() => {
@@ -237,7 +240,7 @@ describe('FavoritesPage', () => {
     expect(bodyOf(fn, 'POST', '/libraries/lib1/tags')).toEqual({ name: 'beach' });
   });
 
-  it('marks a file completed from its right-click menu and re-reads the list', async () => {
+  it('marks a file completed in place, without re-reading the list', async () => {
     const fn = setup([
       (url, init) =>
         init?.method === 'PUT' && url.endsWith('/files/f1/reading-status')
@@ -246,16 +249,55 @@ describe('FavoritesPage', () => {
     ]);
 
     fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    await waitFor(() => expect(listCalls(fn)).toBeGreaterThan(0));
+    const before = listCalls(fn);
     fireEvent.click(await screen.findByTestId('menu-complete'));
 
     await waitFor(() =>
       expect(bodyOf(fn, 'PUT', '/files/f1/reading-status')).toEqual({ status: 'completed' }),
     );
-    await waitFor(() =>
-      expect(
-        fn.mock.calls.filter(([u]) => String(u).includes('/libraries/lib1/favorites')).length,
-      ).toBeGreaterThanOrEqual(2),
-    );
+    // A reload would flash the whole grid; the tile just knows it is done now.
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'IMG_0001.png' }));
+    expect(await screen.findByTestId('menu-complete')).toHaveAttribute('aria-checked', 'true');
+    expect(listCalls(fn)).toBe(before);
+    expect(screen.queryByTestId('grid-skeleton')).not.toBeInTheDocument();
+  });
+
+  it('takes a just-completed file out of view while "Hide completed" is on', async () => {
+    const fn = setup([
+      (url) =>
+        url.includes('/api/v1/settings/hide-completed')
+          ? json({ hide_completed: true })
+          : undefined,
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/files/f1/reading-status')
+          ? json({ status: 'completed' })
+          : undefined,
+    ]);
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    const before = listCalls(fn);
+    fireEvent.click(await screen.findByTestId('menu-complete'));
+
+    await waitFor(() => expect(screen.queryByText('IMG_0001.png')).not.toBeInTheDocument());
+    expect(screen.getByText('clip.mp4')).toBeInTheDocument();
+    expect(listCalls(fn)).toBe(before);
+  });
+
+  it('puts a file back when the server refuses to mark it', async () => {
+    setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/files/f1/reading-status')
+          ? apiError(500, 'INTERNAL', 'nope')
+          : undefined,
+    ]);
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    fireEvent.click(await screen.findByTestId('menu-complete'));
+
+    expect(await screen.findByText("Couldn't update 1 file")).toBeInTheDocument();
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'IMG_0001.png' }));
+    expect(await screen.findByTestId('menu-complete')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('offers to un-complete a completed file', async () => {
@@ -272,7 +314,7 @@ describe('FavoritesPage', () => {
 
     fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
     const item = await screen.findByTestId('menu-complete');
-    expect(item).toHaveTextContent('Mark as not completed');
+    expect(item).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(item);
 
     await waitFor(() =>
@@ -293,13 +335,43 @@ describe('FavoritesPage', () => {
             : undefined,
       ]),
     );
-    renderPage(
-      <HideCompletedProvider>
-        <FavoritesPage />
-      </HideCompletedProvider>,
-    );
+    renderPage(<FavoritesPage />);
 
     expect(await screen.findByText('clip.mp4')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('IMG_0001.png')).not.toBeInTheDocument());
+  });
+
+  it('shares a file from its right-click menu', async () => {
+    const fn = setup(
+      [
+        (url, init) =>
+          init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/shares')
+            ? json({ share: { id: 'sh1' }, token: 'tok1' }, 201)
+            : undefined,
+      ],
+      { libraries: [libraryFixture({ can_share: true })] },
+    );
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    fireEvent.click(await screen.findByTestId('menu-share'));
+    const dialog = await screen.findByTestId('share-dialog');
+    expect(within(dialog).getByTestId('share-target')).toHaveTextContent('IMG_0001.png');
+    fireEvent.click(within(dialog).getByTestId('confirm-new-share'));
+
+    await waitFor(() =>
+      expect(bodyOf(fn, 'POST', '/api/v1/libraries/lib1/shares')).toEqual({
+        target: { kind: 'file', id: 'f1' },
+        caps: ['read', 'download'],
+      }),
+    );
+    expect(await within(dialog).findByTestId('share-link')).toBeInTheDocument();
+  });
+
+  it('does not offer Share… to someone who cannot create links', async () => {
+    setup([], { libraries: [libraryFixture({ can_share: false })] });
+
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    expect(await screen.findByTestId('menu-complete')).toBeInTheDocument();
+    expect(screen.queryByTestId('menu-share')).not.toBeInTheDocument();
   });
 });

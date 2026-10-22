@@ -108,17 +108,45 @@
   left: 0;
   right: 0;
   bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: var(--space-5) var(--space-2) var(--space-2);
   overflow: hidden;
   font-size: var(--font-size-xs);
   line-height: 1.3;
   color: var(--media-ink);
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   background: var(--media-scrim-bottom);
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-standard);
+  pointer-events: none;
+}
+
+.media-tile-name,
+.media-tile-tags {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tags: smaller and quieter than the name. */
+.media-tile-tags {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* A book's title, one line under its cover, cut short with an ellipsis. */
+.media-tile-title {
+  position: absolute;
+  display: block;
+  padding: 6px 2px 0;
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -128,6 +156,23 @@
   color: var(--color-text-secondary);
   background: none;
   text-align: center;
+}
+
+/* A book's name is under its cover already; what is left in its caption is
+   its tags, which show on hover, focus or a hold like on any other tile. */
+.media-tile.is-placeholder.is-titled .media-tile-caption {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .media-tile.is-placeholder.is-titled:hover .media-tile-caption {
+    opacity: 1;
+  }
+}
+
+.media-tile.is-placeholder.is-titled:focus-within .media-tile-caption,
+.media-tile.is-placeholder.is-titled.is-holding .media-tile-caption {
+  opacity: 1;
 }
 
 .media-tile::before {
@@ -314,6 +359,12 @@
 .media-tile.is-selected .media-tile-caption,
 .media-tile.is-selected::before {
   opacity: 0;
+}
+
+/* Held on a phone: the caption and tags show until the finger lifts, even
+   though the hold also selected the tile. */
+.media-tile.is-holding .media-tile-caption {
+  opacity: 1;
 }
 
 /* ------------------------------ footer -------------------------------- */
