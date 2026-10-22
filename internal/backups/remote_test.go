@@ -344,7 +344,7 @@ func TestSnapshotNamesSortInTheOrderBackupsRan(t *testing.T) {
 	a := snapshotName(base.Add(100*time.Millisecond), "bkp-ffff")
 	b := snapshotName(base.Add(900*time.Millisecond), "bkp-0000")
 	c := snapshotName(base.Add(time.Second), "bkp-8888")
-	if !(a < b && b < c) {
+	if a >= b || b >= c {
 		t.Errorf("names out of order: %s %s %s", a, b, c)
 	}
 }
