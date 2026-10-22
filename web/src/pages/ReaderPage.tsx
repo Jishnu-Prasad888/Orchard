@@ -69,6 +69,8 @@ import type {
 import { BookPanel } from '../components/viewer/BookPanel';
 import { ErrorState, LoadingState } from '../components/States';
 import { Icon } from '../components/ui/Icon';
+import { useToast } from '../components/ui/Toast';
+import { copyText } from '../lib/clipboard';
 import { lazyPage } from '../lib/lazyPage';
 import { useAppTheme } from '../lib/useAppTheme';
 import './ReaderPage.css';
@@ -172,6 +174,15 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       if (flashTimer.current) clearTimeout(flashTimer.current);
     },
     [],
+  );
+
+  const toast = useToast();
+  const copyToClipboard = useCallback(
+    async (text: string) => {
+      if (await copyText(text)) showFlash('Copied!');
+      else toast({ message: "Couldn't copy the text", tone: 'error' });
+    },
+    [showFlash, toast],
   );
 
   // Load the file, its book metadata, saved progress, and reader
@@ -435,12 +446,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
         {
           id: 'copy',
           label: 'Copy',
-          onSelect: () => {
-            void navigator.clipboard?.writeText(pending.text).then(
-              () => showFlash('Copied!'),
-              () => undefined,
-            );
-          },
+          onSelect: () => void copyToClipboard(pending.text),
         },
       ]
     : [];
@@ -939,12 +945,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                 error={annotationError}
                 onRemove={(id) => void removeQuote(id)}
                 onToggleFavorite={(q) => void toggleQuoteFavorite(q)}
-                onCopy={(q) => {
-                  void navigator.clipboard?.writeText(q.text).then(
-                    () => showFlash('Copied!'),
-                    () => undefined,
-                  );
-                }}
+                onCopy={(q) => void copyToClipboard(q.text)}
               />
             )}
 
