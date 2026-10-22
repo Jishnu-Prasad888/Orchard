@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 
 import { LibrariesProvider } from '../api/libraries';
 import AuthProvider from '../auth/AuthProvider';
+import { HideCompletedProvider } from '../components/media/useHideCompleted';
 import { ToastProvider } from '../components/ui/Toast';
 import { UploadProvider } from '../components/upload/UploadProvider';
 
@@ -18,7 +19,9 @@ export default function Providers({ children }: { children: ReactNode }) {
     <AuthProvider>
       <LibrariesProvider>
         <ToastProvider>
-          <UploadProvider>{children}</UploadProvider>
+          <UploadProvider>
+            <HideCompletedProvider>{children}</HideCompletedProvider>
+          </UploadProvider>
         </ToastProvider>
       </LibrariesProvider>
     </AuthProvider>

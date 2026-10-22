@@ -11,14 +11,13 @@
  * Raspberry Pi with a hundred thousand files.
  */
 
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
 import { useFileLabels } from '../api/fileLabels';
 import { useLibraryResource } from '../api/resources';
 import {
-  clearReadingStatus,
   getHomeLayout,
   listCollections,
   listFavorites,
@@ -27,7 +26,6 @@ import {
   listLibraryQuotes,
   listRecentlyOpened,
   setHomeLayout,
-  setReadingStatus,
 } from '../api/queries';
 import type {
   Collection,
@@ -42,12 +40,13 @@ import { Dialog } from '../components/Dialog';
 import { useFileOperations } from '../components/FileOperations';
 import { LibraryGatePage } from '../components/LibraryGatePage';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
+import { FileMenuHeader } from '../components/media/FileMenuHeader';
 import { gridMetrics } from '../components/media/layout';
-import { useVisibleFiles } from '../components/media/useHideCompleted';
+import { useHideCompleted, useVisibleFiles } from '../components/media/useHideCompleted';
 import { EmptyState, ErrorState, LibraryOfflineNotice } from '../components/States';
 import { downloadUrl } from '../components/media';
 import { Icon } from '../components/ui/Icon';
-import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
+import { Menu, menuGroups, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { useToast } from '../components/ui/Toast';
 import { useUploadActions } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
@@ -195,63 +194,103 @@ function Home({ library }: { library: Library }) {
 
   const ops = useFileOperations(libraryId, home.reload);
   // Right-click on any tile: the same short menu in every section.
-  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuEntry[] } | null>(null);
-  const { openViewer, openProperties, openTags } = ops;
+  const [menu, setMenu] = useState<{
+    anchor: MenuAnchor;
+    items: MenuEntry[];
+    header?: ReactNode;
+  } | null>(null);
+  const { openViewer, openProperties, openTags, openCollections, openShare } = ops;
+  const canShare = library.can_share ?? false;
   const toast = useToast();
-  const reloadHome = home.reload;
+  const { markCompleted } = useHideCompleted();
   const setCompleted = useCallback(
     (file: FileSummary, value: boolean) => {
-      (value
-        ? setReadingStatus(libraryId, file.id, 'completed')
-        : clearReadingStatus(libraryId, file.id)
-      )
-        .then(() => {
-          toast({
-            message: value ? 'Marked as completed' : 'Marked as not completed',
-            tone: 'success',
-          });
-          reloadHome();
-        })
-        .catch(() => toast({ message: "Couldn't update the file", tone: 'error' }));
+      // No reload (it would redraw every section): the mark is laid over
+      // the sections' files, so only this tile changes.
+      void markCompleted(libraryId, [file], value).then((failed) =>
+        toast(
+          failed
+            ? { message: "Couldn't update the file", tone: 'error' }
+            : {
+                message: value ? 'Marked as completed' : 'Marked as not completed',
+                tone: 'success',
+              },
+        ),
+      );
     },
-    [libraryId, reloadHome, toast],
+    [libraryId, markCompleted, toast],
   );
   const openMenu = useCallback(
     (file: FileSummary, x: number, y: number) =>
       setMenu({
         anchor: { x, y },
-        items: [
-          { id: 'open', label: 'Open', icon: 'file', onSelect: () => openViewer(file) },
-          {
-            id: 'download',
-            label: 'Download',
-            icon: 'download',
-            href: downloadUrl(libraryId, file),
-          },
-          {
-            id: 'tags',
-            label: 'Tags…',
-            icon: 'tag',
-            onSelect: () => openTags(file),
-            testId: 'menu-tags',
-          },
-          {
-            id: 'complete',
-            label: file.completed ? 'Mark as not completed' : 'Mark as completed',
-            icon: 'check',
-            onSelect: () => setCompleted(file, !file.completed),
-            testId: 'menu-complete',
-          },
-          {
-            id: 'properties',
-            label: 'Properties',
-            icon: 'settings',
-            onSelect: () => openProperties(file),
-            testId: 'menu-properties',
-          },
-        ],
+        header: <FileMenuHeader file={file} />,
+        items: menuGroups(
+          [{ id: 'open', label: 'Open', icon: 'file', onSelect: () => openViewer(file) }],
+          [
+            {
+              id: 'complete',
+              label: 'Completed',
+              icon: 'check-circle',
+              checked: Boolean(file.completed),
+              onSelect: () => setCompleted(file, !file.completed),
+              testId: 'menu-complete',
+            },
+          ],
+          [
+            {
+              id: 'tags',
+              label: 'Tags…',
+              icon: 'tag',
+              onSelect: () => openTags(file),
+              testId: 'menu-tags',
+            },
+            {
+              id: 'collections',
+              label: 'Collections…',
+              icon: 'archive',
+              onSelect: () => openCollections(file),
+              testId: 'menu-collections',
+            },
+          ],
+          [
+            {
+              id: 'download',
+              label: 'Download',
+              icon: 'download',
+              href: downloadUrl(libraryId, file),
+            },
+            ...(canShare
+              ? [
+                  {
+                    id: 'share',
+                    label: 'Share…',
+                    icon: 'share' as const,
+                    onSelect: () => openShare(file),
+                    testId: 'menu-share',
+                  },
+                ]
+              : []),
+            {
+              id: 'properties',
+              label: 'Properties',
+              icon: 'info',
+              onSelect: () => openProperties(file),
+              testId: 'menu-properties',
+            },
+          ],
+        ),
       }),
-    [libraryId, openViewer, openProperties, openTags, setCompleted],
+    [
+      libraryId,
+      openViewer,
+      openProperties,
+      openTags,
+      openCollections,
+      openShare,
+      canShare,
+      setCompleted,
+    ],
   );
   const data = home.data;
   // With "Hide completed" on, every section leaves out what the user has
@@ -532,6 +571,7 @@ function Home({ library }: { library: Library }) {
         <Menu
           anchor={menu.anchor}
           items={menu.items}
+          header={menu.header}
           onClose={() => setMenu(null)}
           label="File actions"
         />

@@ -143,6 +143,32 @@ func (s *Service) AuthenticateShare(ctx context.Context, token, password string)
 	return sh, nil
 }
 
+// ShareForUnlocked resolves a raw share token to its live share for a
+// visitor who has already given its password (the server remembers that per
+// link; see httpapi/sharesessions.go). Revocation and expiry are still
+// enforced on every request; only the password check is skipped. Like
+// AuthenticateShare it returns ErrUnauthorized for anything not live.
+func (s *Service) ShareForUnlocked(ctx context.Context, token string) (*Share, error) {
+	if token == "" {
+		return nil, ErrUnauthorized
+	}
+	sh, err := s.shareByTokenHash(ctx, hashToken(token))
+	if errors.Is(err, ErrNotFound) {
+		return nil, ErrUnauthorized
+	}
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if sh.RevokedAt != nil && !sh.RevokedAt.IsZero() {
+		return nil, ErrUnauthorized
+	}
+	if sh.ExpiresAt != nil && !sh.ExpiresAt.IsZero() && now.After(*sh.ExpiresAt) {
+		return nil, ErrUnauthorized
+	}
+	return sh, nil
+}
+
 // ListShares returns the shares rooted at the given key prefix, oldest first.
 func (s *Service) ListShares(ctx context.Context, keyPrefix string) ([]Share, error) {
 	rows, err := s.db.QueryContext(ctx, `

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
@@ -11,15 +12,57 @@ import (
 
 // grantRequest is the accepted grant creation payload.
 type grantRequest struct {
-	UserID string   `json:"user_id"`
-	Key    string   `json:"key"`
-	Caps   []string `json:"caps"`
-	Effect string   `json:"effect"`
+	UserID string `json:"user_id"`
+	// Scope is what the grant applies to; the server builds the key from it.
+	// Key is the older form: a raw server key, or a bare folder path.
+	Scope  *grantScope `json:"scope,omitempty"`
+	Key    string      `json:"key"`
+	Caps   []string    `json:"caps"`
+	Effect string      `json:"effect"`
+}
+
+// grantScope is a grant's resource, by kind and path relative to the
+// library root.
+type grantScope struct {
+	Kind string `json:"kind"` // "library", "folder" or "file"
+	Path string `json:"path,omitempty"`
+}
+
+// grantKey builds the resource key a grant request names. A key in the
+// "library:<id>" / "file:<id>/<path>" style is refused: the server never
+// understood it, and the web UI once sent it, which stored grants on a folder
+// literally named "library:<id>" that gave nobody anything.
+func grantKey(libID string, body grantRequest) (string, string) {
+	if body.Scope == nil {
+		if strings.HasPrefix(body.Key, "library:") || strings.HasPrefix(body.Key, "file:") {
+			return "", `Use "scope" ({"kind": "library" | "folder" | "file", "path": …}) to say what the grant applies to.`
+		}
+		return normalizeLibraryKey(libID, body.Key), ""
+	}
+	path := strings.Trim(strings.TrimSpace(body.Scope.Path), "/")
+	switch body.Scope.Kind {
+	case shareKindLibrary:
+		return authz.LibraryKey(libID), ""
+	case shareKindFolder, shareKindFile:
+		clean, ok := canonicalFolder(path)
+		if !ok || clean == "" {
+			return "", "Give the path, relative to the library root."
+		}
+		if body.Scope.Kind == shareKindFolder {
+			return authz.FolderKey(libID, clean), ""
+		}
+		return authz.FileKey(libID, clean), ""
+	}
+	return "", `scope.kind must be "library", "folder" or "file".`
 }
 
 // shareRequest is the accepted share creation payload.
 type shareRequest struct {
-	Key       string   `json:"key"`
+	// Target is what the link exposes. Required: the server builds the key.
+	Target *shareTargetRequest `json:"target"`
+	// Key is no longer accepted (see sharetargets.go); it is read only to
+	// answer an old client with a clear error rather than a silent default.
+	Key       string   `json:"key,omitempty"`
 	Caps      []string `json:"caps"`
 	Password  string   `json:"password,omitempty"`
 	ExpiresAt string   `json:"expires_at,omitempty"`
@@ -72,16 +115,20 @@ func (s *Server) handleCreateGrant(w http.ResponseWriter, r *http.Request, u *au
 	}
 	caps, err := parseCaps(body.Caps)
 	if err != nil {
-		writeDomainError(w, s.logger, requestIDOrEmpty(r), &authz.ValidationError{Field: "caps", Reason: err.Error()})
+		s.writeAuthzError(w, r, &authz.ValidationError{Field: "caps", Reason: err.Error()})
 		return
 	}
 	effect := authz.Effect(body.Effect)
 	if effect != authz.EffectAllow && effect != authz.EffectDeny {
-		writeDomainError(w, s.logger, requestIDOrEmpty(r), &authz.ValidationError{Field: "effect", Reason: `must be "allow" or "deny"`})
+		s.writeAuthzError(w, r, &authz.ValidationError{Field: "effect", Reason: `must be "allow" or "deny"`})
 		return
 	}
 
-	key := normalizeLibraryKey(lib.ID, body.Key)
+	key, problem := grantKey(lib.ID, body)
+	if problem != "" {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest, problem)
+		return
+	}
 	created, err := s.authz.CreateGrant(r.Context(), authz.GrantInput{
 		UserID:      body.UserID,
 		ResourceKey: key,
@@ -145,7 +192,11 @@ func (s *Server) handleListShares(w http.ResponseWriter, r *http.Request, u *aut
 	}
 	resp := make([]shareResponse, 0, len(shares))
 	for _, sh := range shares {
-		resp = append(resp, toShareResponse(sh))
+		out := toShareResponse(sh)
+		t := parseShareTarget(lib.ID, sh.ResourceKey)
+		out.TargetKind = t.Kind
+		out.TargetName = s.shareTargetName(r.Context(), lib, &sh, t)
+		resp = append(resp, out)
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"shares": resp})
 }
@@ -167,9 +218,41 @@ func (s *Server) handleCreateShare(w http.ResponseWriter, r *http.Request, u *au
 		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
 		return
 	}
+	if body.Target == nil {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest,
+			"Choose what the link shares.")
+		return
+	}
 	caps, err := parseCaps(body.Caps)
 	if err != nil {
-		writeDomainError(w, s.logger, requestIDOrEmpty(r), &authz.ValidationError{Field: "caps", Reason: err.Error()})
+		s.writeAuthzError(w, r, &authz.ValidationError{Field: "caps", Reason: err.Error()})
+		return
+	}
+	// The public routes only ever read and download, so any other
+	// capability on a link would be a promise nothing keeps — or, if a
+	// write route is ever opened to shares, one nobody meant to make.
+	if !caps.All(authz.CapRead) {
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest,
+			"A share link must allow viewing.")
+		return
+	}
+	for c := range caps {
+		if c != authz.CapRead && c != authz.CapDownload {
+			writeError(w, s.logger, requestIDOrEmpty(r), http.StatusBadRequest, CodeBadRequest,
+				"A share link can only allow viewing and downloading.")
+			return
+		}
+	}
+	key, name, err := s.resolveShareTarget(r.Context(), lib, u, body.Target)
+	if err != nil {
+		var te *shareTargetError
+		if errors.As(err, &te) {
+			writeError(w, s.logger, requestIDOrEmpty(r), te.status, te.code, te.message)
+			return
+		}
+		s.logger.Error("resolve share target", "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+			CodeInternal, "Internal server error.")
 		return
 	}
 
@@ -177,15 +260,20 @@ func (s *Server) handleCreateShare(w http.ResponseWriter, r *http.Request, u *au
 	if body.ExpiresAt != "" {
 		t, err := time.Parse(time.RFC3339, body.ExpiresAt)
 		if err != nil {
-			writeDomainError(w, s.logger, requestIDOrEmpty(r),
+			s.writeAuthzError(w, r,
 				&authz.ValidationError{Field: "expires_at", Reason: `must be an RFC3339 timestamp`})
+			return
+		}
+		if !t.After(time.Now()) {
+			s.writeAuthzError(w, r,
+				&authz.ValidationError{Field: "expires_at", Reason: "must be in the future"})
 			return
 		}
 		expires = &t
 	}
 
 	view, err := s.authz.CreateShare(r.Context(), authz.NewShareInput{
-		ResourceKey: normalizeLibraryKey(lib.ID, body.Key),
+		ResourceKey: key,
 		Caps:        caps,
 		Password:    body.Password,
 		ExpiresAt:   expires,
@@ -195,8 +283,11 @@ func (s *Server) handleCreateShare(w http.ResponseWriter, r *http.Request, u *au
 		s.writeAuthzError(w, r, err)
 		return
 	}
+	resp := toShareResponse(view.Share)
+	resp.TargetKind = body.Target.Kind
+	resp.TargetName = name
 	writeJSON(w, s.logger, http.StatusCreated, map[string]any{
-		"share": toShareResponse(view.Share),
+		"share": resp,
 		"token": view.Token,
 	})
 }
@@ -266,10 +357,16 @@ type grantResponse struct {
 	Capabilities []string `json:"capabilities"`
 	Effect       string   `json:"effect"`
 	CreatedAt    string   `json:"created_at"`
+	// ScopeKind and ScopePath say what the grant applies to, for people.
+	ScopeKind string `json:"scope_kind"`
+	ScopePath string `json:"scope_path,omitempty"`
 }
 
 func toGrantResponse(g authz.Grant) grantResponse {
+	t := parseShareTarget(shareLibraryID(g.ResourceKey), g.ResourceKey)
 	return grantResponse{
+		ScopeKind:    t.Kind,
+		ScopePath:    t.Path,
 		ID:           g.ID,
 		UserID:       g.UserID,
 		ResourceKey:  g.ResourceKey,
@@ -287,6 +384,10 @@ type shareResponse struct {
 	ExpiresAt    *string  `json:"expires_at"`
 	RevokedAt    *string  `json:"revoked_at"`
 	CreatedAt    string   `json:"created_at"`
+	// TargetKind and TargetName say what the link exposes, for people:
+	// "folder" / "Japan 2024", "tag" / "beach".
+	TargetKind string `json:"target_kind"`
+	TargetName string `json:"target_name"`
 }
 
 func toShareResponse(sh authz.Share) shareResponse {

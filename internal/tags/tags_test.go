@@ -390,3 +390,34 @@ func TestDeleteTagCascades(t *testing.T) {
 		t.Errorf("expected 0 tags after cascade delete, got %d", len(ts))
 	}
 }
+
+func TestRename(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	beach, err := store.Create(ctx, "beach", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(ctx, "mountains", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.Rename(ctx, beach.ID, "coast")
+	if err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if got.ID != beach.ID || got.Name != "coast" {
+		t.Errorf("renamed tag = %+v, want same id named coast", got)
+	}
+
+	// Only the capitals of its own name: not a clash with itself.
+	if _, err := store.Rename(ctx, beach.ID, "Coast"); err != nil {
+		t.Errorf("case-only rename: %v", err)
+	}
+	if _, err := store.Rename(ctx, beach.ID, "MOUNTAINS"); !errors.Is(err, tags.ErrAlreadyExists) {
+		t.Errorf("rename onto another tag's name: err = %v, want ErrAlreadyExists", err)
+	}
+	if _, err := store.Rename(ctx, "nope", "x"); !errors.Is(err, tags.ErrNotFound) {
+		t.Errorf("rename unknown tag: err = %v, want ErrNotFound", err)
+	}
+}

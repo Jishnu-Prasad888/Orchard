@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { called, json, mockApi, noContent, originalFetch } from '../test/harness';
+import { called, json, mockApi, noContent, originalFetch, bodyOf } from '../test/harness';
 import type { RouteHandler } from '../test/harness';
 import Providers from '../test/Providers';
 import ReaderPage from './ReaderPage';
@@ -519,5 +519,29 @@ describe('ReaderPage', () => {
     expect(within(highlights).getByText('First section text.')).toBeInTheDocument();
     expect(within(highlights).getByText('a note')).toBeInTheDocument();
     expect(within(highlights).getByText('Conclusion')).toBeInTheDocument();
+  });
+
+  it('zooms the text with − and + and saves the size', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.includes('/api/v1/settings/reader')
+          ? json({ preferences: DEFAULT_PREFS })
+          : undefined,
+    ]);
+    await screen.findByText('The Great Essay');
+
+    expect(screen.getByTestId('reader-zoom-reset')).toHaveTextContent('100%');
+    fireEvent.click(screen.getByTestId('reader-zoom-in'));
+    expect(screen.getByTestId('reader-zoom-reset')).toHaveTextContent('111%');
+    await waitFor(() =>
+      expect(bodyOf(fetchMock, 'PUT', '/api/v1/settings/reader')).toMatchObject({ font_size: 20 }),
+    );
+
+    // Ctrl − zooms out instead of shrinking the whole page; Ctrl 0 resets.
+    fireEvent.keyDown(window, { key: '-', ctrlKey: true });
+    fireEvent.keyDown(window, { key: '-', ctrlKey: true });
+    expect(screen.getByTestId('reader-zoom-reset')).toHaveTextContent('89%');
+    fireEvent.keyDown(window, { key: '0', metaKey: true });
+    expect(screen.getByTestId('reader-zoom-reset')).toHaveTextContent('100%');
   });
 });

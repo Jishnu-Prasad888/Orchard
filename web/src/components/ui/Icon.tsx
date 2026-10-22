@@ -107,6 +107,12 @@ const ICONS = {
   plus: <path d="M12 5v14M5 12h14" />,
   minus: <path d="M5 12h14" />,
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  'check-circle': (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m8.3 12.3 2.6 2.6 4.9-5.4" />
+    </>
+  ),
   more: (
     <>
       <circle cx="12" cy="5.5" r="1.2" fill="currentColor" stroke="none" />

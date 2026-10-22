@@ -7,7 +7,7 @@
  * almost the same shape (a named group, and everything carrying it).
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
@@ -23,6 +23,7 @@ import {
 } from '../api/queries';
 import type { Collection, FileSummary } from '../api/types';
 import { ConfirmDialog, PromptDialog } from '../components/Dialog';
+import { ShareDialog } from '../components/ShareDialog';
 import { MediaGrid } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useMediaActions } from '../components/media/useMediaActions';
@@ -39,6 +40,7 @@ import {
 } from '../components/States';
 import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
 import { Icon } from '../components/ui/Icon';
+import { Menu, menuGroups, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { ViewerModal } from '../components/ViewerModal';
 import './CollectionsPage.css';
 
@@ -53,6 +55,12 @@ export default function CollectionsPage() {
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Collection | null>(null);
   const [deleting, setDeleting] = useState<Collection | null>(null);
+  const [sharing, setSharing] = useState<Collection | null>(null);
+  const [menu, setMenu] = useState<{
+    anchor: MenuAnchor;
+    items: MenuEntry[];
+    header?: ReactNode;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -119,6 +127,18 @@ export default function CollectionsPage() {
     selection,
     ops,
     onChanged: files.reload,
+    extraMenu: (file) =>
+      active
+        ? [
+            {
+              id: 'remove-from-collection',
+              label: `Remove from “${active.name}”`,
+              icon: 'close',
+              onSelect: () => void removeFromCollection([file]),
+              testId: 'menu-remove-from-collection',
+            },
+          ]
+        : [],
     extra: active
       ? [
           {
@@ -155,6 +175,63 @@ export default function CollectionsPage() {
       updateCollection(gate.kind === 'ready' ? gate.libraryId : '', c.id, { pinned: !c.pinned }),
     );
   };
+
+  const openRename = (c: Collection) => {
+    setPromptError(null);
+    setRenaming(c);
+  };
+  const canShare = gate.kind === 'ready' && (gate.library.can_share ?? false);
+  const collectionMenu = (c: Collection): MenuEntry[] =>
+    menuGroups(
+      [
+        {
+          id: 'open',
+          label: 'Open',
+          icon: 'archive',
+          onSelect: () => setActive(c),
+        },
+      ],
+      [
+        {
+          id: 'rename',
+          label: 'Rename…',
+          icon: 'edit',
+          onSelect: () => openRename(c),
+          testId: 'menu-rename-collection',
+        },
+        {
+          id: 'pin',
+          label: 'Pinned to Home',
+          icon: 'pin',
+          checked: c.pinned,
+          onSelect: () => togglePin(c),
+        },
+        ...(canShare
+          ? [
+              {
+                id: 'share',
+                label: 'Share…',
+                icon: 'share' as const,
+                onSelect: () => setSharing(c),
+                testId: 'menu-share-collection',
+              },
+            ]
+          : []),
+      ],
+      [
+        {
+          id: 'delete',
+          label: 'Delete collection…',
+          icon: 'trash',
+          danger: true,
+          onSelect: () => {
+            setActionError(null);
+            setDeleting(c);
+          },
+          testId: 'menu-delete-collection',
+        },
+      ],
+    );
 
   if (gate.kind === 'loading') {
     return (
@@ -235,13 +312,21 @@ export default function CollectionsPage() {
               ← Collections
             </button>
             <h2>{active.name}</h2>
+            {canShare && (
+              <button
+                type="button"
+                className="button"
+                onClick={() => setSharing(active)}
+                data-testid="share-collection-button"
+              >
+                Share
+              </button>
+            )}
             <button
               type="button"
               className="button"
-              onClick={() => {
-                setPromptError(null);
-                setRenaming(active);
-              }}
+              onClick={() => openRename(active)}
+              data-testid="rename-collection-button"
             >
               Rename
             </button>
@@ -259,18 +344,23 @@ export default function CollectionsPage() {
 
           {files.data !== null && files.data.length === 0 && (
             <EmptyState title="Nothing in this collection yet" testId="collection-files-empty">
-              <p className="muted">
-                Add files to this collection from the viewer's Collections tab.
-              </p>
+              <p className="muted">Right-click any file and choose Collections… to add it here.</p>
             </EmptyState>
           )}
 
-          {files.data !== null && files.data.length > 0 && (
+          {files.data !== null && collectionFiles.length > 0 && (
             <MediaGrid
               libraryId={gate.libraryId}
-              files={files.data}
+              files={collectionFiles}
               onOpen={ops.openViewer}
               selection={selection}
+              onContextMenu={(file, x, y) =>
+                setMenu({
+                  anchor: { x, y },
+                  items: actions.menuFor(file),
+                  header: actions.headerFor(file),
+                })
+              }
               label={active.name}
               testId="file-grid"
             />
@@ -280,7 +370,7 @@ export default function CollectionsPage() {
             <ViewerModal
               libraryId={gate.libraryId}
               file={ops.viewer}
-              siblings={files.data ?? []}
+              siblings={collectionFiles}
               onNavigate={ops.openViewer}
               onChanged={() => {
                 files.reload();
@@ -323,7 +413,16 @@ export default function CollectionsPage() {
             <ul className="collection-grid" data-testid="collections-grid" aria-label="Collections">
               {shownCollections.map((c) => (
                 <li key={c.id}>
-                  <div className="collection-card">
+                  <div
+                    className="collection-card"
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setMenu({
+                        anchor: { x: event.clientX, y: event.clientY },
+                        items: collectionMenu(c),
+                      });
+                    }}
+                  >
                     <button
                       type="button"
                       className="collection-card-open"
@@ -343,6 +442,21 @@ export default function CollectionsPage() {
                       data-testid={`pin-collection-${c.name}`}
                     >
                       <Icon name="pin" size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`More actions for ${c.name}`}
+                      aria-haspopup="menu"
+                      onClick={(event) =>
+                        setMenu({
+                          anchor: { element: event.currentTarget },
+                          items: collectionMenu(c),
+                        })
+                      }
+                      data-testid={`more-collection-${c.name}`}
+                    >
+                      <Icon name="more" size={16} />
                     </button>
                   </div>
                 </li>
@@ -390,13 +504,35 @@ export default function CollectionsPage() {
           updateCollection(gate.libraryId, target.id, { name })
             .then((resp) => {
               setRenaming(null);
-              setActive(resp.collection);
+              // Renamed from its card: stay on the list; from inside: stay in it.
+              if (active?.id === resp.collection.id) setActive(resp.collection);
               collections.reload();
             })
             .catch((e: unknown) => setPromptError(e instanceof Error ? e.message : String(e)))
             .finally(() => setBusy(false));
         }}
         testId="rename-collection-dialog"
+      />
+
+      {menu && (
+        <Menu
+          anchor={menu.anchor}
+          items={menu.items}
+          header={menu.header}
+          onClose={() => setMenu(null)}
+          label="Collection actions"
+        />
+      )}
+
+      <ShareDialog
+        libraryId={gate.libraryId}
+        open={sharing !== null}
+        fixed={
+          sharing
+            ? { target: { kind: 'collection', id: sharing.id }, name: sharing.name }
+            : undefined
+        }
+        onClose={() => setSharing(null)}
       />
 
       <ConfirmDialog

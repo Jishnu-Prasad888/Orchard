@@ -39,6 +39,10 @@ type libraryResponse struct {
 	SchemaVersion int    `json:"schema_version"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+	// CanShare is whether the caller may create share links here (manage on
+	// the library). Set by the library list only, so a client knows whether
+	// to offer "Share…" at all.
+	CanShare bool `json:"can_share,omitempty"`
 }
 
 func toLibraryResponse(l *library.Library) libraryResponse {
@@ -143,7 +147,9 @@ func (s *Server) handleListLibraries(w http.ResponseWriter, r *http.Request, u *
 		// Every session lists libraries before using one, which makes this
 		// the place a returning member's data is reconnected (members.go).
 		s.reconnectMember(r.Context(), u, &libs[i])
-		resp = append(resp, toLibraryResponse(&libs[i]))
+		out := toLibraryResponse(&libs[i])
+		out.CanShare = isAdmin || s.canManageLibrary(r, u, libs[i].ID)
+		resp = append(resp, out)
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{"libraries": resp})
 }
@@ -158,6 +164,20 @@ func (s *Server) canReadLibrary(r *http.Request, u *auth.User, libID string) boo
 		return u != nil && u.Role == auth.RoleAdmin
 	}
 	ok, err := s.authz.Can(r.Context(), principalFrom(u), authz.LibraryKey(libID), authz.CapRead)
+	if err != nil {
+		s.logger.Error("list libraries", "library", libID, "error", err)
+		return false
+	}
+	return ok
+}
+
+// canManageLibrary reports whether u holds manage on the library — what
+// creating a share link requires.
+func (s *Server) canManageLibrary(r *http.Request, u *auth.User, libID string) bool {
+	if s.authz == nil {
+		return u != nil && u.Role == auth.RoleAdmin
+	}
+	ok, err := s.authz.Can(r.Context(), principalFrom(u), authz.LibraryKey(libID), authz.CapManage)
 	if err != nil {
 		s.logger.Error("list libraries", "library", libID, "error", err)
 		return false

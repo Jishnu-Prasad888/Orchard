@@ -10,6 +10,7 @@ import {
   noContent,
   originalFetch,
   renderPage,
+  libraryFixture,
 } from '../test/harness';
 import TagsPage from './TagsPage';
 
@@ -31,6 +32,10 @@ function setup(overrides: { tags?: typeof tags; tagFiles?: typeof tagFiles } = {
       url.endsWith('/api/v1/libraries/lib1/tags/t1') && init?.method === 'DELETE'
         ? noContent()
         : undefined, // delete tag
+    (url, init) =>
+      url.endsWith('/api/v1/libraries/lib1/tags/t1') && init?.method === 'PATCH'
+        ? json({ tag: { id: 't1', name: 'holiday', created_at: '2026-01-02T00:00:00Z' } })
+        : undefined, // rename tag
     (url, init) =>
       url.endsWith('/api/v1/libraries/lib1/tags') && init?.method === 'POST'
         ? json({ tag: { id: 't9', name: 'Trip' } }, 201)
@@ -203,5 +208,56 @@ describe('TagsPage', () => {
     });
     expect(called(fetchMock, 'DELETE', '/tags/t1')).toBe(false);
     expect(screen.getByTestId('tag-detail')).toBeInTheDocument();
+  });
+
+  it('renames a tag from its right-click menu', async () => {
+    const fn = setup();
+    fireEvent.contextMenu(await screen.findByText('vacation'));
+    fireEvent.click(await screen.findByTestId('menu-rename-tag'));
+
+    const dialog = await screen.findByTestId('rename-tag-dialog');
+    fireEvent.change(within(dialog).getByLabelText('Tag name'), { target: { value: 'holiday' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(bodyOf(fn, 'PATCH', '/tags/t1')).toEqual({ name: 'holiday' }));
+    await waitFor(() => expect(screen.queryByTestId('rename-tag-dialog')).not.toBeInTheDocument());
+  });
+
+  it('deletes a tag from its right-click menu, and the dialog closes', async () => {
+    const fn = setup();
+    fireEvent.contextMenu(await screen.findByText('vacation'));
+    fireEvent.click(await screen.findByTestId('menu-delete-tag'));
+
+    const dialog = await screen.findByTestId('delete-tag-dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete tag' }));
+
+    await waitFor(() => expect(called(fn, 'DELETE', '/api/v1/libraries/lib1/tags/t1')).toBe(true));
+    await waitFor(() => expect(screen.queryByTestId('delete-tag-dialog')).not.toBeInTheDocument());
+  });
+
+  it('shares a tag from its right-click menu', async () => {
+    const fn = mockApi(
+      [
+        (url, init) =>
+          init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/shares')
+            ? json({ share: { id: 'sh1' }, token: 'tok1' }, 201)
+            : undefined,
+        (url) => (url.endsWith('/api/v1/libraries/lib1/tags') ? json(tags) : undefined),
+      ],
+      { libraries: [libraryFixture({ can_share: true })] },
+    );
+    renderPage(<TagsPage />, { libraries: [libraryFixture({ can_share: true })] });
+
+    fireEvent.contextMenu(await screen.findByText('vacation'));
+    fireEvent.click(await screen.findByTestId('menu-share-tag'));
+    const dialog = await screen.findByTestId('share-dialog');
+    fireEvent.click(within(dialog).getByTestId('confirm-new-share'));
+
+    await waitFor(() =>
+      expect(bodyOf(fn, 'POST', '/api/v1/libraries/lib1/shares')).toEqual({
+        target: { kind: 'tag', id: 't1' },
+        caps: ['read'],
+      }),
+    );
   });
 });

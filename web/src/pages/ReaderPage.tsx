@@ -71,6 +71,13 @@ import { ErrorState, LoadingState } from '../components/States';
 import { Icon } from '../components/ui/Icon';
 import { useToast } from '../components/ui/Toast';
 import { copyText } from '../lib/clipboard';
+import {
+  ZOOM_MAX_FONT,
+  ZOOM_MIN_FONT,
+  zoomDirection,
+  zoomed,
+  zoomPercent,
+} from '../components/reader/zoom';
 import { lazyPage } from '../lib/lazyPage';
 import { useAppTheme } from '../lib/useAppTheme';
 import './ReaderPage.css';
@@ -491,6 +498,12 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
     [libraryId],
   );
 
+  // Zoom a reflowable book: a step of its saved font size (see zoom.ts).
+  const zoom = useCallback(
+    (direction: 1 | -1 | 0) => onSavePreferences(zoomed(preferences, direction)),
+    [onSavePreferences, preferences],
+  );
+
   const runSearch = useCallback(
     async (query: string) => {
       setSearchQuery(query);
@@ -539,6 +552,22 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
 
   const contentUrl = useMemo(() => (file ? downloadUrl(libraryId, file) : ''), [libraryId, file]);
   const kind = file ? readerKind(file.name) : 'text';
+  const canZoom = kind !== 'pdf';
+
+  // Ctrl/⌘ +, − and 0 zoom the text instead of the whole page. Inside an
+  // EPUB chapter the keys land in its frame; the reader relays those.
+  useEffect(() => {
+    if (!canZoom) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const direction = zoomDirection(event.key);
+      if (direction === null) return;
+      event.preventDefault();
+      zoom(direction);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canZoom, zoom]);
 
   if (loadError) {
     return (
@@ -584,6 +613,42 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           {author && <span className="reader-topbar-author"> · {author}</span>}
         </div>
         <div className="reader-topbar-actions">
+          {canZoom && (
+            <div className="reader-zoom" role="group" aria-label="Text size">
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => zoom(-1)}
+                disabled={preferences.font_size <= ZOOM_MIN_FONT}
+                aria-label="Zoom out"
+                title="Zoom out (Ctrl −)"
+                data-testid="reader-zoom-out"
+              >
+                <Icon name="minus" />
+              </button>
+              <button
+                type="button"
+                className="reader-zoom-level"
+                onClick={() => zoom(0)}
+                aria-label={`Text size ${zoomPercent(preferences)}%, reset`}
+                title="Reset (Ctrl 0)"
+                data-testid="reader-zoom-reset"
+              >
+                {zoomPercent(preferences)}%
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => zoom(1)}
+                disabled={preferences.font_size >= ZOOM_MAX_FONT}
+                aria-label="Zoom in"
+                title="Zoom in (Ctrl +)"
+                data-testid="reader-zoom-in"
+              >
+                <Icon name="plus" />
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className={panel === 'toc' ? 'icon-button active' : 'icon-button'}
@@ -668,6 +733,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
             {!readerError && kind === 'epub' && (
               <EpubReader
                 ref={readerRef}
+                onZoomKey={zoom}
                 libraryId={libraryId}
                 fileId={fileId}
                 fileName={file.name}

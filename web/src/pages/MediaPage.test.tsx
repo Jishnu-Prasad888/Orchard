@@ -918,17 +918,11 @@ describe('MediaPage', () => {
     });
   });
 
-  it('creates a read-only share link for a file', async () => {
+  it('creates a share link for exactly the file in the viewer', async () => {
     const fetchMock = setup([
       (url, init) =>
         init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/shares')
-          ? json(
-              {
-                share: { id: 'sh1', key: 'file:lib1/IMG_0001.png', caps: ['read'] },
-                token: 'tok123',
-              },
-              201,
-            )
+          ? json({ share: { id: 'sh1' }, token: 'tok123' }, 201)
           : undefined,
     ]);
 
@@ -937,18 +931,15 @@ describe('MediaPage', () => {
     fireEvent.click(await screen.findByTestId('viewer-tab-share'));
 
     const panel = await screen.findByTestId('viewer-share');
-    expect(panel).toHaveTextContent('file:lib1/IMG_0001.png');
+    expect(within(panel).getByTestId('share-target')).toHaveTextContent('IMG_0001.png');
+    fireEvent.click(within(panel).getByTestId('confirm-new-share'));
 
-    fireEvent.click(screen.getByTestId('viewer-create-share'));
-
-    await waitFor(() => {
-      expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/shares')).toBe(true);
-    });
-    const link = (await screen.findByLabelText('Share link')) as HTMLInputElement;
+    const link = (await screen.findByTestId('share-link')) as HTMLInputElement;
     expect(link.value).toMatch(/\/s\/tok123$/);
-    expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/lib1/shares')).toMatchObject({
-      key: 'file:lib1/IMG_0001.png',
-      caps: ['read'],
+    // The server is told which file, never a key it would have to trust.
+    expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/lib1/shares')).toEqual({
+      target: { kind: 'file', id: 'f1' },
+      caps: ['read', 'download'],
     });
   });
 
@@ -977,7 +968,7 @@ describe('MediaPage', () => {
     ]);
 
     await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('novel.epub'));
+    fireEvent.click(screen.getByRole('button', { name: 'novel.epub' }));
 
     // Readable documents never open the photo/video viewer's overlay.
     await waitFor(() => {
@@ -1005,7 +996,7 @@ describe('MediaPage', () => {
     await screen.findByTestId('viewer');
     expect(called(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f1/opened')).toBe(false);
 
-    fireEvent.click(screen.getByText('report.docx'));
+    fireEvent.click(screen.getByRole('button', { name: 'report.docx' }));
     expect(await screen.findByTestId('viewer')).toHaveTextContent('report.docx');
   });
 
@@ -1027,7 +1018,7 @@ describe('MediaPage', () => {
     ]);
 
     await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('report.docx'));
+    fireEvent.click(screen.getByRole('button', { name: 'report.docx' }));
     fireEvent.click(await screen.findByTestId('viewer-tab-book'));
 
     const panel = await screen.findByTestId('viewer-book');
@@ -1064,7 +1055,7 @@ describe('MediaPage', () => {
     ]);
 
     await screen.findByTestId('file-grid');
-    fireEvent.click(screen.getByText('report.docx'));
+    fireEvent.click(screen.getByRole('button', { name: 'report.docx' }));
     fireEvent.click(await screen.findByTestId('viewer-tab-book'));
 
     const panel = await screen.findByTestId('viewer-book');

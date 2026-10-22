@@ -1,11 +1,12 @@
 /**
  * Permissions — who can do what in this library, and where.
  *
- * A grant is `(user, resource key, capabilities, effect)` and the resource key
- * is hierarchical: `library:<id>` covers everything beneath it, and a grant on
- * `library:<id>/2024` covers only that subtree. That inheritance is the part
- * worth making visible, so every row shows the full key and the page explains
- * that a narrower key is what you want almost every time.
+ * A grant is `(user, scope, capabilities, effect)` and scopes nest: the whole
+ * library covers everything in it, and a grant on the folder `2024` covers
+ * only that subtree. That inheritance is the part worth making visible, so the
+ * form says in words what a grant will reach, and every row says what it
+ * applies to. The server builds the key from the scope; the page never
+ * writes one (it once wrote `library:<id>`, which the server never read).
  *
  * Listing and writing grants both require `manage` on the library. Choosing a
  * user needs the admin user list, which a non-admin manager cannot read — so
@@ -48,19 +49,20 @@ const EMPTY_FORM: GrantFormState = {
   caps: ['read'],
 };
 
-/**
- * Turn the form into a resource key.
- *
- * A bare path is interpreted against the scope the user picked, because
- * `2024/summer` means a folder here and a file in the file scope — the server
- * would read it the same way but showing the resulting key is what makes the
- * inheritance legible.
- */
-function resourceKey(libraryId: string, form: GrantFormState): string {
+/** The form's scope, as the server takes it; null until a path is given. */
+function grantScope(
+  form: GrantFormState,
+): { kind: 'library' | 'folder' | 'file'; path?: string } | null {
+  if (form.scope === 'library') return { kind: 'library' };
   const path = form.path.trim().replace(/^\/+|\/+$/g, '');
-  if (form.scope === 'library' || path === '') return `library:${libraryId}`;
-  if (form.scope === 'folder') return `library:${libraryId}/${path}`;
-  return `file:${libraryId}/${path}`;
+  return path ? { kind: form.scope, path } : null;
+}
+
+/** What a grant reaches, in words. */
+function describeScope(kind: string, path?: string): string {
+  if (kind === 'library' || !path) return 'The whole library';
+  if (kind === 'file') return `The file ${path}`;
+  return `The folder ${path} and everything in it`;
 }
 
 function GrantDialog({
@@ -86,14 +88,15 @@ function GrantDialog({
       caps: prev.caps.includes(cap) ? prev.caps.filter((c) => c !== cap) : [...prev.caps, cap],
     }));
 
-  const key = resourceKey(libraryId, form);
+  const scope = grantScope(form);
 
   const submit = () => {
     setBusy(true);
     setError(null);
+    if (!scope) return;
     createGrant(libraryId, {
       user_id: form.userId.trim(),
-      key,
+      scope,
       caps: form.caps,
       effect: form.effect,
     })
@@ -122,7 +125,7 @@ function GrantDialog({
             type="button"
             className="button primary-button"
             onClick={submit}
-            disabled={busy || form.userId.trim() === '' || form.caps.length === 0}
+            disabled={busy || form.userId.trim() === '' || form.caps.length === 0 || !scope}
             data-testid="confirm-new-grant"
           >
             {busy ? 'Saving…' : 'Add grant'}
@@ -191,8 +194,10 @@ function GrantDialog({
           )}
         </div>
 
-        <p className="grant-key">
-          Grants on <code data-testid="grant-key">{key}</code> apply to everything beneath it.
+        <p className="grant-key" data-testid="grant-key">
+          {scope
+            ? `Applies to: ${describeScope(scope.kind, scope.path)}.`
+            : 'Give the path, relative to the library root.'}
         </p>
 
         <fieldset className="grant-caps">
@@ -371,8 +376,8 @@ export default function PermissionsPage() {
                     <span className="muted grant-user-id"> {grant.user_id}</span>
                   )}
                 </th>
-                <td className="grant-key">
-                  <code>{grant.resource_key}</code>
+                <td className="grant-scope-cell" title={grant.resource_key}>
+                  {describeScope(grant.scope_kind, grant.scope_path)}
                 </td>
                 <td>
                   <span className="grant-caps-list">
@@ -432,7 +437,8 @@ export default function PermissionsPage() {
             {revoking && (
               <>
                 <strong>{userNames.get(revoking.user_id) ?? revoking.user_id}</strong> will lose{' '}
-                {revoking.capabilities.join(', ')} on <code>{revoking.resource_key}</code>. Anything
+                {revoking.capabilities.join(', ')} on{' '}
+                {describeScope(revoking.scope_kind, revoking.scope_path).toLowerCase()}. Anything
                 they could already do there becomes inaccessible immediately.
               </>
             )}

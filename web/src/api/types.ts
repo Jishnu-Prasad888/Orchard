@@ -66,6 +66,9 @@ export interface Library {
   schema_version: number;
   created_at: string;
   updated_at: string;
+  /** Whether the signed-in user may create share links here. Set by the
+   * library list. */
+  can_share?: boolean;
 }
 
 export interface LibraryListResponse {
@@ -191,6 +194,10 @@ export interface FileSummary {
   /** Whether the signed-in user has marked this file completed. Set by file
    * listings only; absent means not completed. */
   completed?: boolean;
+  /** A book's own title, from its metadata. Set by file listings only. */
+  title?: string;
+  /** Names of the file's tags. Set by file listings only. */
+  tags?: string[];
 }
 
 export interface FileEnvelope {
@@ -480,6 +487,9 @@ export interface PermissionGrant {
   id: string;
   user_id: string;
   resource_key: string;
+  /** What the grant applies to, in words: kind and path. */
+  scope_kind: ShareTargetKind;
+  scope_path?: string;
   capabilities: Capability[];
   effect: GrantEffect;
   created_at: string;
@@ -497,9 +507,31 @@ export interface GrantEnvelope {
  * Sharing
  * ------------------------------------------------------------------ */
 
+/** What a share link exposes. The server builds the link's scope from this
+ * and checks that the thing exists; nothing else is accepted. */
+export type ShareTarget =
+  | { kind: 'library' }
+  | { kind: 'folder'; path: string }
+  | { kind: 'file'; id: string }
+  | { kind: 'tag'; id: string }
+  | { kind: 'collection'; id: string };
+
+export type ShareTargetKind = ShareTarget['kind'];
+
+export const SHARE_KIND_LABEL: Record<ShareTargetKind, string> = {
+  library: 'Library',
+  folder: 'Folder',
+  file: 'File',
+  tag: 'Tag',
+  collection: 'Collection',
+};
+
 export interface Share {
   id: string;
   resource_key: string;
+  /** What the link exposes, in words. */
+  target_kind: ShareTargetKind;
+  target_name: string;
   capabilities: Capability[];
   has_password: boolean;
   expires_at?: string;
@@ -523,10 +555,23 @@ export interface ShareListResponse {
  * ids, only the scope and the label a visitor would see.
  */
 export interface PublicShareInfo {
-  resource_key: string;
+  kind: ShareTargetKind;
+  /** The shared thing's name: a folder, file, tag or collection. */
+  name: string;
   library?: string;
   has_password: boolean;
   expires_at?: string;
+  /** Whether the link lets visitors download, not only see the list. */
+  can_download: boolean;
+  /** For a folder share: the folder browsing starts in. */
+  folder?: string;
+}
+
+/** A share's listing: files, and for a library or folder share the
+ * sub-folders of the folder being shown. */
+export interface PublicShareListing extends FileListResponse {
+  folders?: Folder[];
+  folder?: string;
 }
 
 export interface PublicShareInfoResponse {

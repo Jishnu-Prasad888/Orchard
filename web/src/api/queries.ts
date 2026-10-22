@@ -69,6 +69,8 @@ import type {
   TagListResponse,
   User,
   UserListResponse,
+  ShareTarget,
+  PublicShareListing,
 } from './types';
 
 /* ------------------------- re-exported types ------------------------- */
@@ -391,6 +393,9 @@ export const listTags = (libraryId: string) =>
 export const createTag = (libraryId: string, name: string, color?: string) =>
   apiPost<{ tag: Tag }>(`/libraries/${libraryId}/tags`, color ? { name, color } : { name });
 
+export const renameTag = (libraryId: string, tagId: string, name: string) =>
+  apiPatch<{ tag: Tag }>(`/libraries/${libraryId}/tags/${tagId}`, { name });
+
 export const deleteTag = (libraryId: string, tagId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/tags/${tagId}`);
 
@@ -530,7 +535,12 @@ export const listGrants = (libraryId: string) =>
 
 export const createGrant = (
   libraryId: string,
-  input: { user_id: string; key: string; caps: string[]; effect: 'allow' | 'deny' },
+  input: {
+    user_id: string;
+    scope: { kind: 'library' | 'folder' | 'file'; path?: string };
+    caps: string[];
+    effect: 'allow' | 'deny';
+  },
 ) => apiPost<{ grant: PermissionGrant }>(`/libraries/${libraryId}/permissions`, input);
 
 export const revokeGrant = (libraryId: string, grantId: string) =>
@@ -540,7 +550,7 @@ export const listShares = (libraryId: string) =>
   apiGet<ShareListResponse>(`/libraries/${libraryId}/shares`);
 export const createShare = (
   libraryId: string,
-  input: { key: string; caps: string[]; password?: string; expires_at?: string },
+  input: { target: ShareTarget; caps: string[]; password?: string; expires_at?: string },
 ) => apiPost<ShareCreateResponse>(`/libraries/${libraryId}/shares`, input);
 
 export const revokeShare = (libraryId: string, shareId: string) =>
@@ -608,7 +618,7 @@ export const getPublicShare = (token: string, password?: string) =>
   shareRequest<{ share: PublicShareInfo }>(`/shares/${token}`, password);
 
 export const listPublicShareFiles = (token: string, password?: string, params: SearchParams = {}) =>
-  shareRequest<FileListResponse>(`/shares/${token}/files${query({ ...params })}`, password);
+  shareRequest<PublicShareListing>(`/shares/${token}/files${query({ ...params })}`, password);
 
 export const authenticatePublicShare = (token: string, password: string) =>
   apiPost<{ authenticated: boolean }>(`/shares/${token}/authenticate`, { password });
@@ -617,12 +627,18 @@ export const getPublicShareFile = (token: string, fileId: string, password?: str
   shareRequest<{ file: FileSummary }>(`/shares/${token}/files/${fileId}`, password);
 
 /**
- * A share's only byte route is `download`, and the server sends it as an
- * attachment — so it is a link to click, never an `<img src>`. There is
+ * `download` saves a file and needs the download capability; `content`
+ * (below) is for looking at it in the page and needs only view. There is
  * deliberately no public thumbnail: a share is narrow on purpose.
  */
 export const publicShareDownloadUrl = (token: string, fileId: string): string =>
   `${API_BASE}/shares/${token}/files/${fileId}/download`;
+
+/** A shared file's bytes for showing in the page (needs only view). A
+ * password link is unlocked by the cookie the server sets once the password
+ * is right, so an <img> or a reader can use this URL as it is. */
+export const publicShareContentUrl = (token: string, fileId: string): string =>
+  `${API_BASE}/shares/${token}/files/${fileId}/content`;
 
 /**
  * Downloading a share file needs the password header, which an `<a download>`

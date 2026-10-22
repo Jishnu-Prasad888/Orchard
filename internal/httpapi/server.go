@@ -33,6 +33,7 @@ type Server struct {
 	keys           *crypto.Keys
 	secureCookies  bool
 	ratelimit      *rateLimiter
+	shareSessions  *shareSessions
 	maxUploadBytes int64
 	metrics        *metrics.Registry
 	settings       *serversettings.Store
@@ -109,6 +110,7 @@ func New(deps Dependencies) *Server {
 		keys:           deps.Keys,
 		secureCookies:  deps.SecureCookies,
 		ratelimit:      newRateLimiter(),
+		shareSessions:  newShareSessions(),
 		maxUploadBytes: deps.MaxUploadBytes,
 		metrics:        deps.Metrics,
 		uploadSlots:    make(chan struct{}, maxConcurrentChunkWrites),
@@ -283,6 +285,7 @@ func (s *Server) Handler() http.Handler {
 		// Tags.
 		mux.Handle("GET /api/v1/libraries/{id}/tags", s.withAuth(allowAny, s.handleListTags))
 		mux.Handle("POST /api/v1/libraries/{id}/tags", s.withAuth(allowAny, s.handleCreateTag))
+		mux.Handle("PATCH /api/v1/libraries/{id}/tags/{tagID}", s.withAuth(allowAny, s.handleRenameTag))
 		mux.Handle("DELETE /api/v1/libraries/{id}/tags/{tagID}", s.withAuth(allowAny, s.handleDeleteTag))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/tags", s.withAuth(allowAny, s.handleListFileTags))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/tags", s.withAuth(allowAny, s.handleAddFileTag))
@@ -350,6 +353,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /api/v1/shares/{token}/files", s.handlePublicShareListFiles)
 		mux.HandleFunc("GET /api/v1/shares/{token}/files/{fileID}", s.handlePublicShareGetFile)
 		mux.HandleFunc("GET /api/v1/shares/{token}/files/{fileID}/download", s.handlePublicShareDownload)
+		// The file's bytes for viewing in the page (images, video, the
+		// readers): needs only view, unlike download.
+		mux.HandleFunc("GET /api/v1/shares/{token}/files/{fileID}/content", s.handlePublicShareContent)
 		mux.HandleFunc("POST /api/v1/shares/{token}/authenticate", s.handlePublicShareAuthenticate)
 	}
 

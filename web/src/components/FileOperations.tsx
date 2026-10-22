@@ -27,6 +27,8 @@ import { ConfirmDialog, Dialog, PromptDialog } from './Dialog';
 import { FolderPicker } from './FolderPicker';
 import { isReadableDocument } from './media';
 import { PropertiesDialog } from './PropertiesDialog';
+import { ShareDialog } from './ShareDialog';
+import { CollectionsPanel } from './viewer/CollectionsPanel';
 import { TagsPanel } from './viewer/TagsPanel';
 import type { ViewerAction } from './ViewerModal';
 
@@ -48,6 +50,10 @@ export interface FileOperations {
   openProperties: (file: FileSummary) => void;
   /** Open the tag editor for a file. */
   openTags: (file: FileSummary) => void;
+  /** Open the "which collections is this in" editor for a file. */
+  openCollections: (file: FileSummary) => void;
+  /** Open the share-link form for a file. */
+  openShare: (file: FileSummary) => void;
   /** Dialog and error state to render. Renders nothing when idle. */
   dialogs: ReactElement;
   /** True while a dialog action is in flight. */
@@ -74,6 +80,23 @@ export function useFileOperations(
   const [error, setError] = useState<string | null>(null);
   const [properties, setProperties] = useState<FileSummary | null>(null);
   const [tagging, setTagging] = useState<FileSummary | null>(null);
+  const [collecting, setCollecting] = useState<FileSummary | null>(null);
+  const [sharing, setSharing] = useState<FileSummary | null>(null);
+  // Edits in the tag and collection dialogs are saved as they are made, but
+  // the page re-reads only once the dialog closes: a reload swaps the grid
+  // for its loading state, which would flash behind the dialog on every tick.
+  const edited = useRef(false);
+  const markEdited = useCallback(() => {
+    edited.current = true;
+  }, []);
+  const closeEditor = useCallback(() => {
+    setTagging(null);
+    setCollecting(null);
+    if (edited.current) {
+      edited.current = false;
+      onChanged();
+    }
+  }, [onChanged]);
 
   const closeDialog = useCallback(() => {
     setPending(null);
@@ -235,17 +258,48 @@ export function useFileOperations(
       <Dialog
         open={tagging !== null}
         title={tagging ? `Tags for “${tagging.name}”` : 'Tags'}
-        onClose={() => setTagging(null)}
+        onClose={closeEditor}
         size="medium"
         testId="tags-dialog"
         footer={
-          <button type="button" className="button primary-button" onClick={() => setTagging(null)}>
+          <button type="button" className="button primary-button" onClick={closeEditor}>
             Done
           </button>
         }
       >
         {tagging && (
-          <TagsPanel key={tagging.id} libraryId={libraryId} file={tagging} onChanged={onChanged} />
+          <TagsPanel key={tagging.id} libraryId={libraryId} file={tagging} onChanged={markEdited} />
+        )}
+      </Dialog>
+
+      <ShareDialog
+        libraryId={libraryId}
+        open={sharing !== null}
+        fixed={
+          sharing ? { target: { kind: 'file', id: sharing.id }, name: sharing.name } : undefined
+        }
+        onClose={() => setSharing(null)}
+      />
+
+      <Dialog
+        open={collecting !== null}
+        title={collecting ? `Collections for “${collecting.name}”` : 'Collections'}
+        onClose={closeEditor}
+        size="medium"
+        testId="collections-dialog"
+        footer={
+          <button type="button" className="button primary-button" onClick={closeEditor}>
+            Done
+          </button>
+        }
+      >
+        {collecting && (
+          <CollectionsPanel
+            key={collecting.id}
+            libraryId={libraryId}
+            file={collecting}
+            onChanged={markEdited}
+          />
         )}
       </Dialog>
     </>
@@ -258,6 +312,8 @@ export function useFileOperations(
     requestAction,
     openProperties: setProperties,
     openTags: setTagging,
+    openCollections: setCollecting,
+    openShare: setSharing,
     dialogs,
     busy,
   };

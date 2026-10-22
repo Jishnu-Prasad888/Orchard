@@ -40,6 +40,9 @@ export interface MenuItem {
   /** For a link item: open in a new tab. */
   external?: boolean;
   onSelect?: () => void;
+  /** A toggle (Favorite, Completed): announced as a checkbox, with a check
+   * mark drawn at the end while it is on. */
+  checked?: boolean;
   testId?: string;
 }
 
@@ -119,7 +122,9 @@ export function Menu({
 
   // Focus follows the active item.
   useEffect(() => {
-    const buttons = panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
+    const buttons = panelRef.current?.querySelectorAll<HTMLElement>(
+      '[role="menuitem"], [role="menuitemcheckbox"]',
+    );
     buttons?.[active]?.focus();
   }, [active, position]);
 
@@ -223,7 +228,8 @@ export function Menu({
     const content = (
       <>
         {entry.icon ? <Icon name={entry.icon} size={18} /> : <span className="menu-item-spacer" />}
-        <span>{entry.label}</span>
+        <span className="menu-item-label">{entry.label}</span>
+        {entry.checked && <Icon name="check" size={16} className="menu-item-check" />}
       </>
     );
     if (entry.href && !entry.disabled) {
@@ -248,7 +254,8 @@ export function Menu({
       <button
         key={entry.id}
         type="button"
-        role="menuitem"
+        role={entry.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+        aria-checked={entry.checked}
         tabIndex={index === active ? 0 : -1}
         className={className}
         disabled={entry.disabled}
@@ -299,6 +306,21 @@ export function withDangerLast(items: MenuItem[]): MenuEntry[] {
   const safe = items.filter((item) => !item.danger);
   const danger = items.filter((item) => item.danger);
   return danger.length && safe.length ? [...safe, 'separator', ...danger] : [...safe, ...danger];
+}
+
+/**
+ * Lay out groups of related items with a separator between each, skipping
+ * empty groups — so a page that offers fewer actions never shows a doubled
+ * or dangling separator.
+ */
+export function menuGroups(...groups: MenuItem[][]): MenuEntry[] {
+  const out: MenuEntry[] = [];
+  for (const group of groups) {
+    if (group.length === 0) continue;
+    if (out.length) out.push('separator');
+    out.push(...group);
+  }
+  return out;
 }
 
 /** State for a menu toggled by a button: the anchor element, or null. */

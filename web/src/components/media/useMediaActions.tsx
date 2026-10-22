@@ -13,16 +13,19 @@
 
 import { type ReactElement, useCallback, useState } from 'react';
 
-import { clearReadingStatus, setReadingStatus, softDeleteFile } from '../../api/queries';
+import { useLibraries } from '../../api/libraries';
+import { softDeleteFile } from '../../api/queries';
 import type { FileSummary } from '../../api/types';
 import { ConfirmDialog } from '../Dialog';
 import type { FileOperations } from '../FileOperations';
 import { downloadUrl } from '../media';
 import type { MenuEntry, MenuItem } from '../ui/Menu';
-import { withDangerLast } from '../ui/Menu';
+import { menuGroups } from '../ui/Menu';
 import { useToast } from '../ui/Toast';
+import { FileMenuHeader } from './FileMenuHeader';
 import type { SelectionAction } from './SelectionToolbar';
 import type { Favorites } from './useFavorites';
+import { useHideCompleted } from './useHideCompleted';
 import type { Selection } from './useSelection';
 
 export interface MediaActionOptions {
@@ -46,6 +49,8 @@ export interface MediaActionOptions {
 export interface MediaActions {
   selectionActions: SelectionAction[];
   menuFor: (file: FileSummary) => MenuEntry[];
+  /** The file's name and kind, for the menu's header. */
+  headerFor: (file: FileSummary) => ReactElement;
   /** Run by the Delete key while a selection exists. */
   onDeleteKey: (() => void) | undefined;
   dialogs: ReactElement;
@@ -83,6 +88,9 @@ export function useMediaActions({
   onShowInFolder,
 }: MediaActionOptions): MediaActions {
   const toast = useToast();
+  const { libraries } = useLibraries();
+  // Only someone who may create links is offered "Share…".
+  const canShare = libraries.find((l) => l.id === libraryId)?.can_share ?? false;
   const [trashing, setTrashing] = useState<FileSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,16 +131,12 @@ export function useMediaActions({
     [favorites, toast],
   );
 
+  const { markCompleted } = useHideCompleted();
   const setCompleted = useCallback(
     async (files: FileSummary[], value: boolean) => {
-      const results = await Promise.allSettled(
-        files.map((f) =>
-          value
-            ? setReadingStatus(libraryId, f.id, 'completed')
-            : clearReadingStatus(libraryId, f.id),
-        ),
-      );
-      const failed = results.filter((r) => r.status === 'rejected').length;
+      // No reload: the mark is laid over the listing (see useHideCompleted),
+      // so only this tile changes.
+      const failed = await markCompleted(libraryId, files, value);
       if (failed) {
         toast({ message: `Couldn't update ${plural(failed, 'file', 'files')}`, tone: 'error' });
       } else {
@@ -142,10 +146,8 @@ export function useMediaActions({
           tone: 'success',
         });
       }
-      // The listing carries each file's completed flag, and may now hide it.
-      onChanged();
     },
-    [libraryId, onChanged, toast],
+    [libraryId, markCompleted, toast],
   );
 
   const confirmTrash = async () => {
@@ -213,7 +215,7 @@ export function useMediaActions({
           {
             id: 'complete',
             label: allCompleted ? 'Mark as not completed' : 'Mark as completed',
-            icon: 'check' as const,
+            icon: 'check-circle' as const,
             onClick: () => {
               void setCompleted(files, !allCompleted);
               selection.clear();
@@ -236,101 +238,150 @@ export function useMediaActions({
       : []),
   ];
 
+  /**
+   * A file's right-click menu, in small groups so it reads at a glance:
+   * open; the two toggles (shown with a check mark rather than as "Add
+   * to…"/"Remove from…" pairs); labels; organizing; details; and, last and
+   * apart, the destructive action.
+   */
   const menuFor = (file: FileSummary): MenuEntry[] => {
-    const favorite = favorites?.has(file.id) ?? false;
-    const items: MenuItem[] = [];
-    if (ops)
-      items.push({
-        id: 'open',
-        label: 'Open',
-        icon: 'file',
-        onSelect: () => ops.openViewer(file),
-      });
-    if (can.download) {
-      items.push({
-        id: 'download',
-        label: 'Download',
-        icon: 'download',
-        href: downloadUrl(libraryId, file),
-      });
-    }
+    const open: MenuItem[] = ops
+      ? [{ id: 'open', label: 'Open', icon: 'file', onSelect: () => ops.openViewer(file) }]
+      : [];
+
+    const toggles: MenuItem[] = [];
     if (can.favorite) {
-      items.push({
+      const favorite = favorites?.has(file.id) ?? false;
+      toggles.push({
         id: 'favorite',
-        label: favorite ? 'Remove from favorites' : 'Add to favorites',
+        label: 'Favorite',
         icon: 'star',
+        checked: favorite,
         onSelect: () => void setFavorite([file], !favorite),
+        testId: 'menu-favorite',
       });
     }
     if (can.complete) {
-      items.push({
+      toggles.push({
         id: 'complete',
-        label: file.completed ? 'Mark as not completed' : 'Mark as completed',
-        icon: 'check',
+        label: 'Completed',
+        icon: 'check-circle',
+        checked: Boolean(file.completed),
         onSelect: () => void setCompleted([file], !file.completed),
         testId: 'menu-complete',
       });
     }
+
+    const labels: MenuItem[] =
+      can.edit && ops
+        ? [
+            {
+              id: 'tags',
+              label: 'Tags…',
+              icon: 'tag',
+              onSelect: () => ops.openTags(file),
+              testId: 'menu-tags',
+            },
+            {
+              id: 'collections',
+              label: 'Collections…',
+              icon: 'archive',
+              onSelect: () => ops.openCollections(file),
+              testId: 'menu-collections',
+            },
+          ]
+        : [];
+
+    const organize: MenuItem[] = [];
     if (can.edit && ops) {
-      items.push({
-        id: 'tags',
-        label: 'Tags…',
-        icon: 'tag',
-        onSelect: () => ops.openTags(file),
-        testId: 'menu-tags',
-      });
+      organize.push(
+        {
+          id: 'rename',
+          label: 'Rename…',
+          icon: 'edit',
+          onSelect: () => ops.requestAction('rename', file),
+        },
+        {
+          id: 'move',
+          label: 'Move to…',
+          icon: 'folder-move',
+          onSelect: () => ops.requestAction('move', file),
+        },
+        {
+          id: 'copy',
+          label: 'Copy to…',
+          icon: 'copy',
+          onSelect: () => ops.requestAction('copy', file),
+        },
+      );
     }
     if (onShowInFolder) {
-      items.push({
+      organize.push({
         id: 'folder',
         label: 'Show in folder',
         icon: 'folder',
         onSelect: () => onShowInFolder(file),
       });
     }
-    if (can.edit && ops) {
-      items.push(
-        {
-          id: 'rename',
-          label: 'Rename',
-          icon: 'edit',
-          onSelect: () => ops.requestAction('rename', file),
-        },
-        {
-          id: 'move',
-          label: 'Move',
-          icon: 'folder-move',
-          onSelect: () => ops.requestAction('move', file),
-        },
-        {
-          id: 'copy',
-          label: 'Copy',
-          icon: 'copy',
-          onSelect: () => ops.requestAction('copy', file),
-        },
-      );
+
+    const extras = extraMenu?.(file) ?? [];
+
+    const details: MenuItem[] = [];
+    if (can.download) {
+      details.push({
+        id: 'download',
+        label: 'Download',
+        icon: 'download',
+        href: downloadUrl(libraryId, file),
+      });
     }
-    items.push(...(extraMenu?.(file) ?? []));
+    if (ops && canShare) {
+      details.push({
+        id: 'share',
+        label: 'Share…',
+        icon: 'share',
+        onSelect: () => ops.openShare(file),
+        testId: 'menu-share',
+      });
+    }
     if (ops) {
-      items.push({
+      details.push({
         id: 'properties',
         label: 'Properties',
-        icon: 'settings',
+        icon: 'info',
         onSelect: () => ops.openProperties(file),
         testId: 'menu-properties',
       });
     }
-    if (can.trash) {
-      items.push({
-        id: 'trash',
-        label: 'Move to trash',
-        icon: 'trash',
-        danger: true,
-        onSelect: () => setTrashing([file]),
-      });
-    }
-    return withDangerLast(items);
+
+    const danger: MenuItem[] = [
+      ...extras.filter((item) => item.danger),
+      ...(can.trash
+        ? [
+            {
+              id: 'trash',
+              label: 'Move to trash',
+              icon: 'trash' as const,
+              danger: true,
+              onSelect: () => setTrashing([file]),
+            },
+          ]
+        : []),
+    ];
+
+    return menuGroups(
+      open,
+      toggles,
+      labels,
+      organize,
+      extras.filter((item) => !item.danger),
+      details,
+      danger,
+    );
   };
+
+  /** What a file's menu says above its actions: which file this is. */
+  const headerFor = (file: FileSummary): ReactElement => <FileMenuHeader file={file} />;
 
   const dialogs = (
     <>
@@ -365,6 +416,7 @@ export function useMediaActions({
   return {
     selectionActions,
     menuFor,
+    headerFor,
     onDeleteKey:
       can.trash && selection.active ? () => setTrashing(selection.selectedFiles) : undefined,
     dialogs,

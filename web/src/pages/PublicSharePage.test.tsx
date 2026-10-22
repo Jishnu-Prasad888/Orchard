@@ -16,10 +16,11 @@ import PublicSharePage from './PublicSharePage';
 
 const shareInfo = {
   share: {
-    resource_key: 'library:lib1',
-    capabilities: ['read' as const, 'download' as const],
+    kind: 'library' as const,
+    name: 'Photos',
     library: 'Photos',
-    requires_password: false,
+    has_password: false,
+    can_download: true,
   },
 };
 
@@ -53,7 +54,7 @@ describe('PublicSharePage', () => {
       (url) => (url.endsWith('/api/v1/shares/tok1') ? json(shareInfo) : undefined),
     ]);
 
-    expect(await screen.findByRole('heading', { name: /library:lib1/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Photos' })).toBeInTheDocument();
     expect(screen.getByText('Shared from Photos')).toBeInTheDocument();
     const list = await screen.findByTestId('share-file-list');
     expect(within(list).getByText('IMG_0001.png')).toBeInTheDocument();
@@ -95,7 +96,7 @@ describe('PublicSharePage', () => {
     fireEvent.click(screen.getByTestId('share-unlock'));
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /library:lib1/ })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Photos' })).toBeInTheDocument(),
     );
     // The heading comes from the share info; the file list is requested right
     // after it, so wait for that request rather than assuming it already went.
@@ -178,19 +179,61 @@ describe('PublicSharePage', () => {
     });
   });
 
-  it('scopes the listing to a folder carried in the link', async () => {
-    const fetchMock = renderShare(
-      [
-        (url) => (url.includes('/api/v1/shares/tok1/files?') ? json(firstPage) : undefined),
-        (url) => (url.endsWith('/api/v1/shares/tok1') ? json(shareInfo) : undefined),
-      ],
-      '/s/tok1?folder=2024',
-    );
+  it('opens a folder link at its folder, browses down, and goes back up no higher', async () => {
+    const folderInfo = {
+      share: { ...shareInfo.share, kind: 'folder' as const, name: 'Japan', folder: 'trips/japan' },
+    };
+    const fetchMock = renderShare([
+      (url) =>
+        url.includes('folder=trips%2Fjapan%2Fkyoto')
+          ? json({ files: [], folders: [], folder: 'trips/japan/kyoto' })
+          : undefined,
+      (url) =>
+        url.includes('/api/v1/shares/tok1/files?')
+          ? json({
+              ...firstPage,
+              folder: 'trips/japan',
+              folders: [
+                {
+                  id: 'k',
+                  rel_path: 'trips/japan/kyoto',
+                  name: 'kyoto',
+                  file_count: 3,
+                  library_id: '',
+                },
+              ],
+            })
+          : undefined,
+      (url) => (url.endsWith('/api/v1/shares/tok1') ? json(folderInfo) : undefined),
+    ]);
 
-    expect(await screen.findByRole('heading', { name: /2024/ })).toBeInTheDocument();
-    await waitFor(() => {
-      expect(called(fetchMock, 'GET', 'folder=2024')).toBe(true);
-    });
+    expect(await screen.findByRole('heading', { name: 'Japan' })).toBeInTheDocument();
+    // The link carries no folder: the server opens it at the shared one.
+    await waitFor(() => expect(called(fetchMock, 'GET', '/api/v1/shares/tok1/files?')).toBe(true));
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('folder='))).toBe(false);
+    // At the top of the share there is nowhere further up to go.
+    expect(screen.queryByTestId('share-up')).not.toBeInTheDocument();
+
+    fireEvent.click(within(await screen.findByTestId('share-folders')).getByText('kyoto'));
+    await waitFor(() =>
+      expect(called(fetchMock, 'GET', 'folder=trips%2Fjapan%2Fkyoto')).toBe(true),
+    );
+    fireEvent.click(await screen.findByTestId('share-up'));
+    await waitFor(() => expect(screen.queryByTestId('share-up')).not.toBeInTheDocument());
+  });
+
+  it('offers no download on a view-only link', async () => {
+    renderShare([
+      (url) => (url.includes('/api/v1/shares/tok1/files?') ? json(firstPage) : undefined),
+      (url) =>
+        url.endsWith('/api/v1/shares/tok1')
+          ? json({ share: { ...shareInfo.share, can_download: false } })
+          : undefined,
+    ]);
+
+    const list = await screen.findByTestId('share-file-list');
+    expect(within(list).getByText('IMG_0001.png')).toBeInTheDocument();
+    expect(screen.queryByTestId('download-f1')).not.toBeInTheDocument();
   });
 
   it('says the link is missing its token', async () => {
@@ -203,5 +246,54 @@ describe('PublicSharePage', () => {
     );
 
     expect(await screen.findByText('This link is missing its share token.')).toBeInTheDocument();
+  });
+
+  it('opens a file in the viewer even when the link does not allow downloads', async () => {
+    const second = fileFixture({
+      id: 'f2',
+      rel_path: 'notes.docx',
+      name: 'notes.docx',
+      media_type: 'document',
+    });
+    renderShare([
+      (url) =>
+        url.includes('/api/v1/shares/tok1/files?')
+          ? json({ files: [fileFixture(), second] })
+          : undefined,
+      (url) =>
+        url.endsWith('/api/v1/shares/tok1')
+          ? json({ share: { ...shareInfo.share, can_download: false } })
+          : undefined,
+    ]);
+
+    fireEvent.click(await screen.findByTestId('open-f1'));
+    const viewer = await screen.findByTestId('share-viewer');
+    // The picture comes from the view route, not the download route.
+    const img = within(viewer).getByRole('img', { name: 'IMG_0001.png' });
+    expect(img.getAttribute('src')).toMatch(/\/api\/v1\/shares\/tok1\/files\/f1\/content$/);
+    expect(within(viewer).queryByTestId('share-viewer-download')).not.toBeInTheDocument();
+    expect(within(viewer).getByText(/1 of 2/)).toBeInTheDocument();
+
+    // → steps to the next file; one with no preview says so.
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(await within(viewer).findByTestId('share-viewer-no-preview')).toHaveTextContent(
+      'This link does not allow downloads.',
+    );
+    fireEvent.click(within(viewer).getByTestId('share-viewer-prev'));
+    expect(within(viewer).getByRole('img', { name: 'IMG_0001.png' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('share-viewer')).not.toBeInTheDocument());
+  });
+
+  it('offers download from the viewer when the link allows it', async () => {
+    renderShare([
+      (url) => (url.includes('/api/v1/shares/tok1/files?') ? json(firstPage) : undefined),
+      (url) => (url.endsWith('/api/v1/shares/tok1') ? json(shareInfo) : undefined),
+    ]);
+
+    fireEvent.click(await screen.findByTestId('open-f1'));
+    const viewer = await screen.findByTestId('share-viewer');
+    expect(within(viewer).getByTestId('share-viewer-download')).toBeInTheDocument();
   });
 });

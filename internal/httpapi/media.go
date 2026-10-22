@@ -620,6 +620,11 @@ type fileResponse struct {
 	// Completed is whether the acting user has marked this file completed,
 	// set the same way; absent when they have not.
 	Completed bool `json:"completed,omitempty"`
+	// Title is a book's own title from its metadata, set the same way; a
+	// grid shows it under the cover in place of the file name.
+	Title string `json:"title,omitempty"`
+	// Tags are the names of this file's tags, set the same way.
+	Tags []string `json:"tags,omitempty"`
 }
 
 type folderResponse struct {

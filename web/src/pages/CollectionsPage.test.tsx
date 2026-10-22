@@ -10,6 +10,7 @@ import {
   noContent,
   originalFetch,
   renderPage,
+  libraryFixture,
 } from '../test/harness';
 import CollectionsPage from './CollectionsPage';
 
@@ -279,5 +280,73 @@ describe('CollectionsPage', () => {
     expect(bodyOf(fetchMock, 'PATCH', '/api/v1/libraries/lib1/collections/c1')).toEqual({
       pinned: true,
     });
+  });
+
+  it('renames a collection from its card menu without opening it', async () => {
+    const fn = setup();
+    fireEvent.click(await screen.findByTestId('more-collection-Summer reading'));
+    fireEvent.click(await screen.findByTestId('menu-rename-collection'));
+
+    const dialog = await screen.findByTestId('rename-collection-dialog');
+    fireEvent.change(within(dialog).getByLabelText('Collection name'), {
+      target: { value: 'Winter reading' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(bodyOf(fn, 'PATCH', '/collections/c1')).toEqual({ name: 'Winter reading' }),
+    );
+    expect(screen.queryByTestId('collection-detail')).not.toBeInTheDocument();
+  });
+
+  it('deletes a collection from its right-click menu', async () => {
+    const fn = setup();
+    fireEvent.contextMenu(await screen.findByTestId('open-collection-Summer reading'));
+    fireEvent.click(await screen.findByTestId('menu-delete-collection'));
+
+    const dialog = await screen.findByTestId('delete-collection-dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete collection' }));
+
+    await waitFor(() =>
+      expect(called(fn, 'DELETE', '/api/v1/libraries/lib1/collections/c1')).toBe(true),
+    );
+  });
+
+  it('removes one file from the collection with its right-click menu', async () => {
+    const fn = setup();
+    fireEvent.click(await screen.findByTestId('open-collection-Summer reading'));
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'IMG_0001.png' }));
+    fireEvent.click(await screen.findByTestId('menu-remove-from-collection'));
+
+    await waitFor(() =>
+      expect(called(fn, 'DELETE', '/api/v1/libraries/lib1/collections/c1/files/f1')).toBe(true),
+    );
+  });
+
+  it('shares a collection from its card menu', async () => {
+    const fn = mockApi(
+      [
+        (url, init) =>
+          init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/shares')
+            ? json({ share: { id: 'sh1' }, token: 'tok1' }, 201)
+            : undefined,
+        (url) =>
+          url.endsWith('/api/v1/libraries/lib1/collections') ? json(collectionsList) : undefined,
+      ],
+      { libraries: [libraryFixture({ can_share: true })] },
+    );
+    renderPage(<CollectionsPage />, { libraries: [libraryFixture({ can_share: true })] });
+
+    fireEvent.click(await screen.findByTestId('more-collection-Summer reading'));
+    fireEvent.click(await screen.findByTestId('menu-share-collection'));
+    const dialog = await screen.findByTestId('share-dialog');
+    fireEvent.click(within(dialog).getByTestId('confirm-new-share'));
+
+    await waitFor(() =>
+      expect(bodyOf(fn, 'POST', '/api/v1/libraries/lib1/shares')).toEqual({
+        target: { kind: 'collection', id: 'c1' },
+        caps: ['read'],
+      }),
+    );
   });
 });

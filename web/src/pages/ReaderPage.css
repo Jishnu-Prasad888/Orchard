@@ -1014,3 +1014,36 @@ button.reader-card-main {
 .reader-epub-turn-next {
   right: var(--space-2);
 }
+
+/* Text size: − 100% + for a book whose text reflows. */
+.reader-zoom {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-2);
+  padding: 0 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.reader-zoom-level {
+  min-width: 3.4em;
+  padding: 0 2px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.reader-zoom-level:hover {
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 599px) {
+  /* Room is tight on a phone: keep − and +, drop the percentage. */
+  .reader-zoom-level {
+    display: none;
+  }
+}

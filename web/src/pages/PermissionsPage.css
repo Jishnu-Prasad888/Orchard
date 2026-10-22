@@ -12,8 +12,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  flex: 1 1 200px;
   min-width: 0;
+}
+
+/* Side by side, a field is at least 200px wide. (On the field itself, in a
+   column, that basis became a 200px height and left a gap under it.) */
+.grant-scope > .grant-field {
+  flex: 1 1 200px;
 }
 
 .grant-field > span {

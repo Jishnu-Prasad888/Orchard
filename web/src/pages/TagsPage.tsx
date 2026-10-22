@@ -7,14 +7,22 @@
  * dialogs, and the shared viewer, so nothing here reimplements them.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { useAuth } from '../auth/authContext';
 import { useLibraryGate } from '../api/libraries';
 import { useLibraryResource } from '../api/resources';
-import { createTag, deleteTag, listTags, removeFileTag, searchFiles } from '../api/queries';
+import {
+  createTag,
+  deleteTag,
+  listTags,
+  removeFileTag,
+  renameTag,
+  searchFiles,
+} from '../api/queries';
 import type { FileSummary, Tag } from '../api/types';
 import { ConfirmDialog, PromptDialog } from '../components/Dialog';
+import { ShareDialog } from '../components/ShareDialog';
 import { MediaGrid } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useMediaActions } from '../components/media/useMediaActions';
@@ -30,6 +38,7 @@ import {
   PageHeader,
 } from '../components/States';
 import { matchesQuery, usePageQuery } from '../components/app-shell/pageSearch';
+import { Menu, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { ViewerModal } from '../components/ViewerModal';
 import './TagsPage.css';
 
@@ -40,6 +49,13 @@ export default function TagsPage() {
   const [activeTag, setActiveTag] = useState<Tag | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Tag | null>(null);
+  const [renaming, setRenaming] = useState<Tag | null>(null);
+  const [sharing, setSharing] = useState<Tag | null>(null);
+  const [menu, setMenu] = useState<{
+    anchor: MenuAnchor;
+    items: MenuEntry[];
+    header?: ReactNode;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -81,6 +97,17 @@ export default function TagsPage() {
     selection,
     ops,
     onChanged: files.reload,
+    extraMenu: (file) =>
+      activeTag
+        ? [
+            {
+              id: 'untag',
+              label: `Remove tag “${activeTag.name}”`,
+              icon: 'tag',
+              onSelect: () => void untag([file]),
+            },
+          ]
+        : [],
     extra: activeTag
       ? [
           {
@@ -111,6 +138,44 @@ export default function TagsPage() {
     },
     [files, tags],
   );
+
+  const openRename = (tag: Tag) => {
+    setPromptError(null);
+    setRenaming(tag);
+  };
+  const canShare = gate.kind === 'ready' && (gate.library.can_share ?? false);
+  const tagMenu = (tag: Tag): MenuEntry[] => [
+    { id: 'open', label: 'Open', icon: 'tag', onSelect: () => setActiveTag(tag) },
+    ...(canShare
+      ? [
+          {
+            id: 'share',
+            label: 'Share…',
+            icon: 'share' as const,
+            onSelect: () => setSharing(tag),
+            testId: 'menu-share-tag',
+          },
+        ]
+      : []),
+    {
+      id: 'rename',
+      label: 'Rename…',
+      icon: 'edit',
+      onSelect: () => openRename(tag),
+      testId: 'menu-rename-tag',
+    },
+    {
+      id: 'delete',
+      label: 'Delete tag…',
+      icon: 'trash',
+      danger: true,
+      onSelect: () => {
+        setActionError(null);
+        setDeleting(tag);
+      },
+      testId: 'menu-delete-tag',
+    },
+  ];
 
   if (gate.kind === 'loading') {
     return (
@@ -186,6 +251,24 @@ export default function TagsPage() {
             <h2>
               <span className="tag-chip">{activeTag.name}</span>
             </h2>
+            {canShare && (
+              <button
+                type="button"
+                className="button"
+                onClick={() => setSharing(activeTag)}
+                data-testid="share-tag-button"
+              >
+                Share
+              </button>
+            )}
+            <button
+              type="button"
+              className="button"
+              onClick={() => openRename(activeTag)}
+              data-testid="rename-tag-button"
+            >
+              Rename
+            </button>
             <button
               type="button"
               className="button danger-button"
@@ -198,18 +281,25 @@ export default function TagsPage() {
           {files.loading && <LoadingState />}
           {files.error && <ErrorState message={files.error} onRetry={files.reload} />}
 
-          {files.data !== null && files.data.length === 0 && (
+          {files.data !== null && tagFiles.length === 0 && (
             <EmptyState title="Nothing tagged yet" testId="tag-files-empty">
               <p className="muted">No files carry this tag. Add it from the file viewer.</p>
             </EmptyState>
           )}
 
-          {files.data !== null && files.data.length > 0 && (
+          {files.data !== null && tagFiles.length > 0 && (
             <MediaGrid
               libraryId={gate.libraryId}
-              files={files.data}
+              files={tagFiles}
               onOpen={ops.openViewer}
               selection={selection}
+              onContextMenu={(file, x, y) =>
+                setMenu({
+                  anchor: { x, y },
+                  items: actions.menuFor(file),
+                  header: actions.headerFor(file),
+                })
+              }
               label={`Tagged ${activeTag.name}`}
               testId="file-grid"
             />
@@ -219,7 +309,7 @@ export default function TagsPage() {
             <ViewerModal
               libraryId={gate.libraryId}
               file={ops.viewer}
-              siblings={files.data ?? []}
+              siblings={tagFiles}
               onNavigate={ops.openViewer}
               onChanged={() => {
                 files.reload();
@@ -260,7 +350,18 @@ export default function TagsPage() {
             <ul className="tag-grid" data-testid="tags-grid" aria-label="Tags">
               {shownTags.map((tag) => (
                 <li key={tag.id}>
-                  <button type="button" className="tag-card" onClick={() => setActiveTag(tag)}>
+                  <button
+                    type="button"
+                    className="tag-card"
+                    onClick={() => setActiveTag(tag)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setMenu({
+                        anchor: { x: event.clientX, y: event.clientY },
+                        items: tagMenu(tag),
+                      });
+                    }}
+                  >
                     <span
                       className="tag-chip"
                       style={tag.color ? { background: tag.color } : undefined}
@@ -301,6 +402,52 @@ export default function TagsPage() {
         testId="new-tag-dialog"
       />
 
+      <PromptDialog
+        open={renaming !== null}
+        title="Rename tag"
+        label="Tag name"
+        initialValue={renaming?.name ?? ''}
+        hint="Every file with this tag keeps it under the new name."
+        busy={busy}
+        error={promptError}
+        onCancel={() => setRenaming(null)}
+        onConfirm={(name) => {
+          if (!renaming) return;
+          const target = renaming;
+          setBusy(true);
+          setPromptError(null);
+          renameTag(gate.libraryId, target.id, name)
+            .then(({ tag }) => {
+              setRenaming(null);
+              // Still looking at it: follow it to its new name.
+              setActiveTag((current) => (current?.id === tag.id ? tag : current));
+              tags.reload();
+            })
+            .catch((e: unknown) => setPromptError(e instanceof Error ? e.message : String(e)))
+            .finally(() => setBusy(false));
+        }}
+        testId="rename-tag-dialog"
+      />
+
+      {menu && (
+        <Menu
+          anchor={menu.anchor}
+          items={menu.items}
+          header={menu.header}
+          onClose={() => setMenu(null)}
+          label="Tag actions"
+        />
+      )}
+
+      <ShareDialog
+        libraryId={gate.libraryId}
+        open={sharing !== null}
+        fixed={
+          sharing ? { target: { kind: 'tag', id: sharing.id }, name: sharing.name } : undefined
+        }
+        onClose={() => setSharing(null)}
+      />
+
       <ConfirmDialog
         open={deleting !== null}
         title={`Delete tag “${deleting?.name ?? ''}”?`}
@@ -320,7 +467,10 @@ export default function TagsPage() {
           const target = deleting;
           void run(
             () => deleteTag(gate.libraryId, target.id),
-            () => setActiveTag(null),
+            () => {
+              setDeleting(null);
+              setActiveTag(null);
+            },
           );
         }}
         testId="delete-tag-dialog"
