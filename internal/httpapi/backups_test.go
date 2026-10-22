@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/audit"
@@ -18,6 +19,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/db"
 	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
+	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
 )
 
 // newBackupTestServer wires a server with a backups manager, one registered
@@ -54,7 +56,11 @@ func newBackupTestServer(t *testing.T) (http.Handler, *testClient, *sql.DB) {
 
 	backupMgr := backups.NewManager(pool, logger, libraries, backups.Config{
 		Dir: filepath.Join(dir, "backups"), Keep: 2,
+		SecretKeyFile: filepath.Join(dir, "secret.key"),
 	}, filepath.Join(dir, "test.db"))
+	if err := backupMgr.LoadPolicy(context.Background(), serversettings.NewStore(pool)); err != nil {
+		t.Fatalf("load backup policy: %v", err)
+	}
 
 	handler := New(Dependencies{
 		Logger:    logger,
@@ -255,4 +261,92 @@ func TestBackupConfig_RejectsARelativeOrUnwritableDir(t *testing.T) {
 	}
 	rec = client.do(t, http.MethodPut, "/api/v1/backups/config", map[string]string{"dir": filepath.Join(file, "sub")})
 	assertErrorEnvelope(t, rec, http.StatusBadRequest, CodeBadRequest)
+}
+
+func TestBackupPolicy_SaveReadAndValidate(t *testing.T) {
+	_, client, _ := newBackupTestServer(t)
+
+	rec := client.do(t, http.MethodGet, "/api/v1/backups/policy", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get policy = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var got backupPolicyResponse
+	jsonUnmarshalRec(t, rec, &got)
+	if got.Schedule.Kind != backups.ScheduleOff || got.NextRun != "" || got.Timezone == "" {
+		t.Errorf("default policy = %+v", got)
+	}
+
+	rec = client.do(t, http.MethodPut, "/api/v1/backups/policy", map[string]any{
+		"schedule":     map[string]any{"kind": "daily", "at": "03:00"},
+		"size_trigger": map[string]any{"enabled": true, "bytes": 200 << 20, "quiet_minutes": 10},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put policy = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	jsonUnmarshalRec(t, rec, &got)
+	if got.Schedule.Kind != "daily" || got.Schedule.At != "03:00" || got.NextRun == "" {
+		t.Errorf("saved schedule = %+v next=%q", got.Schedule, got.NextRun)
+	}
+	if !got.SizeTrigger.Enabled || got.SizeTrigger.Bytes != 200<<20 {
+		t.Errorf("saved size trigger = %+v", got.SizeTrigger)
+	}
+
+	for _, bad := range []map[string]any{
+		{"schedule": map[string]any{"kind": "daily", "at": "3pm"}},
+		{"schedule": map[string]any{"kind": "interval", "every_minutes": 1}},
+		{"schedule": map[string]any{"kind": "off"}, "size_trigger": map[string]any{"enabled": true, "bytes": 10, "quiet_minutes": 5}},
+	} {
+		rec := client.do(t, http.MethodPut, "/api/v1/backups/policy", bad)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("policy %v = %d, want 400", bad, rec.Code)
+		}
+	}
+	// None of the refused requests changed anything.
+	rec = client.do(t, http.MethodGet, "/api/v1/backups/policy", nil)
+	jsonUnmarshalRec(t, rec, &got)
+	if got.Schedule.Kind != "daily" || !got.SizeTrigger.Enabled {
+		t.Errorf("a refused request changed the policy: %+v", got.backupPolicyBody)
+	}
+}
+
+func TestBackupRemote_ValidatesAndExplains(t *testing.T) {
+	_, client, _ := newBackupTestServer(t)
+
+	cases := []struct {
+		body map[string]any
+		want string
+	}{
+		{map[string]any{"config": map[string]any{"kind": "sftp", "user": "pi"}}, "server address is required"},
+		{map[string]any{"config": map[string]any{"kind": "smb", "host": "nas"}}, "share name is required"},
+		{map[string]any{"config": map[string]any{"kind": "ftp", "host": "nas", "user": "pi", "ftp_security": "maybe"}}, "ftp_security"},
+		{map[string]any{"config": map[string]any{"kind": "local", "path": "/etc"}}, "backup folder setting"},
+		// Nothing listens on port 1: a clear failure, not a hang.
+		{map[string]any{
+			"config": map[string]any{"kind": "sftp", "host": "127.0.0.1", "port": 1, "user": "pi"},
+			"secret": map[string]any{"password": "x"},
+		}, "could not reach"},
+		// No password given and none saved for this server.
+		{map[string]any{"config": map[string]any{"kind": "sftp", "host": "nas", "user": "pi"}}, "enter the password"},
+	}
+	for _, c := range cases {
+		rec := client.do(t, http.MethodPost, "/api/v1/backups/remote/test", c.body)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), c.want) {
+			t.Errorf("test %v = %d %s, want 400 mentioning %q", c.body, rec.Code, rec.Body.String(), c.want)
+		}
+		rec = client.do(t, http.MethodPut, "/api/v1/backups/remote", c.body)
+		if rec.Code == http.StatusOK {
+			t.Errorf("saved %v", c.body)
+		}
+	}
+
+	rec := client.do(t, http.MethodGet, "/api/v1/backups/config", nil)
+	var cfg backupConfigResponse
+	jsonUnmarshalRec(t, rec, &cfg)
+	if cfg.Destination != "local" || cfg.Remote != nil {
+		t.Errorf("after refused requests, config = %+v", cfg)
+	}
+	rec = client.do(t, http.MethodPost, "/api/v1/backups/use-local", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("use-local = %d", rec.Code)
+	}
 }

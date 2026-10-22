@@ -458,3 +458,89 @@ func TestKeyDerivationDeterministic(t *testing.T) {
 		t.Fatalf("key length = %d, want 32", len(a))
 	}
 }
+
+func TestStreamSink_RoundTripsWithoutSeeking(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	sizes := []int{0, 10, aeadChunkSize - 1, aeadChunkSize, aeadChunkSize + 1, 3*aeadChunkSize + 7}
+	for _, size := range sizes {
+		for _, mode := range []struct{ compress, encrypt bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+			plain := make([]byte, size)
+			for i := range plain {
+				plain[i] = byte(i * 7 % 251)
+			}
+			sum := sha256.Sum256(plain)
+			var k []byte
+			if mode.encrypt {
+				k = key
+			}
+			// A plain io.Writer: no Seek, as over FTP.
+			var buf bytes.Buffer
+			sink, err := newStreamSink(&buf, hex.EncodeToString(sum[:]), int64(size), mode.compress, mode.encrypt, k)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := sink.Write(plain); err != nil {
+				t.Fatal(err)
+			}
+			h, err := sink.Finish()
+			if err != nil {
+				t.Fatalf("size %d %+v: finish: %v", size, mode, err)
+			}
+			if !h.Streamed {
+				t.Error("header not marked streamed")
+			}
+			pr, err := openPayload(bytes.NewReader(buf.Bytes()), k)
+			if err != nil {
+				t.Fatalf("size %d %+v: open: %v", size, mode, err)
+			}
+			got, err := io.ReadAll(pr)
+			if err != nil || pr.Err() != nil {
+				t.Fatalf("size %d %+v: read: %v / %v", size, mode, err, pr.Err())
+			}
+			if !bytes.Equal(got, plain) {
+				t.Errorf("size %d %+v: round trip differs", size, mode)
+			}
+		}
+	}
+}
+
+func TestStreamSink_RefusesAFileThatChangedAfterHashing(t *testing.T) {
+	sum := sha256.Sum256([]byte("what was hashed"))
+	sink, err := newStreamSink(io.Discard, hex.EncodeToString(sum[:]), 15, false, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = sink.Write([]byte("what was writte"))
+	if _, err := sink.Finish(); !errors.Is(err, errChangedWhileWriting) {
+		t.Errorf("finish = %v, want errChangedWhileWriting", err)
+	}
+}
+
+func TestStreamSink_TruncatedOrTamperedFails(t *testing.T) {
+	key := bytes.Repeat([]byte{9}, 32)
+	plain := bytes.Repeat([]byte("orchard"), 30000)
+	sum := sha256.Sum256(plain)
+	var buf bytes.Buffer
+	sink, _ := newStreamSink(&buf, hex.EncodeToString(sum[:]), int64(len(plain)), true, true, key)
+	_, _ = sink.Write(plain)
+	if _, err := sink.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	whole := buf.Bytes()
+	for name, data := range map[string][]byte{
+		"truncated": whole[:len(whole)-100],
+		"tampered":  append(append([]byte{}, whole[:len(whole)/2]...), append([]byte{whole[len(whole)/2] ^ 1}, whole[len(whole)/2+1:]...)...),
+	} {
+		pr, err := openPayload(bytes.NewReader(data), key)
+		if err != nil {
+			continue
+		}
+		_, rerr := io.ReadAll(pr)
+		if rerr == nil && pr.Err() == nil {
+			t.Errorf("%s payload read back without an error", name)
+		}
+	}
+}

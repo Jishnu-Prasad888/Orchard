@@ -336,6 +336,15 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("GET /api/v1/backups", s.withAuth(allowAdmin, s.handleListBackups))
 			mux.Handle("GET /api/v1/backups/config", s.withAuth(allowAdmin, s.handleGetBackupConfig))
 			mux.Handle("PUT /api/v1/backups/config", s.withAuth(allowAdmin, s.handleSetBackupConfig))
+			// When backups run on their own: a schedule that survives
+			// restarts, and a trigger on how much new data has piled up.
+			mux.Handle("GET /api/v1/backups/drives", s.withAuth(allowAdmin, s.handleListBackupDrives))
+			// A network destination (SFTP, FTP(S), SMB) instead of a folder.
+			mux.Handle("POST /api/v1/backups/remote/test", s.withAuth(allowAdmin, s.handleTestBackupRemote))
+			mux.Handle("PUT /api/v1/backups/remote", s.withAuth(allowAdmin, s.handleSetBackupRemote))
+			mux.Handle("POST /api/v1/backups/use-local", s.withAuth(allowAdmin, s.handleUseLocalBackups))
+			mux.Handle("GET /api/v1/backups/policy", s.withAuth(allowAdmin, s.handleGetBackupPolicy))
+			mux.Handle("PUT /api/v1/backups/policy", s.withAuth(allowAdmin, s.handleSetBackupPolicy))
 			mux.Handle("GET /api/v1/backups/{id}", s.withAuth(allowAdmin, s.handleGetBackup))
 			mux.Handle("POST /api/v1/backups/{id}/verify", s.withAuth(allowAdmin, s.handleVerifyBackup))
 			mux.Handle("POST /api/v1/backups/{id}/restore", s.withAuth(allowAdmin, s.handleRestoreBackup))

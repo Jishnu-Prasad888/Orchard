@@ -582,7 +582,10 @@ export interface PublicShareInfoResponse {
  * Backups
  * ------------------------------------------------------------------ */
 
-export type BackupStatus = 'running' | 'ok' | 'failed' | string;
+/** As the server sends it. (`ok` was never one: the page used to look for
+ * it, which drew every good backup as unfinished and kept Verify and Restore
+ * disabled.) */
+export type BackupStatus = 'running' | 'completed' | 'failed' | 'pruned' | 'restoring';
 
 /** Where backups are written, and how they're kept. */
 export interface BackupConfig {
@@ -593,6 +596,55 @@ export interface BackupConfig {
   keep: number;
   interval_minutes: number;
   encrypted: boolean;
+  /** The folder's drive, and whether it is plugged in right now. */
+  drive?: BackupDriveStatus;
+  /** Where backups go: the folder above, or the network server. */
+  destination?: 'local' | 'remote';
+  remote?: { config: BackupRemoteConfig; has_secret: boolean };
+}
+
+/** A network destination's settings. Never holds a password. */
+export interface BackupRemoteConfig {
+  kind: 'sftp' | 'ftp' | 'smb';
+  host: string;
+  port?: number;
+  user?: string;
+  path: string;
+  share?: string;
+  domain?: string;
+  ftp_security?: 'explicit' | 'implicit' | 'none';
+  /** The confirmed server identity: SSH host key, or a self-signed cert. */
+  fingerprint?: string;
+}
+
+export interface BackupRemoteSecret {
+  password?: string;
+  private_key?: string;
+  key_passphrase?: string;
+}
+
+export interface BackupDriveStatus {
+  mount?: string;
+  device?: string;
+  fs_type?: string;
+  /** On the disk the system runs from (a Pi's SD card). */
+  system: boolean;
+  free: number;
+  total: number;
+  connected: boolean;
+  /** Why backups cannot be written there now. */
+  problem?: string;
+}
+
+/** A mounted drive a backup folder could go on. */
+export interface BackupDrive {
+  path: string;
+  device: string;
+  fs_type: string;
+  uuid?: string;
+  total: number;
+  free: number;
+  system: boolean;
 }
 
 export interface BackupRecord {
@@ -614,6 +666,42 @@ export interface BackupRecord {
   verify_errors?: number;
   error_msg?: string;
   created_at: string;
+  /** Why it ran. */
+  trigger?: BackupTrigger;
+}
+
+export type BackupTrigger = 'manual' | 'scheduled' | 'catch-up' | 'size';
+
+export const BACKUP_TRIGGER_LABEL: Record<BackupTrigger, string> = {
+  manual: 'By hand',
+  scheduled: 'Scheduled',
+  'catch-up': 'Missed schedule',
+  size: 'New data',
+};
+
+/** When backups run by the clock. `at` is "HH:MM" in the server's time. */
+export interface BackupSchedule {
+  kind: 'off' | 'interval' | 'daily' | 'weekly';
+  every_minutes?: number;
+  at?: string;
+  /** 0 = Sunday. */
+  weekday?: number;
+  since?: string;
+}
+
+/** Back up once new data since the last backup adds up to `bytes`. */
+export interface BackupSizeTrigger {
+  enabled: boolean;
+  bytes: number;
+  quiet_minutes: number;
+}
+
+export interface BackupPolicy {
+  schedule: BackupSchedule;
+  size_trigger: BackupSizeTrigger;
+  next_run?: string;
+  timezone: string;
+  pending: { files: number; bytes: number; last_change?: string };
 }
 
 /* ------------------------------------------------------------------ *

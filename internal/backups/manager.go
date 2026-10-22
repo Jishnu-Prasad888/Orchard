@@ -23,6 +23,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/sanitize"
+	"github.com/Jishnu-Prasad888/Orchard/internal/serversettings"
 )
 
 // DirSettingKey is the server setting holding the backup directory an
@@ -55,7 +56,12 @@ type Config struct {
 	// Restore requires the same passphrase.
 	Passphrase string
 
-	// Interval is the scheduled backup cadence (0 disables scheduling).
+	// SecretKeyFile is where the key sealing a network destination's
+	// password is kept (created on first use; see remote.go).
+	SecretKeyFile string
+
+	// Interval is the scheduled backup cadence from ORCHARD_BACKUP_INTERVAL_MIN
+	// (0 disables it). A schedule saved in the app replaces it; see policy.go.
 	Interval time.Duration
 }
 
@@ -76,6 +82,20 @@ type Manager struct {
 	busy    atomic.Bool
 	skipped atomic.Int64
 	trigger chan struct{}
+
+	// When backups run on their own (policy.go), under mu.
+	settings         *serversettings.Store
+	policy           Policy
+	attemptedSlot    time.Time
+	sizeBackoffUntil time.Time
+	// drive is which drive the backup folder was chosen on (mounts.go).
+	drive DriveRecord
+	// mounts reads the mount table; a field so tests can stand in for it.
+	mounts func() []Mount
+	// remote is the saved network destination; destination says whether
+	// backups go there or to the local folder (remote.go).
+	remote      *savedRemote
+	destination string
 }
 
 // NewManager builds the backup manager. serverDB is the absolute path of the
@@ -92,6 +112,7 @@ func NewManager(db *sql.DB, logger *slog.Logger, libs *library.Manager, cfg Conf
 		cfg:     cfg,
 		server:  serverDB,
 		trigger: make(chan struct{}, 1),
+		mounts:  systemMounts,
 	}
 }
 
@@ -134,14 +155,61 @@ func (m *Manager) SetDir(dir, source string) error {
 		return errors.New("backup directory must be an absolute path")
 	}
 	dir = filepath.Clean(dir)
+	// Refuse a drive that is not plugged in before creating anything, or the
+	// folder would be made on the system disk in its place.
+	mounts := m.mounts()
+	if msg := checkDrive(mounts, DriveRecord{}, dir); msg != "" {
+		return errors.New(msg)
+	}
 	if err := CheckDir(dir); err != nil {
 		return err
 	}
+	drive := recordDrive(mounts, dir)
 	m.mu.Lock()
 	m.cfg.Dir = dir
 	m.cfg.DirSource = source
+	m.drive = drive
 	m.mu.Unlock()
+	if m.settings != nil {
+		if err := m.saveSetting(context.Background(), DriveSettingKey, drive); err != nil {
+			m.logger.Warn("save backup drive", "error", err)
+		}
+	}
 	return nil
+}
+
+// DriveStatus is the backup folder's drive, and whether it is there now.
+type DriveStatus struct {
+	Mount     string `json:"mount,omitempty"`
+	Device    string `json:"device,omitempty"`
+	FSType    string `json:"fs_type,omitempty"`
+	System    bool   `json:"system"`
+	Free      int64  `json:"free"`
+	Total     int64  `json:"total"`
+	Connected bool   `json:"connected"`
+	// Problem says why backups cannot be written there now, if they cannot.
+	Problem string `json:"problem,omitempty"`
+}
+
+// Drive reports on the backup folder's drive.
+func (m *Manager) Drive() DriveStatus {
+	dir := m.dir()
+	if dir == "" {
+		return DriveStatus{}
+	}
+	m.mu.RLock()
+	rec := m.drive
+	m.mu.RUnlock()
+	mounts := m.mounts()
+	st := DriveStatus{Problem: checkDrive(mounts, rec, dir)}
+	st.Connected = st.Problem == ""
+	if cur, ok := mountFor(mounts, dir); ok {
+		st.Mount, st.Device, st.FSType, st.System = cur.Path, cur.Device, cur.FSType, cur.System
+		if st.Connected {
+			st.Total, st.Free = diskSpace(cur.Path)
+		}
+	}
+	return st
 }
 
 // CheckDir creates dir if needed and confirms backups can be written there.
@@ -168,52 +236,38 @@ func (m *Manager) Trigger() {
 	}
 }
 
-// Start launches the scheduler goroutine. Call it exactly once.
+// Start launches the scheduler goroutine. Call it exactly once, after
+// LoadPolicy.
 func (m *Manager) Start(ctx context.Context) {
 	if m.dir() == "" {
 		// Scheduled runs skip themselves until a directory is set.
 		m.logger.Info("backups paused: no backup directory configured")
 	}
-	go func() {
-		var tick <-chan time.Time
-		if m.cfg.Interval > 0 {
-			t := time.NewTicker(m.cfg.Interval)
-			defer t.Stop()
-			tick = t.C
-			m.logger.Info("backup scheduler started",
-				"interval", m.cfg.Interval.String(),
-				"dir", m.dir(), "keep", m.cfg.Keep,
-				"encrypted", m.cfg.Passphrase != "")
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick:
-				m.run(15 * time.Minute)
-			case <-m.trigger:
-				m.run(4 * time.Hour)
-			}
-		}
-	}()
+	p := m.Policy()
+	m.logger.Info("backup scheduler started",
+		"schedule", p.Schedule.Kind, "size_trigger", p.SizeTrigger.Enabled,
+		"dir", m.dir(), "keep", m.cfg.Keep, "encrypted", m.cfg.Passphrase != "")
+	go m.loop(ctx)
 }
 
-// run is the single-flight wrapper around RunBackup.
-func (m *Manager) run(timeout time.Duration) {
+// run is the single-flight wrapper around runBackup for the scheduler. It
+// returns the record, or nil if the run was skipped or could not start.
+func (m *Manager) run(timeout time.Duration, trigger string) *Record {
 	if !m.busy.CompareAndSwap(false, true) {
-		m.logger.Warn("backup skipped: another run is in progress")
-		return
+		m.logger.Warn("backup skipped: another run is in progress", "trigger", trigger)
+		return nil
 	}
 	defer m.busy.Store(false)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	rec, err := m.RunBackup(ctx)
+	rec, err := m.runBackup(ctx, trigger)
 	if err != nil {
-		m.logger.Error("backup run errored", "error", err)
-		return
+		m.logger.Error("backup run errored", "trigger", trigger, "error", err)
+		return nil
 	}
 	m.logger.Info("backup run finished", "backup_id", rec.ID, "status", rec.Status,
-		"files", rec.Files, "bytes", rec.Bytes, "stored_bytes", rec.StoredBytes)
+		"trigger", trigger, "files", rec.Files, "bytes", rec.Bytes, "stored_bytes", rec.StoredBytes)
+	return rec
 }
 
 // Run performs one full backup synchronously and returns the record. It is
@@ -223,7 +277,7 @@ func (m *Manager) Run(ctx context.Context) (*Record, error) {
 		return nil, errors.New("a backup is already running")
 	}
 	defer m.busy.Store(false)
-	return m.RunBackup(ctx)
+	return m.runBackup(ctx, TriggerManual)
 }
 
 // Verify re-checks a completed backup's integrity by restoring a sample of
@@ -236,6 +290,9 @@ func (m *Manager) Verify(ctx context.Context, id string) (*Record, error) {
 	}
 	if rec.Status != StatusCompleted || rec.Destination == "" {
 		return nil, errors.New("backup is not verifiable")
+	}
+	if rec.Snapshot != "" {
+		return m.verifyRemote(ctx, rec)
 	}
 	var key []byte
 	if rec.Encrypted {
@@ -271,9 +328,41 @@ func (m *Manager) Verify(ctx context.Context, id string) (*Record, error) {
 // RunBackup performs one full backup synchronously. Callers should normally
 // use Run; this is exposed for tests.
 func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
+	return m.runBackup(ctx, TriggerManual)
+}
+
+func (m *Manager) runBackup(ctx context.Context, trigger string) (*Record, error) {
+	m.mu.RLock()
+	toRemote := m.destination == DestinationRemote
+	m.mu.RUnlock()
+	if toRemote {
+		now := time.Now().UTC()
+		m.skipped.Store(0)
+		rec := &Record{ID: newID(), Status: StatusRunning, StartedAt: now, CreatedAt: now,
+			ServerDB: m.server, Trigger: trigger}
+		if err := m.store.Create(ctx, rec); err != nil {
+			return nil, err
+		}
+		return m.runRemoteBackup(ctx, rec)
+	}
 	dir := m.dir()
 	if dir == "" {
 		return nil, errors.New("backup directory not configured — set one on the Backups page")
+	}
+	// The drive must be the one backups were set up on, and plugged in:
+	// otherwise the folder below would be created on the system disk.
+	m.mu.RLock()
+	drive := m.drive
+	m.mu.RUnlock()
+	if msg := checkDrive(m.mounts(), drive, dir); msg != "" {
+		now := time.Now().UTC()
+		rec := &Record{ID: newID(), Status: StatusRunning, StartedAt: now, CreatedAt: now,
+			ServerDB: m.server, Trigger: trigger, Destination: dir}
+		if err := m.store.Create(ctx, rec); err != nil {
+			return nil, err
+		}
+		m.fail(ctx, rec, errors.New(msg))
+		return rec, nil
 	}
 	now := time.Now().UTC()
 	m.skipped.Store(0)
@@ -283,6 +372,7 @@ func (m *Manager) RunBackup(ctx context.Context) (*Record, error) {
 		StartedAt: now,
 		CreatedAt: now,
 		ServerDB:  m.server,
+		Trigger:   trigger,
 	}
 	if err := m.store.Create(ctx, rec); err != nil {
 		return nil, err
@@ -666,6 +756,9 @@ func (m *Manager) Restore(ctx context.Context, id, dest string) (*Record, error)
 	}
 	if dest == "" {
 		return nil, errors.New("restore destination required")
+	}
+	if rec.Snapshot != "" {
+		return m.restoreRemote(ctx, rec, dest)
 	}
 	if err := os.MkdirAll(dest, 0o700); err != nil {
 		return nil, err

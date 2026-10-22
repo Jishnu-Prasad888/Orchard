@@ -71,6 +71,12 @@ import type {
   UserListResponse,
   ShareTarget,
   PublicShareListing,
+  BackupPolicy,
+  BackupSchedule,
+  BackupSizeTrigger,
+  BackupDrive,
+  BackupRemoteConfig,
+  BackupRemoteSecret,
 } from './types';
 
 /* ------------------------- re-exported types ------------------------- */
@@ -570,6 +576,25 @@ export const getBackupConfig = () => apiGet<BackupConfig>('/backups/config');
 /** Changes the backup directory; the server creates it and checks it is
  * writable before accepting it. */
 export const setBackupDir = (dir: string) => apiPut<BackupConfig>('/backups/config', { dir });
+
+export const listBackupDrives = () =>
+  apiGet<{ drives: BackupDrive[] }>('/backups/drives').then((r) => r.drives ?? []);
+
+/** A missing secret means "keep the one already saved for this server". */
+export const testBackupRemote = (config: BackupRemoteConfig, secret?: BackupRemoteSecret) =>
+  apiPost<{ ok: boolean }>('/backups/remote/test', secret ? { config, secret } : { config });
+
+export const setBackupRemote = (config: BackupRemoteConfig, secret?: BackupRemoteSecret) =>
+  apiPut<BackupConfig>('/backups/remote', secret ? { config, secret } : { config });
+
+export const useLocalBackups = () => apiPost<BackupConfig>('/backups/use-local', {});
+
+export const getBackupPolicy = () => apiGet<BackupPolicy>('/backups/policy');
+
+export const setBackupPolicy = (policy: {
+  schedule: BackupSchedule;
+  size_trigger: BackupSizeTrigger;
+}) => apiPut<BackupPolicy>('/backups/policy', policy);
 
 export const verifyBackup = (id: string) => apiPost<BackupRecord>(`/backups/${id}/verify`);
 

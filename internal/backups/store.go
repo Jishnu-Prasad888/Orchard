@@ -45,7 +45,22 @@ type Record struct {
 	VerifyErrors  int
 	ErrorMsg      string
 	CreatedAt     time.Time
+	// Trigger is why it ran: TriggerManual, TriggerScheduled, TriggerCatchUp
+	// or TriggerSize.
+	Trigger string
+	// Snapshot and Target say where a network backup is (repo.go); both
+	// are empty for a local one.
+	Snapshot string
+	Target   string
 }
+
+// Why a backup ran.
+const (
+	TriggerManual    = "manual"
+	TriggerScheduled = "scheduled"
+	TriggerCatchUp   = "catch-up"
+	TriggerSize      = "size"
+)
 
 // Store provides row-level access to backup records.
 type Store struct {
@@ -60,18 +75,52 @@ func NewStore(db *sql.DB) *Store {
 const recordCols = `id, status, destination, started_at, finished_at,
 	server_db_path, libraries, files, files_skipped, bytes, stored_bytes,
 	encrypted, same_device, verify_status, verify_checked, verify_errors,
-	error_msg, created_at`
+	error_msg, created_at, trigger, snapshot, target`
 
 func (s *Store) Create(ctx context.Context, r *Record) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO backups (`+recordCols+`)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		r.ID, string(r.Status), r.Destination,
 		rf(r.StartedAt), rf(r.FinishedAt),
 		r.ServerDB, r.Libraries, r.Files, r.FilesSkipped,
 		r.Bytes, r.StoredBytes, b2i(r.Encrypted), b2i(r.SameDevice),
 		r.VerifyStatus, r.VerifyChecked, r.VerifyErrors,
-		r.ErrorMsg, rf(r.CreatedAt))
+		r.ErrorMsg, rf(r.CreatedAt), triggerOrManual(r.Trigger), r.Snapshot, r.Target)
 	return err
+}
+
+func triggerOrManual(t string) string {
+	if t == "" {
+		return TriggerManual
+	}
+	return t
+}
+
+// LastStarted is when the most recent backup of any outcome started (zero
+// if none has): what a schedule counts from, so a failed run is not retried
+// in a tight loop but at the next slot.
+func (s *Store) LastStarted(ctx context.Context) (time.Time, error) {
+	return s.lastStart(ctx, `SELECT started_at FROM backups ORDER BY started_at DESC LIMIT 1`)
+}
+
+// LastCompletedStart is when the most recent successful backup started (zero
+// if none has): everything changed after it is not in any backup yet.
+func (s *Store) LastCompletedStart(ctx context.Context) (time.Time, error) {
+	return s.lastStart(ctx, `SELECT started_at FROM backups WHERE status IN ('completed', 'pruned')
+		ORDER BY started_at DESC LIMIT 1`)
+}
+
+func (s *Store) lastStart(ctx context.Context, query string) (time.Time, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, query).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	t, _ := time.Parse(time.RFC3339Nano, v)
+	return t, nil
 }
 
 // Update overwrites all mutable fields for a running record.
@@ -80,13 +129,13 @@ func (s *Store) Update(ctx context.Context, r *Record) error {
 		status=?, destination=?, started_at=?, finished_at=?,
 		server_db_path=?, libraries=?, files=?, files_skipped=?, bytes=?,
 		stored_bytes=?, encrypted=?, same_device=?, verify_status=?,
-		verify_checked=?, verify_errors=?, error_msg=?
+		verify_checked=?, verify_errors=?, error_msg=?, snapshot=?, target=?
 		WHERE id=?`,
 		string(r.Status), r.Destination, rf(r.StartedAt), rf(r.FinishedAt),
 		r.ServerDB, r.Libraries, r.Files, r.FilesSkipped, r.Bytes,
 		r.StoredBytes, b2i(r.Encrypted), b2i(r.SameDevice),
 		r.VerifyStatus, r.VerifyChecked, r.VerifyErrors,
-		r.ErrorMsg, r.ID)
+		r.ErrorMsg, r.Snapshot, r.Target, r.ID)
 	return err
 }
 
@@ -136,7 +185,7 @@ func scanRecord(sc recordScanner) (Record, error) {
 		&serverDB, &r.Libraries, &r.Files, &r.FilesSkipped,
 		&r.Bytes, &r.StoredBytes, &encrypted, &sameDev,
 		&r.VerifyStatus, &r.VerifyChecked, &r.VerifyErrors,
-		&r.ErrorMsg, &created)
+		&r.ErrorMsg, &created, &r.Trigger, &r.Snapshot, &r.Target)
 	if err != nil {
 		return Record{}, err
 	}

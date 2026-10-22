@@ -14,9 +14,16 @@ import {
 import type { RouteHandler } from '../test/harness';
 import BackupsPage from './BackupsPage';
 
+const defaultPolicy = {
+  schedule: { kind: 'off' },
+  size_trigger: { enabled: false, bytes: 0, quiet_minutes: 0 },
+  timezone: 'IST',
+  pending: { files: 12, bytes: 3 * 1024 * 1024 },
+};
+
 const okBackup = {
   id: 'b1',
-  status: 'ok',
+  status: 'completed',
   destination: '/mnt/backup/orchard',
   started_at: '2026-09-01T02:00:00Z',
   finished_at: '2026-09-01T02:14:00Z',
@@ -59,6 +66,10 @@ function setup(overrides: RouteHandler[] = [], options = {}) {
     [
       ...overrides,
       (url) => (url.endsWith('/api/v1/backups/b1') ? json(okBackup) : undefined),
+      (url, init) =>
+        (init?.method ?? 'GET') === 'GET' && url.endsWith('/api/v1/backups/policy')
+          ? json(defaultPolicy)
+          : undefined,
       (url, init) =>
         (init?.method ?? 'GET') === 'GET' && url.endsWith('/api/v1/backups/config')
           ? json(defaultConfig)
@@ -335,5 +346,274 @@ describe('BackupsPage', () => {
 
     expect(await screen.findByText(/not writable/)).toBeInTheDocument();
     expect(screen.getByTestId('backup-dir-input')).toBeInTheDocument();
+  });
+
+  it('can verify and restore a completed backup', async () => {
+    setup();
+    const table = await screen.findByTestId('backups-table');
+    fireEvent.click(within(table).getByTestId('backup-open-b1'));
+    // The server says "completed"; the page once looked for "ok", which kept
+    // both of these disabled for every real backup.
+    expect(await screen.findByTestId('verify-backup')).toBeEnabled();
+    expect(screen.getByTestId('open-restore-backup')).toBeEnabled();
+  });
+
+  it('says why each backup ran', async () => {
+    setup([
+      (url) =>
+        url.endsWith('/api/v1/backups')
+          ? json([
+              { ...okBackup, trigger: 'catch-up' },
+              { ...failedBackup, trigger: 'size' },
+            ])
+          : undefined,
+    ]);
+    const table = await screen.findByTestId('backups-table');
+    expect(within(table).getByText('Missed schedule')).toBeInTheDocument();
+    expect(within(table).getByText('New data')).toBeInTheDocument();
+  });
+
+  it('saves a weekly schedule and a size trigger, and shows the next run', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/backups/policy')
+          ? json({
+              ...defaultPolicy,
+              schedule: { kind: 'weekly', at: '02:30', weekday: 1 },
+              size_trigger: { enabled: true, bytes: 2 * 1024 ** 3, quiet_minutes: 15 },
+              next_run: '2099-01-05T21:00:00Z',
+            })
+          : undefined,
+    ]);
+
+    expect(await screen.findByTestId('size-pending')).toHaveTextContent(
+      'Not yet backed up: 12 files, 3.0 MB.',
+    );
+    expect(screen.getByTestId('save-backup-policy')).toBeDisabled();
+    // The starting limit reads as 5 GB, not 5120 MB.
+    expect(screen.getByTestId('size-amount')).toHaveValue(5);
+
+    fireEvent.change(screen.getByTestId('schedule-kind'), { target: { value: 'weekly' } });
+    fireEvent.change(screen.getByTestId('schedule-weekday'), { target: { value: '1' } });
+    fireEvent.change(screen.getByTestId('schedule-at'), { target: { value: '02:30' } });
+    expect(screen.getByText(/runs once as soon as the server is back/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('size-enabled'));
+    fireEvent.change(screen.getByTestId('size-amount'), { target: { value: '2' } });
+    fireEvent.change(screen.getByTestId('size-quiet'), { target: { value: '15' } });
+    fireEvent.click(screen.getByTestId('save-backup-policy'));
+
+    await waitFor(() =>
+      expect(bodyOf(fetchMock, 'PUT', '/api/v1/backups/policy')).toEqual({
+        schedule: { kind: 'weekly', at: '02:30', weekday: 1 },
+        size_trigger: { enabled: true, bytes: 2 * 1024 ** 3, quiet_minutes: 15 },
+      }),
+    );
+    expect(await screen.findByTestId('schedule-next')).toHaveTextContent('Next backup:');
+  });
+
+  it('shows a refused schedule inside the form', async () => {
+    setup([
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/backups/policy')
+          ? apiError(400, 'BAD_REQUEST', 'the interval must be between 15 minutes and 31 days')
+          : undefined,
+    ]);
+    fireEvent.change(await screen.findByTestId('schedule-kind'), {
+      target: { value: 'interval' },
+    });
+    fireEvent.change(screen.getByTestId('schedule-hours'), { target: { value: '6' } });
+    fireEvent.click(screen.getByTestId('save-backup-policy'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('between 15 minutes and 31 days');
+    // Still unsaved, so it can be corrected and tried again.
+    expect(screen.getByTestId('save-backup-policy')).toBeEnabled();
+  });
+
+  it('warns, in words, when the backup drive is unplugged', async () => {
+    setup([
+      (url, init) =>
+        (init?.method ?? 'GET') === 'GET' && url.endsWith('/api/v1/backups/config')
+          ? json({
+              ...defaultConfig,
+              drive: {
+                system: true,
+                free: 0,
+                total: 0,
+                connected: false,
+                problem:
+                  'The backup drive for /media/pi/backup/orchard (/media/pi/backup) is not connected.',
+              },
+            })
+          : undefined,
+    ]);
+    expect(await screen.findByTestId('backup-drive-problem')).toHaveTextContent('is not connected');
+  });
+
+  it('offers the mounted drives when choosing a folder', async () => {
+    setup([
+      (url) =>
+        url.endsWith('/api/v1/backups/drives')
+          ? json({
+              drives: [
+                {
+                  path: '/',
+                  device: '/dev/mmcblk0p2',
+                  fs_type: 'ext4',
+                  total: 32e9,
+                  free: 20e9,
+                  system: true,
+                },
+                {
+                  path: '/media/pi/backup',
+                  device: '/dev/sda1',
+                  fs_type: 'exfat',
+                  total: 1e12,
+                  free: 6e11,
+                  system: false,
+                },
+              ],
+            })
+          : undefined,
+    ]);
+    fireEvent.click(await screen.findByTestId('change-backup-dir'));
+    const list = await screen.findByTestId('backup-drives');
+    expect(within(list).getByText('System disk', { exact: false })).toBeInTheDocument();
+    fireEvent.click(within(list).getByText('/media/pi/backup'));
+    expect(screen.getByTestId('backup-dir-input')).toHaveValue('/media/pi/backup/orchard-backups');
+  });
+
+  it('sets up SFTP, asking to confirm the server on first contact', async () => {
+    let tests = 0;
+    const fetchMock = setup([
+      (url, init) => {
+        if (init?.method !== 'POST' || !url.endsWith('/api/v1/backups/remote/test'))
+          return undefined;
+        tests += 1;
+        const body = JSON.parse(String(init.body)) as { config: { fingerprint?: string } };
+        return body.config.fingerprint
+          ? json({ ok: true })
+          : new Response(
+              JSON.stringify({
+                error: {
+                  code: 'SERVER_IDENTITY',
+                  message: "confirm the server's identity",
+                  request_id: 'r',
+                  details: { fingerprint: 'SHA256:abc123', changed: false },
+                },
+              }),
+              { status: 409, headers: { 'Content-Type': 'application/json' } },
+            );
+      },
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/backups/remote')
+          ? json({
+              ...defaultConfig,
+              destination: 'remote',
+              remote: {
+                config: { kind: 'sftp', host: 'nas.local', user: 'pi', path: 'orchard-backups' },
+                has_secret: true,
+              },
+            })
+          : undefined,
+    ]);
+
+    fireEvent.click(await screen.findByTestId('backup-remote-edit'));
+    // Not encrypted: said before anything leaves the machine.
+    expect(screen.getByTestId('backup-remote-unencrypted')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('remote-host'), { target: { value: 'nas.local' } });
+    fireEvent.change(screen.getByTestId('remote-user'), { target: { value: 'pi' } });
+    fireEvent.change(screen.getByTestId('remote-password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByTestId('remote-test'));
+
+    const prompt = await screen.findByTestId('remote-identity');
+    expect(prompt).toHaveTextContent('First connection to nas.local');
+    expect(prompt).toHaveTextContent('SHA256:abc123');
+    fireEvent.click(within(prompt).getByTestId('remote-trust'));
+    expect(await screen.findByTestId('remote-tested')).toBeInTheDocument();
+    expect(tests).toBe(2);
+
+    fireEvent.click(screen.getByTestId('remote-save'));
+    await waitFor(() =>
+      expect(bodyOf(fetchMock, 'PUT', '/api/v1/backups/remote')).toEqual({
+        config: {
+          kind: 'sftp',
+          host: 'nas.local',
+          user: 'pi',
+          path: 'orchard-backups',
+          ftp_security: 'explicit',
+          fingerprint: 'SHA256:abc123',
+        },
+        secret: { password: 'pw' },
+      }),
+    );
+    expect(await screen.findByTestId('backup-notice')).toHaveTextContent(
+      'Backups will now go to sftp://pi@nas.local/orchard-backups.',
+    );
+    expect(screen.getByTestId('backup-dir-unused')).toBeInTheDocument();
+  });
+
+  it('warns loudly when a confirmed server presents a different identity', async () => {
+    setup([
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/backups/remote/test')
+          ? new Response(
+              JSON.stringify({
+                error: {
+                  code: 'SERVER_IDENTITY',
+                  message: 'changed',
+                  request_id: 'r',
+                  details: { fingerprint: 'SHA256:new', changed: true },
+                },
+              }),
+              { status: 409, headers: { 'Content-Type': 'application/json' } },
+            )
+          : undefined,
+    ]);
+    fireEvent.click(await screen.findByTestId('backup-remote-edit'));
+    fireEvent.change(screen.getByTestId('remote-host'), { target: { value: 'nas.local' } });
+    fireEvent.change(screen.getByTestId('remote-password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByTestId('remote-test'));
+    const prompt = await screen.findByTestId('remote-identity');
+    expect(prompt).toHaveTextContent("This server's identity has changed");
+    expect(within(prompt).getByTestId('remote-trust')).toHaveTextContent('Trust the new identity');
+  });
+
+  it('says plain FTP is unencrypted, and keeps a saved password without resending it', async () => {
+    const fetchMock = setup([
+      (url, init) =>
+        (init?.method ?? 'GET') === 'GET' && url.endsWith('/api/v1/backups/config')
+          ? json({
+              ...defaultConfig,
+              encrypted: true,
+              destination: 'remote',
+              remote: {
+                config: {
+                  kind: 'ftp',
+                  host: 'nas',
+                  user: 'pi',
+                  path: 'b',
+                  ftp_security: 'explicit',
+                },
+                has_secret: true,
+              },
+            })
+          : undefined,
+      (url, init) =>
+        init?.method === 'PUT' && url.endsWith('/api/v1/backups/remote')
+          ? json({ ...defaultConfig, destination: 'remote' })
+          : undefined,
+    ]);
+    expect(await screen.findByTestId('backup-remote-current')).toHaveTextContent('ftp://pi@nas/b');
+    expect(screen.queryByTestId('backup-remote-unencrypted')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('backup-remote-edit'));
+    expect(screen.getByTestId('remote-password')).toHaveAttribute(
+      'placeholder',
+      'Saved — leave empty to keep it',
+    );
+    fireEvent.change(screen.getByTestId('remote-ftp-security'), { target: { value: 'none' } });
+    expect(screen.getByRole('note')).toHaveTextContent('unencrypted');
+    fireEvent.click(screen.getByTestId('remote-save'));
+    await waitFor(() =>
+      expect(bodyOf(fetchMock, 'PUT', '/api/v1/backups/remote')).not.toHaveProperty('secret'),
+    );
   });
 });
