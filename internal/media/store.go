@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -47,6 +48,14 @@ func (s *FileStore) List(ctx context.Context, opts ListOptions) (*Page, error) {
 	if opts.Type != "" {
 		conditions = append(conditions, "media_type = ?")
 		args = append(args, string(opts.Type))
+	}
+	if cond, extArgs := ExtensionCondition("rel_path", opts.Extensions); cond != "" {
+		conditions = append(conditions, cond)
+		args = append(args, extArgs...)
+	}
+
+	if opts.Sort == SortByReading {
+		return s.listByReading(ctx, opts, conditions, args, hint)
 	}
 
 	// Cursor: rel_path > cursor for forward pagination.
@@ -124,6 +133,66 @@ func (s *FileStore) List(ctx context.Context, opts ListOptions) (*Page, error) {
 	return page, nil
 }
 
+// readingCursorPrefix marks a SortByReading cursor, which is an offset: the
+// order depends on the user's opens, which no column of the row carries.
+const readingCursorPrefix = "o:"
+
+// listByReading serves SortByReading: the files the user opened, most
+// recent first, then the rest newest first. conditions are List's filters,
+// which name only indexed_files columns.
+func (s *FileStore) listByReading(ctx context.Context, opts ListOptions, conditions []string, args []any, hint string) (*Page, error) {
+	offset := 0
+	if c, ok := strings.CutPrefix(opts.Cursor, readingCursorPrefix); ok {
+		if n, err := strconv.Atoi(c); err == nil && n > 0 {
+			offset = n
+		}
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+	query := fmt.Sprintf(`
+		SELECT f.id, f.rel_path, f.size_bytes, f.mod_time, f.content_hash, f.media_type, f.status,
+		       f.first_seen_at, f.last_seen_at
+		FROM indexed_files AS f %s
+		LEFT JOIN file_opens AS o ON o.file_id = f.id AND o.user_id = ?
+		%s
+		ORDER BY o.opened_at IS NULL, o.opened_at DESC, f.mod_time DESC, f.rel_path ASC
+		LIMIT ? OFFSET ?`, hint, where)
+	all := append([]any{opts.UserID}, args...)
+	all = append(all, opts.Limit+1, offset)
+
+	rows, err := s.db.QueryContext(ctx, query, all...)
+	if err != nil {
+		return nil, fmt.Errorf("list files by reading: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var files []*File
+	for rows.Next() {
+		f, err := s.scanFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	page := &Page{}
+	if len(files) > opts.Limit {
+		page.NextCursor = readingCursorPrefix + strconv.Itoa(offset+opts.Limit)
+		files = files[:opts.Limit]
+	}
+	page.Files = files
+	if total, err := s.countFiles(ctx, opts); err == nil {
+		page.Total = total
+	}
+	return page, nil
+}
+
 // countFiles returns an approximate total for the given filter options.
 func (s *FileStore) countFiles(ctx context.Context, opts ListOptions) (int, error) {
 	var conditions []string
@@ -138,6 +207,10 @@ func (s *FileStore) countFiles(ctx context.Context, opts ListOptions) (int, erro
 	if opts.Type != "" {
 		conditions = append(conditions, "media_type = ?")
 		args = append(args, string(opts.Type))
+	}
+	if cond, extArgs := ExtensionCondition("rel_path", opts.Extensions); cond != "" {
+		conditions = append(conditions, cond)
+		args = append(args, extArgs...)
 	}
 	where := "WHERE " + strings.Join(conditions, " AND ")
 	var n int

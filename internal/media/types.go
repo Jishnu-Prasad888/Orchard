@@ -174,6 +174,9 @@ const (
 	SortByName    SortField = "name"
 	SortBySize    SortField = "size"
 	SortByModTime SortField = "mod_time"
+	// SortByReading puts the files UserID opened most recently first, then
+	// the ones they never opened, newest first. Order does not apply.
+	SortByReading SortField = "reading"
 )
 
 // SortOrder is ascending or descending.
@@ -195,6 +198,10 @@ type ListOptions struct {
 	// Type filters to files of a specific MediaType. Empty means all.
 	Type MediaType
 
+	// Extensions filters to files ending in one of these (see
+	// ParseExtensions). Empty means all.
+	Extensions []string
+
 	// Status filters by file status. Defaults to "present" when empty.
 	Status FileStatus
 
@@ -202,10 +209,49 @@ type ListOptions struct {
 	Sort  SortField
 	Order SortOrder
 
+	// UserID is whose opens SortByReading orders by.
+	UserID string
+
 	// Cursor-based pagination: Cursor is the last seen rel_path from the
 	// previous page. Empty means start from the beginning.
 	Cursor string
 	Limit  int // default 50, max 200
+}
+
+// ParseExtensions reads a comma-separated extension list ("pdf,epub") from a
+// query string, lowercased and without dots. Anything that is not a short
+// run of letters and digits is dropped, so the result is safe in a LIKE.
+func ParseExtensions(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		ext := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(part), "."))
+		if ext == "" || len(ext) > 10 || strings.IndexFunc(ext, func(r rune) bool {
+			return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+		}) >= 0 {
+			continue
+		}
+		out = append(out, ext)
+		if len(out) == 16 {
+			break
+		}
+	}
+	return out
+}
+
+// ExtensionCondition is the WHERE fragment matching col against any of exts
+// (from ParseExtensions), or "" when exts is empty. LIKE is case-insensitive
+// for ASCII in SQLite, so "Book.PDF" matches "pdf".
+func ExtensionCondition(col string, exts []string) (string, []any) {
+	if len(exts) == 0 {
+		return "", nil
+	}
+	ors := make([]string, len(exts))
+	args := make([]any, len(exts))
+	for i, ext := range exts {
+		ors[i] = col + " LIKE ?"
+		args[i] = "%." + ext
+	}
+	return "(" + strings.Join(ors, " OR ") + ")", args
 }
 
 // Defaults fills in zero values with sensible defaults.

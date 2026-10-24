@@ -551,6 +551,44 @@ video.viewer-media {
   min-width: 0;
 }
 
+/* The tag search dropdown, in flow under the input so a scrolling dialog
+   body never clips it. */
+.viewer-tag-options {
+  max-height: 220px;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1);
+  overflow-y: auto;
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
+}
+
+.viewer-tag-options li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.viewer-tag-options li[aria-selected='true'] {
+  background: var(--color-fill-hover);
+}
+
+.viewer-tag-options li.is-create {
+  color: var(--color-accent);
+}
+
+.viewer-tag-options li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .viewer-collection-list {
   display: flex;
   flex-direction: column;

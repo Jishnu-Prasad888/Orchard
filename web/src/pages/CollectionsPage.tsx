@@ -7,13 +7,14 @@
  * almost the same shape (a named group, and everything carrying it).
  */
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/authContext';
 import { useLibraryGate } from '../api/libraries';
 import { useLibraryResource } from '../api/resources';
 import {
+  addCollectionFile,
   createCollection,
   deleteCollection,
   listCollectionFiles,
@@ -22,6 +23,7 @@ import {
   updateCollection,
 } from '../api/queries';
 import type { Collection, FileSummary } from '../api/types';
+import { AddFilesDialog } from '../components/AddFilesDialog';
 import { ConfirmDialog, PromptDialog } from '../components/Dialog';
 import { ShareDialog } from '../components/ShareDialog';
 import { MediaGrid } from '../components/media/MediaGrid';
@@ -113,6 +115,11 @@ export default function CollectionsPage() {
     collections.reload();
   });
   const collectionFiles = useVisibleFiles(files.data ?? NO_FILES);
+  const collectedIds = useMemo(
+    () => new Set((files.data ?? NO_FILES).map((f) => f.id)),
+    [files.data],
+  );
+  const [adding, setAdding] = useState(false);
   const selection = useSelection(collectionFiles, active?.id ?? '');
   const libraryIdOrEmpty = gate.kind === 'ready' ? gate.libraryId : '';
   const removeFromCollection = async (targets: FileSummary[]) => {
@@ -312,6 +319,15 @@ export default function CollectionsPage() {
               ← Collections
             </button>
             <h2>{active.name}</h2>
+            <button
+              type="button"
+              className="button primary-button"
+              onClick={() => setAdding(true)}
+              disabled={offline}
+              data-testid="add-collection-files-button"
+            >
+              Add books
+            </button>
             {canShare && (
               <button
                 type="button"
@@ -344,7 +360,9 @@ export default function CollectionsPage() {
 
           {files.data !== null && files.data.length === 0 && (
             <EmptyState title="Nothing in this collection yet" testId="collection-files-empty">
-              <p className="muted">Right-click any file and choose Collections… to add it here.</p>
+              <p className="muted">
+                Use Add books, or right-click any file and choose Collections… to add it here.
+              </p>
             </EmptyState>
           )}
 
@@ -464,6 +482,24 @@ export default function CollectionsPage() {
             </ul>
           )}
         </>
+      )}
+
+      {active && (
+        <AddFilesDialog
+          open={adding}
+          libraryId={gate.libraryId}
+          title={`Add to “${active.name}”`}
+          existingIds={collectedIds}
+          onAdd={async (picked) => {
+            await Promise.all(
+              picked.map((f) => addCollectionFile(gate.libraryId, active.id, f.id)),
+            );
+            files.reload();
+            collections.reload();
+          }}
+          onClose={() => setAdding(false)}
+          testId="add-collection-files-dialog"
+        />
       )}
 
       <PromptDialog

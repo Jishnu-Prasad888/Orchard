@@ -64,6 +64,7 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request, u *auth
 		return
 	}
 	opts.FolderPath = folder
+	opts.UserID = u.ID
 	if !s.requireCap(w, r, u, folderKeyFromParent(lib.ID, opts.FolderPath), authz.CapRead) {
 		return
 	}
@@ -685,6 +686,7 @@ func parseListOptions(r *http.Request) media.ListOptions {
 		FolderPath: q.Get("folder"),
 		Recursive:  q.Get("recursive") == "true",
 		Type:       media.MediaType(q.Get("type")),
+		Extensions: media.ParseExtensions(q.Get("ext")),
 		Status:     media.FileStatus(q.Get("status")),
 		Sort:       media.SortField(q.Get("sort")),
 		Order:      media.SortOrder(q.Get("order")),

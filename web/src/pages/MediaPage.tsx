@@ -55,6 +55,8 @@ export interface MediaPageConfig {
   title: string;
   /** Fixed media type. */
   type?: MediaFilter;
+  /** Show only files with these extensions (no dots). */
+  extensions?: readonly string[];
   /** File-manager mode: folders, breadcrumbs, list view, in-folder upload. */
   showFolders?: boolean;
   /** Offer a type dropdown. Defaults to on when no type is fixed. */
@@ -72,6 +74,7 @@ const KNOWN_TYPES: MediaFilter[] = ['photo', 'video', 'audio', 'document', 'othe
 type SortValue = `${FileSort}:${SortOrder}`;
 
 const SORTS: Array<{ value: SortValue; label: string }> = [
+  { value: 'reading:desc', label: 'Reading order' },
   { value: 'mod_time:desc', label: 'Newest first' },
   { value: 'mod_time:asc', label: 'Oldest first' },
   { value: 'name:asc', label: 'Name (A–Z)' },
@@ -251,6 +254,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const query: ListingQuery = {
     q,
     type,
+    extensions: config.extensions,
     // A query searches the whole library; a timeline is the whole library.
     folder: folderMode && !q ? folder : undefined,
     recursive: !folderMode,

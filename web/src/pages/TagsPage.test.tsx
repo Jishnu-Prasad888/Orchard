@@ -41,8 +41,16 @@ function setup(overrides: { tags?: typeof tags; tagFiles?: typeof tagFiles } = {
         ? json({ tag: { id: 't9', name: 'Trip' } }, 201)
         : undefined,
     (url) => (url.endsWith('/api/v1/libraries/lib1/tags') ? json(tagList) : undefined),
+    (url, init) =>
+      url.endsWith('/api/v1/libraries/lib1/files/f2/tags') && init?.method === 'POST'
+        ? noContent()
+        : undefined, // tag a file from the add-books picker
     (url) => {
       if (!url.includes('/search?')) return undefined;
+      // The add-books picker searches the whole library, untagged.
+      if (!url.includes('tag=')) {
+        return json({ files: [fileFixture(), fileFixture({ id: 'f2', name: 'Dune.epub' })] });
+      }
       const name = url.split('tag=')[1]?.split('&')[0] ?? '';
       return json(name === 'vacation' ? files : { files: [] });
     },
@@ -145,6 +153,32 @@ describe('TagsPage', () => {
     expect(await screen.findByTestId('tag-detail')).toBeInTheDocument();
     expect(screen.getByTestId('file-grid')).toBeInTheDocument();
     expect(screen.getByText('IMG_0001.png')).toBeInTheDocument();
+  });
+
+  it('adds books to an open tag, and hides New tag while one is open', async () => {
+    const fetchMock = setup();
+
+    await screen.findByTestId('tags-grid');
+    expect(screen.getByTestId('new-tag-button')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /vacation/ }));
+    await screen.findByTestId('file-grid');
+    expect(screen.queryByTestId('new-tag-button')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('add-tag-files-button'));
+    const dialog = await screen.findByTestId('add-tag-files-dialog');
+    // The file already tagged is shown ticked and locked.
+    expect(await within(dialog).findByText('Already added')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Dune\.epub/ }));
+    fireEvent.click(within(dialog).getByTestId('add-files-confirm'));
+
+    await waitFor(() =>
+      expect(bodyOf(fetchMock, 'POST', '/api/v1/libraries/lib1/files/f2/tags')).toEqual({
+        tag_id: 't1',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId('add-tag-files-dialog')).not.toBeInTheDocument(),
+    );
   });
 
   it('shows an empty state for a tag nothing carries yet', async () => {

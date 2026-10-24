@@ -14,7 +14,7 @@
 import { type ReactElement, useCallback, useState } from 'react';
 
 import { useLibraries } from '../../api/libraries';
-import { softDeleteFile } from '../../api/queries';
+import { clearReadingProgress, softDeleteFile } from '../../api/queries';
 import type { FileSummary } from '../../api/types';
 import { ConfirmDialog } from '../Dialog';
 import type { FileOperations } from '../FileOperations';
@@ -150,6 +150,26 @@ export function useMediaActions({
     [libraryId, markCompleted, toast],
   );
 
+  // Back to unread: drop the reading position and the completed mark. The
+  // reload redraws the progress bar, behind the grid already on screen.
+  const resetProgress = useCallback(
+    async (file: FileSummary) => {
+      const results = await Promise.allSettled([
+        clearReadingProgress(libraryId, file.id),
+        markCompleted(libraryId, [file], false).then((failed) => {
+          if (failed) throw new Error('reading status');
+        }),
+      ]);
+      onChanged();
+      if (results.some((r) => r.status === 'rejected')) {
+        toast({ message: "Couldn't reset reading progress", tone: 'error' });
+      } else {
+        toast({ message: 'Marked as unread', tone: 'success' });
+      }
+    },
+    [libraryId, markCompleted, onChanged, toast],
+  );
+
   const confirmTrash = async () => {
     if (!trashing) return;
     setBusy(true);
@@ -269,6 +289,15 @@ export function useMediaActions({
         checked: Boolean(file.completed),
         onSelect: () => void setCompleted([file], !file.completed),
         testId: 'menu-complete',
+      });
+    }
+    if (can.complete && file.media_type === 'document') {
+      toggles.push({
+        id: 'reset-progress',
+        label: 'Reset progress',
+        icon: 'refresh',
+        onSelect: () => void resetProgress(file),
+        testId: 'menu-reset-progress',
       });
     }
 

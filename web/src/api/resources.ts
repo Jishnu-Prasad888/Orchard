@@ -80,7 +80,9 @@ export function useLibraryResource<T>(
   // Serialising the inputs gives a cheap, stable identity for "the request this
   // result belongs to". It is a plain string, so comparing it in the effect's
   // dependency list works by value without a memo.
-  const key = active ? `${libraryId}|${JSON.stringify(deps)}|${reloadKey}` : null;
+  // A reload fetches behind the data on screen, like a change on disk, so it
+  // stays out of the key: a new key would blank the page to its loading state.
+  const key = active ? `${libraryId}|${JSON.stringify(deps)}` : null;
 
   useEffect(() => {
     if (key === null || libraryId === null) return;
@@ -98,8 +100,8 @@ export function useLibraryResource<T>(
     return () => {
       cancelled = true;
     };
-    // The key encodes every input, so it is the only dependency that matters.
-  }, [key, libraryId, changeTick]);
+    // The key encodes every input; the ticks only ask for a fresh read of it.
+  }, [key, libraryId, changeTick, reloadKey]);
 
   const current = key !== null && settled?.key === key ? settled : null;
 
@@ -133,7 +135,7 @@ export function useResource<T>(
     fnRef.current = fn;
   });
 
-  const key = enabled ? `${JSON.stringify(deps)}|${reloadKey}` : null;
+  const key = enabled ? JSON.stringify(deps) : null;
 
   useEffect(() => {
     if (key === null) return;
@@ -151,8 +153,8 @@ export function useResource<T>(
     return () => {
       cancelled = true;
     };
-    // The key encodes every input, so it is the only dependency that matters.
-  }, [key]);
+    // The key encodes every input; a reload only asks for a fresh read of it.
+  }, [key, reloadKey]);
 
   const current = key !== null && settled?.key === key ? settled : null;
 

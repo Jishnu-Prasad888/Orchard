@@ -774,3 +774,92 @@ func TestListFolderBoundaries(t *testing.T) {
 		t.Errorf("CountPresentUnder(trip) = %d, %v; want 2", n, err)
 	}
 }
+
+// TestListFilesSortByReading proves reading order: the user's opens, most
+// recent first, then the files they never opened, newest first — and that
+// another user's opens, and the offset cursor, do not disturb it.
+func TestListFilesSortByReading(t *testing.T) {
+	root := t.TempDir()
+	orchardDir := filepath.Join(root, ".orchard")
+	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := librarydb.Open(orchardDir)
+	if err != nil {
+		t.Fatalf("open library db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := media.NewFileStore(db, "lib1")
+	ctx := context.Background()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i, name := range []string{"old.pdf", "mid.pdf", "new.pdf", "readlong.pdf", "readlast.pdf"} {
+		if err := store.UpsertFromPath(ctx, name, 1, base.Add(time.Duration(i)*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	open := func(user, rel string, at time.Time) {
+		t.Helper()
+		f, err := store.GetByRelPath(ctx, rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO file_opens (user_id, file_id, opened_at) VALUES (?, ?, ?)`,
+			user, f.ID, at.Format(time.RFC3339)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	open("u1", "readlong.pdf", base.Add(24*time.Hour))
+	open("u1", "readlast.pdf", base.Add(48*time.Hour))
+	open("u2", "old.pdf", base.Add(72*time.Hour))
+
+	var got []string
+	cursor := ""
+	for {
+		page, err := store.List(ctx, media.ListOptions{
+			Sort: media.SortByReading, UserID: "u1", Limit: 2, Cursor: cursor,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range page.Files {
+			got = append(got, f.RelPath)
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	want := []string{"readlast.pdf", "readlong.pdf", "new.pdf", "mid.pdf", "old.pdf"}
+	if !slices.Equal(got, want) {
+		t.Errorf("reading order = %v, want %v", got, want)
+	}
+}
+
+// TestListFilesFilterByExtension proves the Files page's books-only filter:
+// matching is case-insensitive, the count agrees, and junk is dropped.
+func TestListFilesFilterByExtension(t *testing.T) {
+	store, root := newTestStore(t)
+	ctx := context.Background()
+	for _, name := range []string{"a.pdf", "b.EPUB", "c.docx", "d.jpg", "e.txt", "pdf.mp3"} {
+		seedFile(t, store, root, name)
+	}
+	exts := media.ParseExtensions("pdf, .epub,DOCX,'or 1=1,")
+	if !slices.Equal(exts, []string{"pdf", "epub", "docx"}) {
+		t.Fatalf("ParseExtensions = %v", exts)
+	}
+	page, err := store.List(ctx, media.ListOptions{Extensions: exts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, f := range page.Files {
+		got = append(got, f.RelPath)
+	}
+	if want := []string{"a.pdf", "b.EPUB", "c.docx"}; !slices.Equal(got, want) {
+		t.Errorf("files = %v, want %v", got, want)
+	}
+	if page.Total != 3 {
+		t.Errorf("total = %d, want 3", page.Total)
+	}
+}

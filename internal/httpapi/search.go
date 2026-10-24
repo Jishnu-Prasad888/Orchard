@@ -274,6 +274,7 @@ func parseSearchQuery(r *http.Request) search.SearchQuery {
 	sq := search.SearchQuery{
 		Text:         q.Get("q"),
 		Type:         media.MediaType(q.Get("type")),
+		Extensions:   media.ParseExtensions(q.Get("ext")),
 		FolderPath:   q.Get("folder"),
 		Tag:          q.Get("tag"),
 		Author:       q.Get("author"),

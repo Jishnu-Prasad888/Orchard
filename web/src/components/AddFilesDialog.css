@@ -1,0 +1,48 @@
+.add-files-search {
+  width: 100%;
+  margin-bottom: var(--space-3);
+}
+
+.add-files-list {
+  max-height: min(50vh, 360px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.add-files-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.add-files-row:hover {
+  background: var(--color-fill-hover);
+}
+
+.add-files-row.is-added {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.add-files-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.add-files-name,
+.add-files-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-files-path {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

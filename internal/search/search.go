@@ -35,6 +35,10 @@ type SearchQuery struct {
 	// Type restricts results to a specific media type. Empty means all.
 	Type media.MediaType
 
+	// Extensions restricts results to files ending in one of these (see
+	// media.ParseExtensions). Empty means all.
+	Extensions []string
+
 	// FolderPath restricts results to files under this folder (prefix match).
 	// Empty means search the entire library.
 	FolderPath string
@@ -227,6 +231,10 @@ func buildExtraFilters(q SearchQuery) ([]string, []any) {
 	if q.Type != "" {
 		conditions = append(conditions, "f.media_type = ?")
 		args = append(args, string(q.Type))
+	}
+	if cond, extArgs := media.ExtensionCondition("f.rel_path", q.Extensions); cond != "" {
+		conditions = append(conditions, cond)
+		args = append(args, extArgs...)
 	}
 	if q.Tag != "" {
 		conditions = append(conditions, `f.id IN (

@@ -130,7 +130,9 @@ export const getIndexStatus = (id: string) =>
 
 /* ------------------------------ files ------------------------------ */
 
-export type FileSort = 'name' | 'size' | 'mod_time' | 'media_type';
+/** `reading` is the signed-in user's: last opened first, then the never
+ * opened, newest first. It ignores the order. */
+export type FileSort = 'name' | 'size' | 'mod_time' | 'media_type' | 'reading';
 export type SortOrder = 'asc' | 'desc';
 export type MediaFilter = 'photo' | 'video' | 'audio' | 'document' | 'other';
 export type FileStatusFilter = 'present' | 'missing' | 'trashed';
@@ -144,6 +146,8 @@ export interface ListFilesParams {
   folder?: string | undefined;
   recursive?: boolean | undefined;
   type?: MediaFilter | undefined;
+  /** Comma-separated extensions to keep, e.g. `pdf,epub`. */
+  ext?: string | undefined;
   status?: FileStatusFilter | undefined;
   sort?: FileSort | undefined;
   order?: SortOrder | undefined;
@@ -334,6 +338,8 @@ export const listDuplicates = (libraryId: string) =>
 export interface SearchParams {
   q?: string | undefined;
   type?: MediaFilter | undefined;
+  /** Comma-separated extensions to keep, e.g. `pdf,epub`. */
+  ext?: string | undefined;
   folder?: string | undefined;
   tag?: string | undefined;
   author?: string | undefined;
