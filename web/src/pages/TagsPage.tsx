@@ -7,12 +7,13 @@
  * dialogs, and the shared viewer, so nothing here reimplements them.
  */
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import { useAuth } from '../auth/authContext';
 import { useLibraryGate } from '../api/libraries';
 import { useLibraryResource } from '../api/resources';
 import {
+  addFileTag,
   createTag,
   deleteTag,
   listTags,
@@ -21,6 +22,7 @@ import {
   searchFiles,
 } from '../api/queries';
 import type { FileSummary, Tag } from '../api/types';
+import { AddFilesDialog } from '../components/AddFilesDialog';
 import { ConfirmDialog, PromptDialog } from '../components/Dialog';
 import { ShareDialog } from '../components/ShareDialog';
 import { MediaGrid } from '../components/media/MediaGrid';
@@ -48,6 +50,7 @@ export default function TagsPage() {
   const isAdmin = user?.role === 'admin';
   const [activeTag, setActiveTag] = useState<Tag | null>(null);
   const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<Tag | null>(null);
   const [renaming, setRenaming] = useState<Tag | null>(null);
   const [sharing, setSharing] = useState<Tag | null>(null);
@@ -83,6 +86,7 @@ export default function TagsPage() {
     tags.reload();
   });
   const tagFiles = useVisibleFiles(files.data ?? NO_FILES);
+  const taggedIds = useMemo(() => new Set((files.data ?? NO_FILES).map((f) => f.id)), [files.data]);
   const selection = useSelection(tagFiles, activeTag?.id ?? '');
   const libraryIdOrEmpty = gate.kind === 'ready' ? gate.libraryId : '';
   const untag = async (targets: FileSummary[]) => {
@@ -190,7 +194,8 @@ export default function TagsPage() {
       title="Tags"
       subtitle="A flat vocabulary you apply to any file, from the viewer or in bulk."
       controls={
-        <>
+        // Inside a tag the page is about that tag's files, so "New tag" goes.
+        activeTag ? undefined : (
           <button
             type="button"
             className="button primary-button"
@@ -203,7 +208,7 @@ export default function TagsPage() {
           >
             New tag
           </button>
-        </>
+        )
       }
     />
   );
@@ -251,6 +256,15 @@ export default function TagsPage() {
             <h2>
               <span className="tag-chip">{activeTag.name}</span>
             </h2>
+            <button
+              type="button"
+              className="button primary-button"
+              onClick={() => setAdding(true)}
+              disabled={offline}
+              data-testid="add-tag-files-button"
+            >
+              Add books
+            </button>
             {canShare && (
               <button
                 type="button"
@@ -283,7 +297,9 @@ export default function TagsPage() {
 
           {files.data !== null && tagFiles.length === 0 && (
             <EmptyState title="Nothing tagged yet" testId="tag-files-empty">
-              <p className="muted">No files carry this tag. Add it from the file viewer.</p>
+              <p className="muted">
+                No files carry this tag. Use Add books, or add it from the file viewer.
+              </p>
             </EmptyState>
           )}
 
@@ -377,6 +393,22 @@ export default function TagsPage() {
             </ul>
           )}
         </>
+      )}
+
+      {activeTag && (
+        <AddFilesDialog
+          open={adding}
+          libraryId={gate.libraryId}
+          title={`Add to “${activeTag.name}”`}
+          existingIds={taggedIds}
+          onAdd={async (picked) => {
+            await Promise.all(picked.map((f) => addFileTag(gate.libraryId, f.id, activeTag.id)));
+            files.reload();
+            tags.reload();
+          }}
+          onClose={() => setAdding(false)}
+          testId="add-tag-files-dialog"
+        />
       )}
 
       <PromptDialog

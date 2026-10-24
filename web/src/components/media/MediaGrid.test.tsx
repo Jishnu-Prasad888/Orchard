@@ -246,7 +246,9 @@ describe('useSelection', () => {
     expect(screen.getByText('Dune')).toHaveClass('media-tile-title');
     // No title in the metadata: the file name, without its extension.
     expect(screen.getByText('untitled-notes')).toHaveClass('media-tile-title');
-    expect(screen.getByTestId('media-tile-tags')).toHaveTextContent('classics · sci-fi');
+    const tagList = screen.getByTestId('media-tile-tags');
+    expect(within(tagList).getByText('classics')).toBeInTheDocument();
+    expect(within(tagList).getByText('sci-fi')).toBeInTheDocument();
     // The name is below the cover already, so the caption does not repeat it.
     expect(screen.queryByText('dune_v2.epub')).not.toBeInTheDocument();
   });

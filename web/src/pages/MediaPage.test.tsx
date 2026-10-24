@@ -123,6 +123,17 @@ describe('MediaPage', () => {
     expect(called(fetchMock, 'GET', 'type=video')).toBe(true);
   });
 
+  it('lists only the configured extensions, without a type dropdown', async () => {
+    const fetchMock = mockApi(apiRules());
+    renderPage(
+      <MediaPage config={{ ...CONFIG, extensions: ['pdf', 'epub'], showTypeFilter: false }} />,
+    );
+
+    await screen.findByTestId('file-grid');
+    expect(screen.queryByTestId('type-filter-select')).not.toBeInTheDocument();
+    expect(called(fetchMock, 'GET', 'ext=pdf%2Cepub')).toBe(true);
+  });
+
   it('ignores an unknown ?type= value', async () => {
     mockApi(apiRules());
     renderPage(<MediaPage config={CONFIG} />, { route: '/media?type=bogus' });

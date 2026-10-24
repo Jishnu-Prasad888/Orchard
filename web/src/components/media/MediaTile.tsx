@@ -193,7 +193,11 @@ function MediaTileImpl({
             {!titled && <span className="media-tile-name">{file.name}</span>}
             {tags.length > 0 && (
               <span className="media-tile-tags" data-testid="media-tile-tags">
-                {tags.join(' · ')}
+                {tags.map((tag) => (
+                  <span key={tag} className="media-tile-tag">
+                    {tag}
+                  </span>
+                ))}
               </span>
             )}
           </span>

@@ -26,6 +26,8 @@ const MB = 1024 * 1024;
 export interface ListingQuery {
   q: string;
   type?: MediaFilter | undefined;
+  /** File extensions to keep (no dots); empty or absent keeps everything. */
+  extensions?: readonly string[] | undefined;
   /** Folder to list; `undefined` with `recursive` means the whole library. */
   folder?: string | undefined;
   recursive?: boolean | undefined;
@@ -87,6 +89,7 @@ function fetchPage(
     return searchFiles(libraryId, {
       q: query.q.trim() || undefined,
       type: query.type,
+      ext: query.extensions?.join(',') || undefined,
       folder: query.recursive ? undefined : query.folder || undefined,
       tag: query.tag,
       author: query.author,
@@ -101,6 +104,7 @@ function fetchPage(
   }
   return listFiles(libraryId, {
     type: query.type,
+    ext: query.extensions?.join(',') || undefined,
     folder: query.folder,
     recursive: query.recursive || undefined,
     sort: query.sort,
@@ -130,8 +134,9 @@ export function useFileListing(
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const key =
-    enabled && libraryId ? `${libraryId}|${JSON.stringify(query)}|${run}|${refreshKey}` : null;
+  // A reload re-reads behind the list on screen, like a change on disk, so it
+  // is not part of the key: a new key blanks the grid to its loading state.
+  const key = enabled && libraryId ? `${libraryId}|${JSON.stringify(query)}` : null;
   const queryRef = useRef(query);
   useEffect(() => {
     queryRef.current = query;
@@ -175,7 +180,7 @@ export function useFileListing(
     return () => {
       cancelled = true;
     };
-  }, [key, libraryId, changeTick]);
+  }, [key, libraryId, changeTick, run, refreshKey]);
 
   const current = loaded && loaded.key === key ? loaded : null;
 
