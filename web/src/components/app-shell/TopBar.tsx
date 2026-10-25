@@ -61,9 +61,14 @@ export function TopBar({
             type="checkbox"
             checked={hideCompleted}
             onChange={(event) => setHideCompleted(event.target.checked)}
+            aria-label="Hide completed"
             data-testid="hide-completed"
           />
-          <span>Hide completed</span>
+          <span className="topbar-hide-completed-long">Hide completed</span>
+          {/* A phone's top bar has no room for the whole phrase. */}
+          <span className="topbar-hide-completed-short" aria-hidden="true">
+            Hide read
+          </span>
         </label>
         {canUpload && (
           <>

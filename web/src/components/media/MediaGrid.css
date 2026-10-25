@@ -103,6 +103,75 @@
   color: #8a8a8a;
 }
 
+/* A book with no cover: a plain paper one, titled, with a spine. */
+.media-tile.is-plain-cover {
+  background: var(--color-surface-elevated);
+  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+}
+
+.media-tile.is-plain-cover .media-tile-glyph {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 6px);
+  color: var(--color-text-muted);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-accent) 55%, transparent) 0 5px,
+      transparent 5px
+    ),
+    linear-gradient(160deg, var(--color-surface-elevated), var(--color-surface));
+}
+
+.media-tile-cover-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--font-reading, Georgia, serif);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+  text-align: left;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* The spine already says "book"; the icon would only crowd the title. */
+.media-tile.is-plain-cover .media-tile-glyph > svg {
+  display: none;
+}
+
+/* Badges and progress were made for dark artwork; on paper they use ink. */
+.media-tile.is-plain-cover .media-tile-badge {
+  color: var(--color-accent);
+  filter: none;
+}
+
+.media-tile.is-plain-cover .media-tile-progress {
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-surface) 96%, transparent),
+    transparent
+  );
+}
+
+.media-tile.is-plain-cover .media-tile-progress-track {
+  background: var(--color-fill-hover);
+}
+
+.media-tile.is-plain-cover .media-tile-progress-label {
+  color: var(--color-text-secondary);
+}
+
+/* The title is on the cover; the caption would only repeat it. */
+.media-tile.is-plain-cover .media-tile-name {
+  display: none;
+}
+
 .media-tile-caption {
   position: absolute;
   left: 0;

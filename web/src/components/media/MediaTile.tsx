@@ -48,6 +48,8 @@ export interface MediaTileProps {
   /** The grid shows this file's title under the tile, so the caption
    * leaves the name out. */
   titled?: boolean;
+  /** The book's title, written on a plain cover when it has no artwork. */
+  coverTitle?: string | undefined;
 }
 
 function MediaTileImpl({
@@ -67,6 +69,7 @@ function MediaTileImpl({
   onContextMenu,
   revealed = false,
   titled = false,
+  coverTitle,
 }: MediaTileProps) {
   const [failed, setFailed] = useState(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
@@ -123,6 +126,7 @@ function MediaTileImpl({
     selected ? 'is-selected' : '',
     selecting ? 'is-selecting' : '',
     hasThumb ? '' : 'is-placeholder',
+    !hasThumb && file.media_type === 'document' ? 'is-plain-cover' : '',
     percent > 0 ? 'has-progress' : '',
     revealed ? 'is-revealed' : '',
     holding ? 'is-holding' : '',
@@ -186,6 +190,13 @@ function MediaTileImpl({
               name={failed ? 'image-off' : mediaTypeIcon(file.media_type)}
               size={isVideo ? 28 : 26}
             />
+            {file.media_type === 'document' && (
+              // A book without a cover gets a plain one with its title, so
+              // a shelf of them is still readable.
+              <span className="media-tile-cover-title">
+                {coverTitle ?? file.name.replace(/\.[^.]+$/, '')}
+              </span>
+            )}
           </span>
         )}
         {(!titled || tags.length > 0) && (

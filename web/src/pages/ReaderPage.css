@@ -62,6 +62,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* The visible height on a phone, not including what the URL bar covers. */
+  height: 100dvh;
   background: var(--reader-bg);
   color: var(--reader-ink);
 }
@@ -180,9 +182,17 @@
 }
 
 .reader-body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+/* Only the phone layout uses these (see the end of this file). */
+.reader-tool-more,
+.reader-panel-close,
+.reader-panel-scrim {
+  display: none;
 }
 
 .reader-surface {
@@ -1312,4 +1322,175 @@ button.reader-card-main {
 
 .reader-word-meaning.is-open {
   display: block;
+}
+
+/* --- Phones ---
+   The top bar keeps the tools used while reading (contents, search, marks,
+   settings) and moves the rest into a "More" menu; side panels become a
+   sheet over the book instead of squeezing it into a sliver (which, for an
+   EPUB, also re-paginated the whole book); the selection bar becomes one
+   row along the bottom. */
+
+@media (max-width: 640px) {
+  .reader-topbar {
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-1);
+  }
+
+  .reader-topbar-author {
+    display: none;
+  }
+
+  .reader-topbar-actions {
+    gap: 0;
+  }
+
+  .reader-tool-secondary {
+    display: none;
+  }
+
+  .reader-tool-more {
+    display: inline-grid;
+  }
+
+  .reader-selection-bar {
+    right: var(--space-2);
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    left: var(--space-2);
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    max-width: none;
+    padding: var(--space-1) var(--space-2);
+    overflow-x: auto;
+    transform: none;
+    scrollbar-width: none;
+  }
+
+  .reader-selection-preview {
+    display: none;
+  }
+
+  .reader-selection-bar > .button {
+    flex-shrink: 0;
+    gap: 4px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
+  }
+
+  .reader-selection-bar > .icon-button {
+    flex-shrink: 0;
+    width: 32px;
+  }
+
+  .reader-selection-bar .reader-highlight-colors {
+    flex-shrink: 0;
+    gap: 2px;
+  }
+
+  .reader-selection-bar .reader-color-swatch {
+    width: 18px;
+    height: 18px;
+  }
+
+  .reader-selection-form {
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  .reader-selection-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Page turns: quiet edge targets that don't sit on the words. */
+  .reader-epub-turn {
+    width: 28px;
+    height: 72px;
+    background: transparent;
+    border: none;
+    opacity: 0.45;
+  }
+
+  .reader-epub-turn-prev {
+    left: 0;
+  }
+
+  .reader-epub-turn-next {
+    right: 0;
+  }
+
+  .reader-pdf-pagebar {
+    gap: 2px;
+    padding: var(--space-1);
+  }
+
+  .reader-pdf-pagebar .button {
+    min-width: 36px;
+    padding-inline: var(--space-1);
+  }
+
+  .reader-pdf-pagebar form {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .reader-pdf-page-input {
+    width: 40px;
+  }
+
+  .reader-pdf-pagebar-divider {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .reader-panel {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 8;
+    width: auto;
+    max-height: 78%;
+    /* Room for the close button above the panel's own header. */
+    padding-top: 52px;
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    background: var(--reader-surface-elevated);
+    border-top: 1px solid var(--reader-border);
+    border-left: none;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-3);
+    animation: reader-sheet-in 180ms var(--ease-standard);
+  }
+
+  .reader-panel-close {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    z-index: 1;
+    display: inline-grid;
+  }
+
+  .reader-panel-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    display: block;
+    background: color-mix(in srgb, #000 28%, transparent);
+  }
+}
+
+@keyframes reader-sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-panel {
+    animation: none;
+  }
 }

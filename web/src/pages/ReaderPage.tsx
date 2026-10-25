@@ -171,6 +171,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
   const [pending, setPending] = useState<ReaderSelection | null>(null);
   const [selectionAction, setSelectionAction] = useState<'highlight' | 'quote' | null>(null);
   const [menuAt, setMenuAt] = useState<MenuPosition | null>(null);
+  const [toolsMenuAt, setToolsMenuAt] = useState<MenuPosition | null>(null);
   const [flash, setFlash] = useState<{ id: number; message: string } | null>(null);
   const [highlightColor, setHighlightColor] = useState<string>(HIGHLIGHT_COLORS[0]);
   const [highlightNote, setHighlightNote] = useState('');
@@ -679,6 +680,37 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
     return () => window.removeEventListener('keydown', onKey);
   }, [canZoom, zoom]);
 
+  // The phone toolbar's overflow: what the narrow top bar hides.
+  const toolEntries: MenuEntry[] = [
+    ...(canZoom
+      ? ([
+          {
+            id: 'zoom-in',
+            label: 'Larger text',
+            disabled: preferences.font_size >= ZOOM_MAX_FONT,
+            onSelect: () => zoom(1),
+          },
+          {
+            id: 'zoom-out',
+            label: 'Smaller text',
+            disabled: preferences.font_size <= ZOOM_MIN_FONT,
+            onSelect: () => zoom(-1),
+          },
+          'separator',
+        ] satisfies MenuEntry[])
+      : []),
+    { id: 'book', label: 'Book details', onSelect: () => setPanel('book') },
+    { id: 'quotes', label: 'Quotes from this book', onSelect: () => setPanel('quotes') },
+    ...(dictionaryOn || words.length > 0
+      ? [{ id: 'words', label: 'Dictionary: saved words', onSelect: () => setPanel('words') }]
+      : []),
+    {
+      id: 'fullscreen',
+      label: isFullscreen ? 'Exit full screen' : 'Full screen',
+      onSelect: toggleFullscreen,
+    },
+  ];
+
   if (loadError) {
     return (
       <main className="page reader-page">
@@ -724,7 +756,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
         </div>
         <div className="reader-topbar-actions">
           {canZoom && (
-            <div className="reader-zoom" role="group" aria-label="Text size">
+            <div className="reader-zoom reader-tool-secondary" role="group" aria-label="Text size">
               <button
                 type="button"
                 className="icon-button"
@@ -778,7 +810,11 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           </button>
           <button
             type="button"
-            className={panel === 'book' ? 'icon-button active' : 'icon-button'}
+            className={
+              panel === 'book'
+                ? 'icon-button active reader-tool-secondary'
+                : 'icon-button reader-tool-secondary'
+            }
             onClick={() => togglePanel('book')}
             aria-label="Book details"
           >
@@ -794,7 +830,11 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           </button>
           <button
             type="button"
-            className={panel === 'quotes' ? 'icon-button active' : 'icon-button'}
+            className={
+              panel === 'quotes'
+                ? 'icon-button active reader-tool-secondary'
+                : 'icon-button reader-tool-secondary'
+            }
             onClick={() => togglePanel('quotes')}
             aria-label="Quotes from this book"
           >
@@ -803,7 +843,11 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           {(dictionaryOn || words.length > 0) && (
             <button
               type="button"
-              className={panel === 'words' ? 'icon-button active' : 'icon-button'}
+              className={
+                panel === 'words'
+                  ? 'icon-button active reader-tool-secondary'
+                  : 'icon-button reader-tool-secondary'
+              }
               onClick={() => togglePanel('words')}
               aria-label="Dictionary: saved words"
               title="Dictionary"
@@ -821,11 +865,24 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           </button>
           <button
             type="button"
-            className="icon-button"
+            className="icon-button reader-tool-secondary"
             onClick={toggleFullscreen}
             aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'}
           >
             {isFullscreen ? <Minimize /> : <Maximize />}
+          </button>
+          {/* On a phone the tools above that don't fit live in this menu. */}
+          <button
+            type="button"
+            className="icon-button reader-tool-more"
+            aria-label="More reading tools"
+            aria-haspopup="menu"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setToolsMenuAt({ x: r.right, y: r.bottom + 4 });
+            }}
+          >
+            <Icon name="more" />
           </button>
         </div>
       </header>
@@ -1044,7 +1101,20 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
         </div>
 
         {panel && (
+          // On a phone the panel is a sheet over the book; tapping the
+          // book around it closes it.
+          <div className="reader-panel-scrim" aria-hidden="true" onClick={() => setPanel(null)} />
+        )}
+        {panel && (
           <aside className="reader-panel" aria-label="Reader panel">
+            <button
+              type="button"
+              className="icon-button reader-panel-close"
+              aria-label="Close panel"
+              onClick={() => setPanel(null)}
+            >
+              <Icon name="close" />
+            </button>
             {panel === 'toc' && (
               <nav aria-label="Table of contents" data-testid="reader-toc">
                 <ul className="reader-toc-list">
@@ -1185,6 +1255,15 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           </aside>
         )}
       </div>
+
+      <ContextMenu
+        open={toolsMenuAt !== null}
+        position={toolsMenuAt}
+        entries={toolEntries}
+        label="Reading tools"
+        onClose={() => setToolsMenuAt(null)}
+        container={shellEl}
+      />
 
       <ContextMenu
         open={menuAt !== null && pending !== null}

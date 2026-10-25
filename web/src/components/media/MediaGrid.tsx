@@ -347,6 +347,7 @@ export function MediaGrid({
                     onContextMenu={onContextMenu}
                     revealed={revealed?.has(file.id) ?? false}
                     titled={title !== null}
+                    coverTitle={title ?? undefined}
                   />,
                   title !== null && (
                     // The tile's button is already named for screen readers.
