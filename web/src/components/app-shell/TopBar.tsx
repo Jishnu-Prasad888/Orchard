@@ -4,6 +4,7 @@
  * wordmark and the account, and search moves to its own tab.
  */
 
+import { BOOK_ACCEPT } from '../../lib/books';
 import { useRef, type RefObject } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -79,6 +80,7 @@ export function TopBar({
               ref={fileRef}
               type="file"
               multiple
+              accept={BOOK_ACCEPT}
               hidden
               aria-label={`Upload files to ${library.name}`}
               onChange={(event) => {

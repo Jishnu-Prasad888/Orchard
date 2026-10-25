@@ -189,7 +189,7 @@ func viewerID(t *testing.T, admin *testClient) string {
 
 func TestAuthz_ReadGrantGrantsAccess(t *testing.T) {
 	_, admin, viewer, libID := newAuthzTestServer(t)
-	fileID := uploadFile(t, admin, libID, "photos/sunset.jpg")
+	fileID := uploadFile(t, admin, libID, "photos/sunset.pdf")
 
 	vid := viewerID(t, admin)
 	grantCap(t, admin, libID, vid, authz.LibraryKey(libID), []string{"read"})
@@ -212,7 +212,7 @@ func TestAuthz_ReadGrantGrantsAccess(t *testing.T) {
 		t.Fatalf("viewer download = %d, want 403", rec.Code)
 	}
 	// Read is not create.
-	rec = rawUpload(t, viewer, libID, "photos/intruder.jpg")
+	rec = rawUpload(t, viewer, libID, "photos/intruder.pdf")
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("viewer upload = %d, want 403", rec.Code)
 	}
@@ -232,8 +232,8 @@ func TestAuthz_ReadGrantGrantsAccess(t *testing.T) {
 
 func TestAuthz_DenyOverridesInheritedAllow(t *testing.T) {
 	_, admin, viewer, libID := newAuthzTestServer(t)
-	uploadFile(t, admin, libID, "photos/sunset.jpg")
-	uploadFile(t, admin, libID, "private/secret.jpg")
+	uploadFile(t, admin, libID, "photos/sunset.pdf")
+	uploadFile(t, admin, libID, "private/secret.pdf")
 
 	vid := viewerID(t, admin)
 	grantCap(t, admin, libID, vid, authz.LibraryKey(libID), []string{"read"})
@@ -268,7 +268,7 @@ func TestAuthz_PermissionsRequireManage(t *testing.T) {
 
 func TestAuthz_PublicShareFlow(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	fileID := uploadFile(t, admin, libID, "photos/sunset.jpg")
+	fileID := uploadFile(t, admin, libID, "photos/sunset.pdf")
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/shares",
 		map[string]any{
@@ -321,7 +321,7 @@ func TestAuthz_PublicShareFlow(t *testing.T) {
 
 func TestAuthz_PublicShareReadOnlyHasNoDownload(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	fileID := uploadFile(t, admin, libID, "photos/sunset.jpg")
+	fileID := uploadFile(t, admin, libID, "photos/sunset.pdf")
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/shares",
 		map[string]any{
@@ -349,7 +349,7 @@ func TestAuthz_PublicShareReadOnlyHasNoDownload(t *testing.T) {
 
 func TestAuthz_RevokedShareIsImmediatelyDead(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	uploadFile(t, admin, libID, "photos/sunset.jpg")
+	uploadFile(t, admin, libID, "photos/sunset.pdf")
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/shares",
 		map[string]any{

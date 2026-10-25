@@ -125,10 +125,10 @@ func TestShare_MissingTargetsAreNotFound(t *testing.T) {
 
 func TestShare_FolderLinkOpensAtItsFolderAndNoHigher(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	inside := uploadFile(t, admin, libID, "trips/japan/temple.jpg")
-	uploadFile(t, admin, libID, "trips/japan/kyoto/street.jpg")
-	outside := uploadFile(t, admin, libID, "trips/paris/tower.jpg")
-	uploadFile(t, admin, libID, "secret.jpg")
+	inside := uploadFile(t, admin, libID, "trips/japan/temple.pdf")
+	uploadFile(t, admin, libID, "trips/japan/kyoto/street.pdf")
+	outside := uploadFile(t, admin, libID, "trips/paris/tower.pdf")
+	uploadFile(t, admin, libID, "secret.pdf")
 
 	token := createShare(t, admin, libID, map[string]any{
 		"target": map[string]any{"kind": "folder", "path": "trips/japan"},
@@ -140,8 +140,8 @@ func TestShare_FolderLinkOpensAtItsFolderAndNoHigher(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("open folder share = %d, want 200", code)
 	}
-	if got := names(l); len(got) != 1 || got[0] != "temple.jpg" {
-		t.Errorf("shared folder lists %v, want [temple.jpg]", got)
+	if got := names(l); len(got) != 1 || got[0] != "temple.pdf" {
+		t.Errorf("shared folder lists %v, want [temple.pdf]", got)
 	}
 	if len(l.Folders) != 1 || l.Folders[0].RelPath != "trips/japan/kyoto" {
 		t.Errorf("sub-folders = %+v, want trips/japan/kyoto", l.Folders)
@@ -199,8 +199,8 @@ func TestShare_FileLinkShowsOnlyThatFile(t *testing.T) {
 
 func TestShare_TagLinkFollowsTheTag(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	tagged := uploadFile(t, admin, libID, "a/beach.jpg")
-	untagged := uploadFile(t, admin, libID, "a/office.jpg")
+	tagged := uploadFile(t, admin, libID, "a/beach.pdf")
+	untagged := uploadFile(t, admin, libID, "a/office.pdf")
 
 	rec := admin.do(t, http.MethodPost, "/api/v1/libraries/"+libID+"/tags", map[string]any{"name": "summer"})
 	var tag struct {
@@ -219,7 +219,7 @@ func TestShare_TagLinkFollowsTheTag(t *testing.T) {
 
 	code, l := listShare(t, admin, token, "")
 	if code != http.StatusOK || len(l.Files) != 1 || l.Files[0].ID != tagged {
-		t.Fatalf("tag share lists %d %v, want just beach.jpg", code, names(l))
+		t.Fatalf("tag share lists %d %v, want just beach.pdf", code, names(l))
 	}
 	if rr := public(t, admin, "/api/v1/shares/"+token+"/files/"+untagged); rr.Code != http.StatusForbidden {
 		t.Errorf("untagged file = %d, want 403", rr.Code)
@@ -275,7 +275,7 @@ func TestShare_CollectionLinkIsTheOwnersAndFollowsIt(t *testing.T) {
 
 func TestShare_InfoNamesTheTargetWithoutInternalKeys(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	uploadFile(t, admin, libID, "trips/japan/temple.jpg")
+	uploadFile(t, admin, libID, "trips/japan/temple.pdf")
 	token := createShare(t, admin, libID, map[string]any{
 		"target": map[string]any{"kind": "folder", "path": "trips/japan"},
 		"caps":   []string{"read"},
@@ -319,7 +319,7 @@ func TestShare_InfoNamesTheTargetWithoutInternalKeys(t *testing.T) {
 
 func TestShare_DownloadNameIsQuotedSafely(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	id := uploadFile(t, admin, libID, `odd "name".txt`)
+	id := uploadFile(t, admin, libID, `odd "name".pdf`)
 	token := createShare(t, admin, libID, map[string]any{
 		"target": map[string]any{"kind": "file", "id": id},
 		"caps":   []string{"read", "download"},
@@ -375,7 +375,7 @@ func TestShare_RejectsAnExpiryInThePast(t *testing.T) {
 
 func TestShare_WrongPasswordsLockTheLinkOnEveryRoute(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	uploadFile(t, admin, libID, "a/x.jpg")
+	uploadFile(t, admin, libID, "a/x.pdf")
 	token := createShare(t, admin, libID, map[string]any{
 		"target": map[string]any{"kind": "library"}, "caps": []string{"read"}, "password": "right-password",
 	}, http.StatusCreated)
@@ -405,7 +405,7 @@ func TestShare_WrongPasswordsLockTheLinkOnEveryRoute(t *testing.T) {
 func TestGrant_ScopeGivesRealAccessAndFakeKeysAreRefused(t *testing.T) {
 	_, admin, viewer, libID := newAuthzTestServer(t)
 	vid := viewerID(t, admin)
-	uploadFile(t, admin, libID, "family/beach.jpg")
+	uploadFile(t, admin, libID, "family/beach.pdf")
 	uploadFile(t, admin, libID, "work/report.pdf")
 
 	// What the web UI used to send: stored as a folder named "library:<id>".
@@ -453,8 +453,8 @@ func TestGrant_ScopeGivesRealAccessAndFakeKeysAreRefused(t *testing.T) {
 
 func TestShare_ViewOnlyLinkCanBeLookedAtButNotDownloaded(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	in := uploadFile(t, admin, libID, "pics/a.jpg")
-	out := uploadFile(t, admin, libID, "private/b.jpg")
+	in := uploadFile(t, admin, libID, "pics/a.pdf")
+	out := uploadFile(t, admin, libID, "private/b.pdf")
 	token := createShare(t, admin, libID, map[string]any{
 		"target": map[string]any{"kind": "folder", "path": "pics"}, "caps": []string{"read"},
 	}, http.StatusCreated)
@@ -479,7 +479,7 @@ func TestShare_ViewOnlyLinkCanBeLookedAtButNotDownloaded(t *testing.T) {
 
 func TestShare_PasswordUnlockCookieIsPerLinkAndDiesWithIt(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
-	id := uploadFile(t, admin, libID, "pics/a.jpg")
+	id := uploadFile(t, admin, libID, "pics/a.pdf")
 	lib := map[string]any{"kind": "library"}
 	token := createShare(t, admin, libID, map[string]any{
 		"target": lib, "caps": []string{"read"}, "password": "right-password",

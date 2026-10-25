@@ -106,6 +106,13 @@ func (s *StateStore) exec(ctx context.Context, query string, args ...any) error 
 	return nil
 }
 
+// Delete removes an indexed file's row outright, taking everything attached
+// to it (tags, favorites, notes, progress) with it through the schema's
+// cascades, as a permanent delete does.
+func (s *StateStore) Delete(ctx context.Context, id string) error {
+	return s.exec(ctx, `DELETE FROM indexed_files WHERE id = ?`, id)
+}
+
 // NewStateStore wraps a per-library database connection.
 func NewStateStore(db *sql.DB) *StateStore {
 	return &StateStore{db: db}

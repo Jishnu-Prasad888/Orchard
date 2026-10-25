@@ -69,7 +69,7 @@ func TestStateStoreUpsertAndGet(t *testing.T) {
 
 	f := &indexer.IndexedFile{
 		ID:          "test-id-1",
-		RelPath:     "photos/img001.jpg",
+		RelPath:     "photos/img001.pdf",
 		SizeBytes:   1024,
 		ModTime:     now,
 		ContentHash: "abc123",
@@ -82,7 +82,7 @@ func TestStateStoreUpsertAndGet(t *testing.T) {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	got, err := store.GetByPath(ctx, "photos/img001.jpg")
+	got, err := store.GetByPath(ctx, "photos/img001.pdf")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestStateStoreUpsertAndGet(t *testing.T) {
 func TestStateStoreGetByPathMissing(t *testing.T) {
 	db := newTestDB(t)
 	store := indexer.NewStateStore(db.DB())
-	got, err := store.GetByPath(context.Background(), "does/not/exist.jpg")
+	got, err := store.GetByPath(context.Background(), "does/not/exist.pdf")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestStateStoreGetByHash(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	for _, path := range []string{"a.jpg", "b.jpg"} {
+	for _, path := range []string{"a.pdf", "b.pdf"} {
 		f := &indexer.IndexedFile{
 			ID: path, RelPath: path, SizeBytes: 100, ModTime: now,
 			ContentHash: "shared-hash", Status: indexer.StatusPresent,
@@ -141,7 +141,7 @@ func TestStateStoreMarkMissing(t *testing.T) {
 	ids := []string{"id-a", "id-b", "id-c"}
 	for _, id := range ids {
 		f := &indexer.IndexedFile{
-			ID: id, RelPath: id + ".jpg", SizeBytes: 1, ModTime: now,
+			ID: id, RelPath: id + ".pdf", SizeBytes: 1, ModTime: now,
 			Status:      indexer.StatusPresent,
 			FirstSeenAt: now, LastSeenAt: now, IndexedAt: now,
 		}
@@ -156,11 +156,11 @@ func TestStateStoreMarkMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarkMissing: %v", err)
 	}
-	if len(newlyMissing) != 1 || newlyMissing[0].RelPath != "id-c.jpg" {
-		t.Errorf("MarkMissing = %+v, want only id-c.jpg", newlyMissing)
+	if len(newlyMissing) != 1 || newlyMissing[0].RelPath != "id-c.pdf" {
+		t.Errorf("MarkMissing = %+v, want only id-c.pdf", newlyMissing)
 	}
 
-	f, _ := store.GetByPath(ctx, "id-c.jpg")
+	f, _ := store.GetByPath(ctx, "id-c.pdf")
 	if f == nil || f.Status != indexer.StatusMissing {
 		t.Errorf("id-c status = %v, want missing", f)
 	}
@@ -188,7 +188,7 @@ func TestStateStoreCounts(t *testing.T) {
 	for i, s := range statuses {
 		id := string(rune('a' + i))
 		f := &indexer.IndexedFile{
-			ID: id, RelPath: id + ".jpg", SizeBytes: 1, ModTime: now,
+			ID: id, RelPath: id + ".pdf", SizeBytes: 1, ModTime: now,
 			Status:      s,
 			FirstSeenAt: now, LastSeenAt: now, IndexedAt: now,
 		}
@@ -215,8 +215,8 @@ func TestIndexManagerWorkerExecutesScanJob(t *testing.T) {
 	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(root, "a.jpg"), "photo a")
-	writeFile(t, filepath.Join(root, "b.txt"), "notes b")
+	writeFile(t, filepath.Join(root, "a.pdf"), "photo a")
+	writeFile(t, filepath.Join(root, "b.epub"), "notes b")
 
 	mgr := indexer.NewIndexManager(discardLogger())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -262,7 +262,7 @@ func TestIndexManagerWorkersRestartIsIdempotent(t *testing.T) {
 	if err := os.MkdirAll(orchardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(root, "a.jpg"), "photo a")
+	writeFile(t, filepath.Join(root, "a.pdf"), "photo a")
 
 	mgr := indexer.NewIndexManager(discardLogger())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -301,8 +301,8 @@ func TestIndexManagerWorkersRestartIsIdempotent(t *testing.T) {
 
 func TestScannerNewFiles(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "img001.jpg"), "photo data")
-	writeFile(t, filepath.Join(root, "2022", "img002.jpg"), "another photo")
+	writeFile(t, filepath.Join(root, "img001.pdf"), "photo data")
+	writeFile(t, filepath.Join(root, "2022", "img002.pdf"), "another photo")
 
 	db := newTestDB(t)
 	store := indexer.NewStateStore(db.DB())
@@ -325,7 +325,7 @@ func TestScannerNewFiles(t *testing.T) {
 
 func TestScannerSkipsOrchardDir(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "real.jpg"), "photo")
+	writeFile(t, filepath.Join(root, "real.pdf"), "photo")
 	writeFile(t, filepath.Join(root, ".orchard", "library.json"), `{"id":"x"}`)
 	writeFile(t, filepath.Join(root, ".orchard", "library.db"), "db content")
 
@@ -342,7 +342,7 @@ func TestScannerSkipsOrchardDir(t *testing.T) {
 
 func TestScannerUnchangedFiles(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "photo.jpg"), "stable content")
+	writeFile(t, filepath.Join(root, "photo.pdf"), "stable content")
 
 	db := newTestDB(t)
 	store := indexer.NewStateStore(db.DB())
@@ -369,7 +369,7 @@ func TestScannerUnchangedFiles(t *testing.T) {
 
 func TestScannerModifiedFile(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "photo.jpg")
+	path := filepath.Join(root, "photo.pdf")
 	writeFile(t, path, "original content")
 
 	db := newTestDB(t)
@@ -400,7 +400,7 @@ func TestScannerModifiedFile(t *testing.T) {
 
 func TestScannerMissingFile(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "photo.jpg")
+	path := filepath.Join(root, "photo.pdf")
 	writeFile(t, path, "some content")
 
 	db := newTestDB(t)
@@ -423,12 +423,12 @@ func TestScannerMissingFile(t *testing.T) {
 	if r2.Missing != 1 {
 		t.Errorf("missing = %d, want 1", r2.Missing)
 	}
-	if len(r2.MissingPaths) != 1 || r2.MissingPaths[0] != "photo.jpg" {
-		t.Errorf("MissingPaths = %v, want [photo.jpg]", r2.MissingPaths)
+	if len(r2.MissingPaths) != 1 || r2.MissingPaths[0] != "photo.pdf" {
+		t.Errorf("MissingPaths = %v, want [photo.pdf]", r2.MissingPaths)
 	}
 
 	// Metadata must still be in the index as 'missing'.
-	f, err := store.GetByPath(context.Background(), "photo.jpg")
+	f, err := store.GetByPath(context.Background(), "photo.pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +439,7 @@ func TestScannerMissingFile(t *testing.T) {
 
 func TestScannerRecordsUnreadableFileAsError(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "locked.jpg")
+	path := filepath.Join(root, "locked.pdf")
 	writeFile(t, path, "some content")
 	if err := os.Chmod(path, 0o000); err != nil {
 		t.Fatal(err)
@@ -461,8 +461,8 @@ func TestScannerRecordsUnreadableFileAsError(t *testing.T) {
 	if result.Errors != 1 {
 		t.Errorf("Errors = %d, want 1", result.Errors)
 	}
-	if len(result.ErrorDetails) != 1 || result.ErrorDetails[0].Path != "locked.jpg" {
-		t.Errorf("ErrorDetails = %+v, want one entry for locked.jpg", result.ErrorDetails)
+	if len(result.ErrorDetails) != 1 || result.ErrorDetails[0].Path != "locked.pdf" {
+		t.Errorf("ErrorDetails = %+v, want one entry for locked.pdf", result.ErrorDetails)
 	}
 	if result.ErrorDetails[0].Reason == "" {
 		t.Error("ErrorDetails[0].Reason is empty, want a reason")
@@ -471,8 +471,8 @@ func TestScannerRecordsUnreadableFileAsError(t *testing.T) {
 
 func TestScannerMovedFile(t *testing.T) {
 	root := t.TempDir()
-	src := filepath.Join(root, "2022", "photo.jpg")
-	dst := filepath.Join(root, "archive", "photo.jpg")
+	src := filepath.Join(root, "2022", "photo.pdf")
+	dst := filepath.Join(root, "archive", "photo.pdf")
 	writeFile(t, src, "unique photo content for move detection")
 
 	db := newTestDB(t)
@@ -504,13 +504,13 @@ func TestScannerMovedFile(t *testing.T) {
 	}
 
 	// Old path should no longer be present.
-	old, _ := store.GetByPath(context.Background(), "2022/photo.jpg")
+	old, _ := store.GetByPath(context.Background(), "2022/photo.pdf")
 	if old != nil && old.Status == indexer.StatusPresent {
 		t.Error("old path still marked present after move")
 	}
 
 	// New path should be present.
-	newF, _ := store.GetByPath(context.Background(), "archive/photo.jpg")
+	newF, _ := store.GetByPath(context.Background(), "archive/photo.pdf")
 	if newF == nil || newF.Status != indexer.StatusPresent {
 		t.Errorf("new path status = %v, want present", newF)
 	}
@@ -518,7 +518,7 @@ func TestScannerMovedFile(t *testing.T) {
 
 func TestScannerDoesNotModifyOriginalFiles(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "video.mp4")
+	path := filepath.Join(root, "video.epub")
 	content := "original video bytes that must never be touched"
 	writeFile(t, path, content)
 
@@ -557,8 +557,8 @@ func TestScannerDoesNotModifyOriginalFiles(t *testing.T) {
 
 func TestScannerReconnectedLibraryOnlyProcessesChanges(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "a.jpg"), "stable a")
-	writeFile(t, filepath.Join(root, "b.jpg"), "stable b")
+	writeFile(t, filepath.Join(root, "a.pdf"), "stable a")
+	writeFile(t, filepath.Join(root, "b.pdf"), "stable b")
 
 	db := newTestDB(t)
 	store := indexer.NewStateStore(db.DB())
@@ -574,7 +574,7 @@ func TestScannerReconnectedLibraryOnlyProcessesChanges(t *testing.T) {
 	}
 
 	// Add a new file; the existing ones are stable.
-	writeFile(t, filepath.Join(root, "c.jpg"), "new file c")
+	writeFile(t, filepath.Join(root, "c.pdf"), "new file c")
 
 	r2, err := scanner.Scan(context.Background(), "lib1", root)
 	if err != nil {
@@ -593,8 +593,8 @@ func TestScannerReconnectedLibraryOnlyProcessesChanges(t *testing.T) {
 // returns after going missing is the exception.
 func TestScannerRescanWritesNothingUnlessAFileReturns(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "a.jpg"), "a")
-	writeFile(t, filepath.Join(root, "b.jpg"), "b")
+	writeFile(t, filepath.Join(root, "a.pdf"), "a")
+	writeFile(t, filepath.Join(root, "b.pdf"), "b")
 
 	db := newTestDB(t)
 	store := indexer.NewStateStore(db.DB())
@@ -624,20 +624,20 @@ func TestScannerRescanWritesNothingUnlessAFileReturns(t *testing.T) {
 	}
 
 	// b goes missing, then comes back: it must be present again.
-	moved := filepath.Join(t.TempDir(), "b.jpg")
-	if err := os.Rename(filepath.Join(root, "b.jpg"), moved); err != nil {
+	moved := filepath.Join(t.TempDir(), "b.pdf")
+	if err := os.Rename(filepath.Join(root, "b.pdf"), moved); err != nil {
 		t.Fatal(err)
 	}
 	if r, _ := scanner.Scan(ctx, "lib1", root); r.Missing != 1 {
 		t.Fatalf("missing = %d, want 1", r.Missing)
 	}
-	if err := os.Rename(moved, filepath.Join(root, "b.jpg")); err != nil {
+	if err := os.Rename(moved, filepath.Join(root, "b.pdf")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := scanner.Scan(ctx, "lib1", root); err != nil {
 		t.Fatal(err)
 	}
-	f, err := store.GetByPath(ctx, "b.jpg")
+	f, err := store.GetByPath(ctx, "b.pdf")
 	if err != nil || f == nil || f.Status != indexer.StatusPresent {
 		t.Fatalf("returned file = %+v, %v", f, err)
 	}
@@ -647,14 +647,14 @@ func TestScannerRescanWritesNothingUnlessAFileReturns(t *testing.T) {
 // database is next reopened (the Photos page filters on it).
 func TestScannerClassifiesMediaTypeWithoutAReopen(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "a.jpg"), "a")
+	writeFile(t, filepath.Join(root, "a.epub"), "a")
 	writeFile(t, filepath.Join(root, "b.pdf"), "b")
 	db := newTestDB(t)
 	scanner := indexer.NewScanner(indexer.NewStateStore(db.DB()), discardLogger())
 	if _, err := scanner.Scan(context.Background(), "lib1", root); err != nil {
 		t.Fatal(err)
 	}
-	for path, want := range map[string]string{"a.jpg": "photo", "b.pdf": "document"} {
+	for path, want := range map[string]string{"a.epub": "document", "b.pdf": "document"} {
 		var got string
 		if err := db.DB().QueryRow(`SELECT media_type FROM indexed_files WHERE rel_path = ?`, path).Scan(&got); err != nil {
 			t.Fatal(err)
@@ -662,5 +662,78 @@ func TestScannerClassifiesMediaTypeWithoutAReopen(t *testing.T) {
 		if got != want {
 			t.Errorf("%s media_type = %q, want %q", path, got, want)
 		}
+	}
+}
+
+// Only books are indexed: an AppImage, an archive or a photo beside them is
+// left alone, and the scan says how many it passed over.
+func TestScannerIndexesOnlyBooks(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "Novel.EPUB"), "epub")
+	writeFile(t, filepath.Join(root, "papers", "paper.pdf"), "pdf")
+	writeFile(t, filepath.Join(root, "Tool-x86_64.AppImage"), "elf")
+	writeFile(t, filepath.Join(root, "papers", "data.zip"), "zip")
+	writeFile(t, filepath.Join(root, "cover.jpg"), "jpg")
+	writeFile(t, filepath.Join(root, "notes.md"), "md")
+
+	db := newTestDB(t)
+	scanner := indexer.NewScanner(indexer.NewStateStore(db.DB()), discardLogger())
+	result, err := scanner.Scan(context.Background(), "lib1", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NewFiles != 2 || result.TotalFiles != 2 || result.Skipped != 4 {
+		t.Errorf("new = %d, total = %d, skipped = %d; want 2, 2, 4",
+			result.NewFiles, result.TotalFiles, result.Skipped)
+	}
+	var n int
+	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM indexed_files`).Scan(&n); err != nil || n != 2 {
+		t.Errorf("indexed rows = %d (%v), want 2", n, err)
+	}
+}
+
+// Rows for non-books left by an older index are removed on the next scan,
+// not reported as missing: the files are still there, just not listed.
+func TestScannerRemovesNonBooksFromAnOlderIndex(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "book.pdf"), "pdf")
+	writeFile(t, filepath.Join(root, "Tool.AppImage"), "elf")
+
+	db := newTestDB(t)
+	store := indexer.NewStateStore(db.DB())
+	now := time.Now().UTC()
+	for _, f := range []*indexer.IndexedFile{
+		{ID: "app", RelPath: "Tool.AppImage", SizeBytes: 3, ModTime: now, Status: indexer.StatusPresent,
+			FirstSeenAt: now, LastSeenAt: now, IndexedAt: now},
+		{ID: "gone", RelPath: "old/setup.exe", SizeBytes: 3, ModTime: now, Status: indexer.StatusMissing,
+			FirstSeenAt: now, LastSeenAt: now, IndexedAt: now},
+	} {
+		if err := store.Upsert(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.DB().Exec(
+		`INSERT INTO favorites (user_id, file_id, created_at) VALUES ('u1', 'app', ?)`,
+		now.Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := indexer.NewScanner(store, discardLogger())
+	result, err := scanner.Scan(context.Background(), "lib1", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Removed != 2 || result.Missing != 0 || result.NewFiles != 1 {
+		t.Errorf("removed = %d, missing = %d, new = %d; want 2, 0, 1",
+			result.Removed, result.Missing, result.NewFiles)
+	}
+	var rows, favs int
+	_ = db.DB().QueryRow(`SELECT COUNT(*) FROM indexed_files`).Scan(&rows)
+	_ = db.DB().QueryRow(`SELECT COUNT(*) FROM favorites`).Scan(&favs)
+	if rows != 1 || favs != 0 {
+		t.Errorf("rows = %d, favorites = %d; want only the book left", rows, favs)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Tool.AppImage")); err != nil {
+		t.Errorf("the AppImage itself must stay on disk: %v", err)
 	}
 }

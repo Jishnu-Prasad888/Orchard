@@ -19,6 +19,7 @@
  * than at the library root.
  */
 
+import { isBookName } from '../../lib/books';
 import {
   createContext,
   useCallback,
@@ -162,18 +163,34 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       .forEach(start);
   }, [items, start]);
 
-  const enqueue = useCallback((libraryId: string, files: File[], folder: string) => {
-    const added = files.map<UploadItem>((file) => ({
-      id: nextId.current++,
-      libraryId,
-      file,
-      dest: joinRelPath(folder, file.name),
-      status: 'queued',
-      loaded: 0,
-      total: file.size,
-    }));
-    setItems((list) => [...list, ...added]);
-  }, []);
+  const enqueue = useCallback(
+    (libraryId: string, files: File[], folder: string) => {
+      // Only books go in; the server would refuse the rest anyway, and
+      // saying so up front beats a row of failed uploads.
+      const books = files.filter((file) => isBookName(file.name));
+      const skipped = files.length - books.length;
+      if (skipped > 0) {
+        toast({
+          tone: books.length ? 'neutral' : 'error',
+          message:
+            skipped === 1 && files.length === 1
+              ? `“${files[0]!.name}” isn’t an EPUB or PDF, so it wasn’t added.`
+              : `Skipped ${skipped} ${skipped === 1 ? 'file' : 'files'} that ${skipped === 1 ? 'isn’t an EPUB or PDF' : 'aren’t EPUBs or PDFs'}.`,
+        });
+      }
+      const added = books.map<UploadItem>((file) => ({
+        id: nextId.current++,
+        libraryId,
+        file,
+        dest: joinRelPath(folder, file.name),
+        status: 'queued',
+        loaded: 0,
+        total: file.size,
+      }));
+      if (added.length) setItems((list) => [...list, ...added]);
+    },
+    [toast],
+  );
 
   const cancel = useCallback(
     (id: number) => {

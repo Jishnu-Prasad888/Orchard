@@ -74,7 +74,7 @@ func TestResumableUploadSurvivesADroppedChunk(t *testing.T) {
 	content := "hello orchard, chunk by chunk"
 
 	rec := admin.do(t, http.MethodPost, base,
-		map[string]any{"path": "books/a.txt", "size": len(content)})
+		map[string]any{"path": "books/a.pdf", "size": len(content)})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create = %d %s", rec.Code, rec.Body)
 	}
@@ -140,9 +140,16 @@ func TestResumableUploadRefusalsExplainThemselves(t *testing.T) {
 		t.Fatalf("existing = %d %s", rec.Code, rec.Body)
 	}
 
-	rec = admin.do(t, http.MethodPost, base, map[string]any{"path": "huge.iso", "size": int64(3) << 40})
+	rec = admin.do(t, http.MethodPost, base, map[string]any{"path": "huge.pdf", "size": int64(3) << 40})
 	if b := decodeUpload(t, rec); rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(b.Error.Message, "upload limit") {
 		t.Fatalf("too large = %d %s", rec.Code, rec.Body)
+	}
+
+	// Only books: refused before a single byte is sent.
+	rec = admin.do(t, http.MethodPost, base, map[string]any{"path": "Tool-x86_64.AppImage", "size": 3})
+	if b := decodeUpload(t, rec); rec.Code != http.StatusUnsupportedMediaType ||
+		!strings.Contains(b.Error.Message, "“Tool-x86_64.AppImage” isn’t an EPUB or PDF") {
+		t.Fatalf("not a book = %d %s", rec.Code, rec.Body)
 	}
 
 	rec = admin.do(t, http.MethodPost, base, map[string]any{"path": "../escape.txt", "size": 3})
@@ -159,7 +166,7 @@ func TestResumableUploadRefusalsExplainThemselves(t *testing.T) {
 func TestResumableUploadCancel(t *testing.T) {
 	_, admin, _, libID := newAuthzTestServer(t)
 	base := "/api/v1/libraries/" + libID + "/uploads"
-	rec := admin.do(t, http.MethodPost, base, map[string]any{"path": "x.bin", "size": 4})
+	rec := admin.do(t, http.MethodPost, base, map[string]any{"path": "x.pdf", "size": 4})
 	url := base + "/" + decodeUpload(t, rec).Upload.ID
 
 	if rec := admin.do(t, http.MethodDelete, url, nil); rec.Code != http.StatusNoContent {
@@ -196,7 +203,7 @@ func TestChunkOutlivesReadTimeoutButNotAStall(t *testing.T) {
 
 	base := "/api/v1/libraries/" + libID + "/uploads"
 	content := "0123456789"
-	rec := admin.do(t, http.MethodPost, base, map[string]any{"path": "slow.txt", "size": 20})
+	rec := admin.do(t, http.MethodPost, base, map[string]any{"path": "slow.pdf", "size": 20})
 	url := srv.URL + base + "/" + decodeUpload(t, rec).Upload.ID
 
 	patch := func(offset int64, body io.Reader, length int64) (*http.Response, uploadBody) {

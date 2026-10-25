@@ -93,7 +93,12 @@ type Result struct {
 	Missing    int
 	Unchanged  int
 	Errors     int
-	Changes    []FileChange
+	// Skipped counts files on disk that aren't books (see media.IsBook) and
+	// so weren't indexed; Removed counts rows for such files deleted from an
+	// older index.
+	Skipped int
+	Removed int
+	Changes []FileChange
 	// ErrorDetails holds up to maxScanDetailEntries of the files that
 	// failed this scan, newest first is not guaranteed — insertion order.
 	// Errors is always the exact count even when this list is capped.

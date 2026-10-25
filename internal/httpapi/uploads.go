@@ -106,6 +106,11 @@ func (s *Server) handleCreateUpload(w http.ResponseWriter, r *http.Request, u *a
 			"That file name or folder isn’t allowed.")
 		return
 	}
+	if !media.IsBook(safe) {
+		writeErrorf(w, s.logger, reqID, http.StatusUnsupportedMediaType, CodeUnsupportedMediaType,
+			"“%s” isn’t an EPUB or PDF. Only EPUB and PDF files can be added to a library.", path.Base(safe))
+		return
+	}
 	if body.Size == nil || *body.Size < 0 {
 		writeError(w, s.logger, reqID, http.StatusBadRequest, CodeBadRequest,
 			"The upload’s size is missing.")
@@ -368,6 +373,9 @@ func (s *Server) writeUploadError(w http.ResponseWriter, r *http.Request, err er
 	case errors.Is(err, media.ErrUploadTooLarge):
 		writeErrorf(w, s.logger, reqID, http.StatusRequestEntityTooLarge, CodePayloadTooLarge,
 			"The file is larger than this server’s %s upload limit.", humanBytes(s.uploadLimit()))
+	case errors.Is(err, media.ErrNotABook):
+		writeError(w, s.logger, reqID, http.StatusUnsupportedMediaType, CodeUnsupportedMediaType,
+			"Only EPUB and PDF files can be added to a library.")
 	case errors.Is(err, media.ErrAlreadyExists) && len(dest) > 0:
 		writeError(w, s.logger, reqID, http.StatusConflict, CodeConflict, alreadyExistsMessage(dest[0]))
 	case isStall(err):

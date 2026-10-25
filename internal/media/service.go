@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -96,12 +97,43 @@ func (svc *Service) ListFolders(ctx context.Context, parent string) ([]*Folder, 
 		if n, err := svc.store.CountPresentUnder(ctx, rel); err == nil {
 			f.FileCount = n
 		}
+		// A folder with no books under it but other files in it (a folder
+		// of AppImages or photos) isn't part of the library. One with no
+		// files at all stays: it may have just been made to put books in.
+		if f.FileCount == 0 && hasFiles(filepath.Join(dir, e.Name())) {
+			continue
+		}
 		out = append(out, f)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
 	return out, nil
+}
+
+// errFoundFile stops hasFiles' walk at the first file.
+var errFoundFile = errors.New("found a file")
+
+// hasFiles reports whether dir, or any folder under it, holds a file.
+// Hidden entries (dot-files and dot-folders, like .orchard) don't count. It
+// stops at the first file, so a large folder costs little.
+func hasFiles(dir string) bool {
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable: keep looking elsewhere
+		}
+		if p != dir && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.IsDir() {
+			return errFoundFile
+		}
+		return nil
+	})
+	return errors.Is(err, errFoundFile)
 }
 
 // FolderExists reports whether relPath is a visible folder in the library:
@@ -189,6 +221,9 @@ func (svc *Service) WriteUpload(ctx context.Context, destRelPath string, src io.
 	if err != nil {
 		return nil, err
 	}
+	if !IsBook(safe) {
+		return nil, ErrNotABook
+	}
 	abs, err := svc.absPath(safe)
 	if err != nil {
 		return nil, err
@@ -250,6 +285,9 @@ func (svc *Service) CommitUpload(ctx context.Context, destRelPath, srcAbs string
 	if err != nil {
 		return nil, err
 	}
+	if !IsBook(safe) {
+		return nil, ErrNotABook
+	}
 	abs, err := svc.absPath(safe)
 	if err != nil {
 		return nil, err
@@ -304,6 +342,9 @@ func (svc *Service) Rename(ctx context.Context, relPath, newName string) (*File,
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrPathTraversal, err)
 	}
+	if !IsBook(name) {
+		return nil, ErrNotABook
+	}
 	f, err := svc.store.GetByRelPath(ctx, safe)
 	if err != nil {
 		return nil, err
@@ -342,6 +383,9 @@ func (svc *Service) Move(ctx context.Context, relPath, newRelPath string) (*File
 	if err != nil {
 		return nil, err
 	}
+	if !IsBook(newSafe) {
+		return nil, ErrNotABook
+	}
 	f, err := svc.store.GetByRelPath(ctx, safe)
 	if err != nil {
 		return nil, err
@@ -377,6 +421,9 @@ func (svc *Service) Copy(ctx context.Context, srcRelPath, destRelPath string) (*
 	destSafe, err := SafeRelPath(destRelPath)
 	if err != nil {
 		return nil, err
+	}
+	if !IsBook(destSafe) {
+		return nil, ErrNotABook
 	}
 
 	srcAbs, _ := svc.absPath(srcSafe)

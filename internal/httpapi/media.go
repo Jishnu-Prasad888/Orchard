@@ -586,6 +586,9 @@ func (s *Server) writeMediaError(w http.ResponseWriter, r *http.Request, err err
 	case errors.Is(err, media.ErrUploadTooLarge):
 		writeError(w, s.logger, reqID, http.StatusRequestEntityTooLarge,
 			CodePayloadTooLarge, "Upload exceeds the maximum allowed size.")
+	case errors.Is(err, media.ErrNotABook):
+		writeError(w, s.logger, reqID, http.StatusUnsupportedMediaType, CodeUnsupportedMediaType,
+			"Only EPUB and PDF files can be in a library; keep the .epub or .pdf extension.")
 	default:
 		s.logger.Error("media operation", "error", err)
 		writeError(w, s.logger, reqID, http.StatusInternalServerError,
