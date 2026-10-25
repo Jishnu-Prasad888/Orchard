@@ -1372,7 +1372,24 @@ button.reader-card-main {
 
   .reader-selection-bar > .button {
     flex-shrink: 0;
-    padding-inline: var(--space-2);
+    gap: 4px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
+  }
+
+  .reader-selection-bar > .icon-button {
+    flex-shrink: 0;
+    width: 32px;
+  }
+
+  .reader-selection-bar .reader-highlight-colors {
+    flex-shrink: 0;
+    gap: 2px;
+  }
+
+  .reader-selection-bar .reader-color-swatch {
+    width: 18px;
+    height: 18px;
   }
 
   .reader-selection-form {

@@ -129,15 +129,25 @@
 }
 
 @media (max-width: 599px) {
+  /* Search gets a row of its own; filters, sort and view share the next,
+     with the sort menu taking whatever room is left. */
   .media-toolbar-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .media-search {
-    flex: 1;
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   .media-search input {
     width: 100%;
+    min-width: 0;
+  }
+
+  .media-toolbar-actions > select {
+    flex: 1;
+    min-width: 0;
   }
 }

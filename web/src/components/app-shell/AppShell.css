@@ -485,6 +485,10 @@
   }
 }
 
+.topbar-hide-completed-short {
+  display: none;
+}
+
 @media (max-width: 599px) {
   .topbar .topbar-search,
   .topbar .topbar-upload-label {
@@ -503,6 +507,16 @@
   .topbar-hide-completed {
     gap: var(--space-1);
     padding: 0;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  .topbar-hide-completed-long {
+    display: none;
+  }
+
+  .topbar-hide-completed-short {
+    display: inline;
   }
 }
 

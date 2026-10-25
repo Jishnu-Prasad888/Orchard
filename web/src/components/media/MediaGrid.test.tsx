@@ -243,9 +243,15 @@ describe('useSelection', () => {
     ];
     render(<MediaGrid libraryId="lib1" files={books} onOpen={() => {}} label="Books" />);
 
-    expect(screen.getByText('Dune')).toHaveClass('media-tile-title');
+    // Under the cover, and — with no artwork — written on a plain cover too.
+    expect(screen.getAllByText('Dune').map((el) => el.className)).toEqual([
+      'media-tile-cover-title',
+      'media-tile-title',
+    ]);
     // No title in the metadata: the file name, without its extension.
-    expect(screen.getByText('untitled-notes')).toHaveClass('media-tile-title');
+    expect(
+      screen.getAllByText('untitled-notes').some((el) => el.classList.contains('media-tile-title')),
+    ).toBe(true);
     const tagList = screen.getByTestId('media-tile-tags');
     expect(within(tagList).getByText('classics')).toBeInTheDocument();
     expect(within(tagList).getByText('sci-fi')).toBeInTheDocument();
