@@ -22,6 +22,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/config"
 	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
 	"github.com/Jishnu-Prasad888/Orchard/internal/db"
+	"github.com/Jishnu-Prasad888/Orchard/internal/dictionary"
 	"github.com/Jishnu-Prasad888/Orchard/internal/httpapi"
 	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
@@ -153,6 +154,16 @@ func run() error {
 	}
 	backupMgr.Start(ctx)
 
+	// Offline dictionaries for the reader, kept beside the server database.
+	// A failure here costs only the dictionary feature, not the server.
+	dictionaries, err := dictionary.NewManager(filepath.Join(cfg.DataDir, "dictionaries"), logger)
+	if err != nil {
+		logger.Error("dictionaries unavailable", "error", err)
+		dictionaries = nil
+	} else {
+		defer dictionaries.Close()
+	}
+
 	// Frontend: the embedded build by default, an on-disk build in development.
 	webHandler, err := webui.Handler(cfg.WebDistDir)
 	if err != nil {
@@ -168,6 +179,7 @@ func run() error {
 		Libraries:      libraries,
 		Indexer:        idxManager,
 		Backups:        backupMgr,
+		Dictionaries:   dictionaries,
 		Keys:           keys,
 		SecureCookies:  cfg.CookieSecure,
 		MaxUploadBytes: cfg.MaxUploadBytes,

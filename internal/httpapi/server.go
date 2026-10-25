@@ -11,6 +11,7 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/authz"
 	"github.com/Jishnu-Prasad888/Orchard/internal/backups"
 	"github.com/Jishnu-Prasad888/Orchard/internal/crypto"
+	"github.com/Jishnu-Prasad888/Orchard/internal/dictionary"
 	"github.com/Jishnu-Prasad888/Orchard/internal/indexer"
 	"github.com/Jishnu-Prasad888/Orchard/internal/library"
 	"github.com/Jishnu-Prasad888/Orchard/internal/metrics"
@@ -30,6 +31,7 @@ type Server struct {
 	libraries      *library.Manager
 	indexer        *indexer.IndexManager
 	backups        *backups.Manager
+	dictionaries   *dictionary.Manager
 	keys           *crypto.Keys
 	secureCookies  bool
 	ratelimit      *rateLimiter
@@ -76,6 +78,10 @@ type Dependencies struct {
 	// Backups runs server and library backups. It may be nil, in which case
 	// the backup-management endpoints return SERVICE_UNAVAILABLE.
 	Backups *backups.Manager
+	// Dictionaries installs offline dictionaries and looks words up in them
+	// for the reader. It may be nil, in which case the dictionary endpoints
+	// are not registered and the reader offers no dictionary.
+	Dictionaries *dictionary.Manager
 	// Keys is the optional at-rest encryption key used to seal the .orchard
 	// identity file. It may be nil or disabled, in which case metadata is
 	// written in the clear.
@@ -107,6 +113,7 @@ func New(deps Dependencies) *Server {
 		libraries:      deps.Libraries,
 		indexer:        deps.Indexer,
 		backups:        deps.Backups,
+		dictionaries:   deps.Dictionaries,
 		keys:           deps.Keys,
 		secureCookies:  deps.SecureCookies,
 		ratelimit:      newRateLimiter(),
@@ -185,6 +192,19 @@ func (s *Server) Handler() http.Handler {
 	// account-wide checkbox, shown at the top of every page.
 	mux.Handle("GET /api/v1/settings/hide-completed", s.withAuth(allowAny, s.handleGetHideCompleted))
 	mux.Handle("PUT /api/v1/settings/hide-completed", s.withAuth(allowAny, s.handleSetHideCompleted))
+
+	// Dictionaries. Installing, enabling and removing them is server
+	// administration; looking a word up (and asking whether any dictionary
+	// is on, which the reader does) is open to every session.
+	if s.dictionaries != nil {
+		mux.Handle("GET /api/v1/dictionaries", s.withAuth(allowAny, s.handleListDictionaries))
+		mux.Handle("GET /api/v1/dictionaries/lookup", s.withAuth(allowAny, s.handleDictionaryLookup))
+		mux.Handle("GET /api/v1/dictionaries/catalog", s.withAuth(allowAdmin, s.handleDictionaryCatalog))
+		mux.Handle("POST /api/v1/dictionaries/install", s.withAuth(allowAdmin, s.handleInstallDictionary))
+		mux.Handle("DELETE /api/v1/dictionaries/install", s.withAuth(allowAdmin, s.handleCancelDictionaryInstall))
+		mux.Handle("PATCH /api/v1/dictionaries/{dictID}", s.withAuth(allowAdmin, s.handleUpdateDictionary))
+		mux.Handle("DELETE /api/v1/dictionaries/{dictID}", s.withAuth(allowAdmin, s.handleDeleteDictionary))
+	}
 
 	// Library surface. Listing is open to any session and filtered by the
 	// caller's read capability, so a member can find the libraries it was
@@ -320,6 +340,11 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/highlights", s.withAuth(allowAny, s.handleCreateHighlight))
 		mux.Handle("PATCH /api/v1/libraries/{id}/highlights/{highlightID}", s.withAuth(allowAny, s.handleUpdateHighlight))
 		mux.Handle("DELETE /api/v1/libraries/{id}/highlights/{highlightID}", s.withAuth(allowAny, s.handleDeleteHighlight))
+
+		// Saved words: dictionary lookups a reader kept, with their meaning.
+		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/words", s.withAuth(allowAny, s.handleListFileWords))
+		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/words", s.withAuth(allowAny, s.handleCreateWord))
+		mux.Handle("DELETE /api/v1/libraries/{id}/words/{wordID}", s.withAuth(allowAny, s.handleDeleteWord))
 
 		// Quotes. Saved passages with citation details and commentary,
 		// independent of highlights (can be typed in by hand).

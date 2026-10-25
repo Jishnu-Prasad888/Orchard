@@ -32,7 +32,7 @@ const (
 
 	// SchemaVersion is the current version of the library-level database
 	// schema. Bump this when adding new tables or changing existing ones.
-	SchemaVersion = 4
+	SchemaVersion = 5
 )
 
 // DB wraps a per-library SQLite connection pool. Use OpenDB to construct one.
@@ -779,6 +779,25 @@ CREATE TABLE IF NOT EXISTS highlights (
 
 CREATE INDEX IF NOT EXISTS highlights_user_file_idx ON highlights (user_id, file_id);
 CREATE INDEX IF NOT EXISTS highlights_file_idx ON highlights (file_id);
+
+-- saved_words are words a user looked up in the reader's dictionary and
+-- kept, with the meaning they read (copied, so it survives the dictionary
+-- being removed). location is the same opaque reader position as
+-- highlights; the reader paints the word there in gray.
+CREATE TABLE IF NOT EXISTS saved_words (
+	id         TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL,
+	file_id    TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
+	word       TEXT NOT NULL,
+	location   TEXT NOT NULL,
+	text       TEXT NOT NULL DEFAULT '',
+	definition TEXT NOT NULL DEFAULT '',
+	source     TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS saved_words_user_file_idx ON saved_words (user_id, file_id);
+CREATE INDEX IF NOT EXISTS saved_words_file_idx ON saved_words (file_id);
 
 -- quotes are passages a user has saved out of a book together with their
 -- own commentary, independent of any highlight (a quote can be typed in by

@@ -16,6 +16,13 @@
  * appears over the book, or from a right-click menu. Either takes a snapshot
  * of the selection first: typing a note moves focus out of the book, which
  * clears the live selection, and the note must still know what it is about.
+ *
+ * When a dictionary is installed and on, a selected word can also be looked
+ * up ("Search in dictionary" in the menu, or Define on the bar — which is
+ * what a long press reaches on a phone). The meaning appears in a card over
+ * the page, never the side panel, so the book doesn't reflow; a word saved
+ * from it is marked in gray where it was found and listed in the
+ * Dictionary panel.
  */
 
 import { Maximize, Minimize } from 'lucide-react';
@@ -29,6 +36,7 @@ import {
   deleteBookmark,
   deleteHighlight,
   deleteQuote,
+  deleteSavedWord,
   getBookMetadata,
   getFile,
   getReaderPreferences,
@@ -36,7 +44,10 @@ import {
   listFileBookmarks,
   listFileHighlights,
   listFileQuotes,
+  listDictionaries,
+  listFileWords,
   markFileOpened,
+  saveWord,
   searchFileContent,
   setReaderPreferences as saveReaderPreferences,
   setReadingProgress,
@@ -51,11 +62,15 @@ import type {
   Highlight,
   Quote,
   ReaderPreferences,
+  SavedWord,
 } from '../api/types';
 import { DEFAULT_READER_PREFERENCES, HIGHLIGHT_COLORS } from '../api/types';
 import { ContextMenu, type MenuEntry, type MenuPosition } from '../components/ContextMenu';
 import { downloadUrl, fileExtension } from '../components/media';
-import { BookmarksPanel, QuotesPanel } from '../components/reader/AnnotationPanels';
+import { BookmarksPanel, QuotesPanel, WordsPanel } from '../components/reader/AnnotationPanels';
+import { DictionaryPopover } from '../components/reader/DictionaryPopover';
+import { isLookupable } from '../components/reader/dictionaryText';
+import { WORD_MARK } from '../components/reader/highlightPaint';
 import { ReaderSettingsPanel } from '../components/reader/ReaderSettingsPanel';
 import { TextReader } from '../components/reader/TextReader';
 import type {
@@ -95,7 +110,15 @@ const PROGRESS_SAVE_DEBOUNCE_MS = 2500;
 /** How long a "Quoted!" / "Bookmarked!" confirmation stays up. */
 const FLASH_MS = 1200;
 
-type PanelTab = 'toc' | 'search' | 'book' | 'settings' | 'annotations' | 'quotes';
+type PanelTab = 'toc' | 'search' | 'book' | 'settings' | 'annotations' | 'quotes' | 'words';
+
+/** A dictionary lookup on screen: what was selected, where in the book, and
+ * where on screen it was asked for (none from the bar or the panel). */
+interface Lookup {
+  text: string;
+  location: string;
+  point: ReaderPoint | null;
+}
 
 function readerKind(fileName: string): 'pdf' | 'epub' | 'text' {
   switch (fileExtension(fileName).toLowerCase()) {
@@ -138,6 +161,11 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [words, setWords] = useState<SavedWord[]>([]);
+  // Whether any dictionary is on: decides if lookups are offered at all.
+  const [dictionaryOn, setDictionaryOn] = useState(false);
+  const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [savingWord, setSavingWord] = useState(false);
   // The live selection in the book, and the snapshot an action works on.
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [pending, setPending] = useState<ReaderSelection | null>(null);
@@ -260,6 +288,13 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       .catch(() => {});
     listFileQuotes(libraryId, fileId)
       .then((r) => !cancelled && setQuotes(r.quotes ?? []))
+      .catch(() => {});
+    listFileWords(libraryId, fileId)
+      .then((r) => !cancelled && setWords(r.words ?? []))
+      .catch(() => {});
+    // No dictionary feature on the server (404) reads as "none on".
+    listDictionaries()
+      .then((r) => !cancelled && setDictionaryOn(r.available))
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -410,6 +445,59 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
     [libraryId, fileId, finishSelection, showFlash],
   );
 
+  /** Opens the dictionary card for a selection. The live selection stays as
+   * it is (the card sits over the page), but the selection bar steps aside
+   * while the card is up. */
+  const lookUp = useCallback((target: ReaderSelection, point: ReaderPoint | null) => {
+    setSelectionAction(null);
+    setLookup({ text: target.text.trim(), location: target.location, point });
+  }, []);
+  const closeLookup = useCallback(() => setLookup(null), []);
+
+  // The saved word matching what the card shows, if any: one entry per
+  // word per book, whatever its case.
+  const lookupKey = lookup?.text.toLowerCase();
+  const savedForLookup = lookupKey
+    ? words.find((w) => w.word.toLowerCase() === lookupKey || w.text.toLowerCase() === lookupKey)
+    : undefined;
+
+  const keepWord = useCallback(
+    async (word: string, meaning: string, source: string) => {
+      if (!lookup) return;
+      setSavingWord(true);
+      try {
+        const { word: saved } = await saveWord(libraryId, fileId, {
+          word,
+          text: lookup.text,
+          location: lookup.location,
+          definition: meaning,
+          source,
+        });
+        setWords((prev) => [saved, ...prev]);
+        showFlash('Saved to your words');
+      } catch (e) {
+        toast({ message: e instanceof Error ? e.message : String(e), tone: 'error' });
+      } finally {
+        setSavingWord(false);
+      }
+    },
+    [libraryId, fileId, lookup, showFlash, toast],
+  );
+
+  const removeWord = useCallback(
+    async (id: string) => {
+      const before = words;
+      setWords((prev) => prev.filter((w) => w.id !== id));
+      try {
+        await deleteSavedWord(libraryId, id);
+      } catch (e) {
+        setWords(before);
+        setAnnotationError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [libraryId, words],
+  );
+
   /** Right-click over selected text: the page's own menu, on a snapshot of
    * the selection (opening the menu moves focus out of the book). */
   const openSelectionMenu = useCallback((point: ReaderPoint) => {
@@ -430,8 +518,21 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
     openSelectionMenu({ x: event.clientX, y: event.clientY });
   };
 
+  const canLookUp = (target: ReaderSelection | null): target is ReaderSelection =>
+    dictionaryOn && !!target && isLookupable(target.text);
+
   const menuEntries: MenuEntry[] = pending
     ? [
+        ...(canLookUp(pending)
+          ? ([
+              {
+                id: 'define',
+                label: 'Search in dictionary',
+                onSelect: () => lookUp(pending, menuAt),
+              },
+              'separator',
+            ] satisfies MenuEntry[])
+          : []),
         { id: 'quote', label: 'Save quote', onSelect: () => void saveQuote(pending) },
         {
           id: 'quote-thought',
@@ -484,10 +585,19 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
 
   const jumpTo = useCallback((location: string) => readerRef.current?.goTo(location), []);
 
-  // What the reader paints: the saved highlights, in the shape it takes.
+  // What the reader paints: saved words in gray, then the saved highlights
+  // (which win where both mark the same passage).
   const readerHighlights = useMemo<ReaderHighlight[]>(
-    () => highlights.map((h) => ({ id: h.id, location: h.location, text: h.text, color: h.color })),
-    [highlights],
+    () => [
+      ...words.map((w) => ({
+        id: `word:${w.id}`,
+        location: w.location,
+        text: w.text,
+        color: WORD_MARK,
+      })),
+      ...highlights.map((h) => ({ id: h.id, location: h.location, text: h.text, color: h.color })),
+    ],
+    [words, highlights],
   );
 
   const onSavePreferences = useCallback(
@@ -690,6 +800,17 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
           >
             <Icon name="quote" />
           </button>
+          {(dictionaryOn || words.length > 0) && (
+            <button
+              type="button"
+              className={panel === 'words' ? 'icon-button active' : 'icon-button'}
+              onClick={() => togglePanel('words')}
+              aria-label="Dictionary: saved words"
+              title="Dictionary"
+            >
+              <Icon name="book" />
+            </button>
+          )}
           <button
             type="button"
             className={panel === 'settings' ? 'icon-button active' : 'icon-button'}
@@ -767,7 +888,7 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
             />
           )}
 
-          {(selection || selectionAction) && (
+          {(selection || selectionAction) && !lookup && (
             <div
               className="reader-selection-bar"
               // Pressing a button here mustn't clear the selection it acts on.
@@ -815,6 +936,16 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                   >
                     <Icon name="highlighter" /> Note…
                   </button>
+                  {canLookUp(selection) && (
+                    <button
+                      type="button"
+                      className="button ghost-button"
+                      onClick={() => lookUp(selection, null)}
+                      data-testid="reader-define"
+                    >
+                      <Icon name="book" /> Define
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-button"
@@ -889,6 +1020,20 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                 </p>
               )}
             </div>
+          )}
+
+          {lookup && (
+            <DictionaryPopover
+              // A new lookup is a fresh card (its own history and tab).
+              key={`${lookup.location}|${lookup.text}`}
+              word={lookup.text}
+              point={lookup.point}
+              saved={!!savedForLookup}
+              busy={savingWord}
+              onSave={(word, meaning, source) => void keepWord(word, meaning, source)}
+              onUnsave={() => savedForLookup && void removeWord(savedForLookup.id)}
+              onClose={closeLookup}
+            />
           )}
 
           {flash && (
@@ -1012,6 +1157,18 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
                 onRemove={(id) => void removeQuote(id)}
                 onToggleFavorite={(q) => void toggleQuoteFavorite(q)}
                 onCopy={(q) => void copyToClipboard(q.text)}
+              />
+            )}
+
+            {panel === 'words' && (
+              <WordsPanel
+                words={words}
+                describe={describeLocation}
+                onJump={jumpTo}
+                error={annotationError}
+                available={dictionaryOn}
+                onLookUp={(w) => lookUp({ text: w.word, location: w.location }, null)}
+                onRemove={(id) => void removeWord(id)}
               />
             )}
 

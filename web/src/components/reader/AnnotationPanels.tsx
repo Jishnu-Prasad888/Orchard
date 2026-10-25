@@ -1,6 +1,7 @@
 /**
  * The reader's side panels for what you've marked in the open book:
- * bookmarks and highlights in one (switched by tabs), quotes in the other.
+ * bookmarks and highlights in one (switched by tabs), quotes in another,
+ * and the words you looked up in the dictionary and kept in a third.
  *
  * Every entry is a card that jumps to its place in the book when clicked,
  * shows where it is ("Page 12", a chapter) and when it was made, and keeps
@@ -11,7 +12,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import type { Bookmark, Highlight, Quote } from '../../api/types';
+import type { Bookmark, Highlight, Quote, SavedWord } from '../../api/types';
 import { Icon } from '../ui/Icon';
 
 /** "Today", "Yesterday", or a short date. */
@@ -65,7 +66,7 @@ function Empty({
   title,
   hint,
 }: {
-  icon: 'bookmark' | 'highlighter' | 'quote';
+  icon: 'bookmark' | 'highlighter' | 'quote' | 'book';
   title: string;
   hint: string;
 }) {
@@ -354,6 +355,108 @@ export function QuotesPanel({
                     aria-label="Remove quote"
                     title="Remove"
                     onClick={() => onRemove(q.id)}
+                  >
+                    <Icon name="trash" size={16} />
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function WordsPanel({
+  words,
+  describe,
+  onJump,
+  error,
+  available,
+  onLookUp,
+  onRemove,
+}: CommonProps & {
+  words: SavedWord[];
+  /** Whether a dictionary is on, to look a saved word up again. */
+  available: boolean;
+  onLookUp: (word: SavedWord) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div className="reader-annot-panel" data-testid="reader-words">
+      <PanelHeader title="Dictionary" count={words.length} />
+
+      {error && <p className="error-text">{error}</p>}
+
+      {words.length === 0 ? (
+        <Empty
+          icon="book"
+          title="No saved words yet"
+          hint={
+            available
+              ? 'Select a word, right-click it (or press and hold), and choose “Search in dictionary”. Save it to keep it here.'
+              : 'Once an administrator adds a dictionary in Settings, words you look up and save appear here.'
+          }
+        />
+      ) : (
+        <ul className="reader-card-list" aria-label="Saved words">
+          {words.map((w) => {
+            const expanded = open === w.id;
+            return (
+              <li key={w.id} className="reader-card reader-word-card">
+                <button
+                  type="button"
+                  className="reader-card-main"
+                  onClick={() => onJump(w.location)}
+                  aria-label={`${w.word}: go to it in the book`}
+                >
+                  <span className="reader-card-body">
+                    <span className="reader-word-title">{w.word}</span>
+                    {w.definition && (
+                      <span
+                        className={expanded ? 'reader-word-meaning is-open' : 'reader-word-meaning'}
+                      >
+                        {w.definition}
+                      </span>
+                    )}
+                    <Meta
+                      where={[describe(w.location), w.source].filter(Boolean).join(' · ') || null}
+                      when={w.created_at}
+                    />
+                  </span>
+                </button>
+                <div className="reader-card-actions">
+                  {w.definition.includes('\n') && (
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={expanded ? 'Show less' : 'Show the whole meaning'}
+                      aria-expanded={expanded}
+                      title={expanded ? 'Less' : 'More'}
+                      onClick={() => setOpen(expanded ? null : w.id)}
+                    >
+                      <Icon name="chevron-down" size={16} />
+                    </button>
+                  )}
+                  {available && (
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Look up ${w.word}`}
+                      title="Look up"
+                      onClick={() => onLookUp(w)}
+                    >
+                      <Icon name="search" size={16} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Remove ${w.word}`}
+                    title="Remove"
+                    onClick={() => onRemove(w.id)}
                   >
                     <Icon name="trash" size={16} />
                   </button>
