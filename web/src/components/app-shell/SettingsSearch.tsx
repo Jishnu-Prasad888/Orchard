@@ -44,6 +44,13 @@ const SETTING_ENTRIES: SettingEntry[] = [
     words: 'library tags sharing shared trash deleted duplicates duplicate copies',
   },
   {
+    label: 'Dictionary',
+    section: 'dictionary',
+    hint: 'Dictionary',
+    words:
+      'dictionary wordnet freedict define definition meaning translate translation words lookup download',
+  },
+  {
     label: 'Accounts and users',
     section: 'accounts',
     hint: 'Accounts',

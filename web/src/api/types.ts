@@ -386,6 +386,112 @@ export interface HighlightEnvelope {
   highlight: Highlight;
 }
 
+/* ---------------------------- dictionaries ---------------------------- */
+
+export type DictionaryKind = 'wordnet' | 'freedict';
+
+/** A dictionary installed on the server. */
+export interface Dictionary {
+  id: string;
+  kind: DictionaryKind;
+  name: string;
+  description: string;
+  version: string;
+  license: string;
+  size_bytes: number;
+  installed_at: string;
+  enabled: boolean;
+}
+
+/** A dictionary that can be installed. */
+export interface DictionarySource {
+  id: string;
+  kind: DictionaryKind;
+  name: string;
+  description: string;
+  version: string;
+  license: string;
+  download_bytes: number;
+  headwords?: number;
+}
+
+export type DictionaryJobPhase =
+  'downloading' | 'verifying' | 'extracting' | 'indexing' | 'done' | 'failed' | 'cancelled';
+
+/** The current or most recent install. `done`/`total` measure the current
+ * phase; `total` is 0 when it can't be known. */
+export interface DictionaryJob {
+  id: string;
+  dictionary_id: string;
+  name: string;
+  phase: DictionaryJobPhase;
+  done: number;
+  total: number;
+  error?: string;
+  started_at: string;
+  finished_at?: string;
+}
+
+export interface DictionaryListResponse {
+  dictionaries: Dictionary[];
+  /** Whether any installed dictionary is on — whether the reader offers
+   * "Search in dictionary". */
+  available: boolean;
+  job: DictionaryJob | null;
+}
+
+export interface DictionaryCatalogResponse {
+  sources: DictionarySource[];
+  /** Why FreeDict's list couldn't be loaded; WordNet is offered anyway. */
+  freedict_error?: string;
+}
+
+export interface DictionarySense {
+  definition: string;
+  examples?: string[];
+  synonyms?: string[];
+  notes?: string[];
+}
+
+export interface DictionaryEntry {
+  headword: string;
+  part_of_speech?: string;
+  pronunciation?: string;
+  senses: DictionarySense[];
+}
+
+export interface DictionaryResult {
+  dictionary_id: string;
+  dictionary_name: string;
+  entries: DictionaryEntry[];
+}
+
+export interface DictionaryLookupResponse {
+  word: string;
+  results: DictionaryResult[];
+}
+
+/** A word looked up in the reader and kept, with the meaning read. */
+export interface SavedWord {
+  id: string;
+  file_id: string;
+  word: string;
+  location: string;
+  /** The exact text selected in the book, found again to paint it. */
+  text: string;
+  definition: string;
+  source?: string;
+  created_at: string;
+}
+
+export interface SavedWordListResponse {
+  words: SavedWord[];
+}
+
+export interface SavedWordEnvelope {
+  word: SavedWord;
+}
+
 /** A saved passage of text with citation details and commentary,
  * independent of any highlight — it can be typed in by hand. */
 export interface Quote {

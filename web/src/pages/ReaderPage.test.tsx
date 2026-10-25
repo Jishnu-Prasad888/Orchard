@@ -446,6 +446,134 @@ describe('ReaderPage', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
+  const dictionaryOn = (url: string) =>
+    url.endsWith('/api/v1/dictionaries')
+      ? json({ dictionaries: [], available: true, job: null })
+      : undefined;
+  const lookupAnswer = (url: string) =>
+    url.includes('/api/v1/dictionaries/lookup')
+      ? json({
+          word: 'First section text',
+          results: [
+            {
+              dictionary_id: 'wordnet',
+              dictionary_name: 'WordNet',
+              entries: [
+                {
+                  headword: 'section',
+                  part_of_speech: 'noun',
+                  senses: [
+                    {
+                      definition: 'one of several parts or pieces that fit with others',
+                      examples: ['a section of a book'],
+                      synonyms: ['part'],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
+      : undefined;
+  const savedWord = {
+    id: 'w1',
+    file_id: 'f1',
+    word: 'First section text',
+    text: 'First section text.',
+    location: 'block-1',
+    definition: 'section, noun · one of several parts or pieces that fit with others',
+    source: 'WordNet',
+    created_at: '2026-10-01T00:00:00Z',
+  };
+
+  it('offers no dictionary lookup when no dictionary is on', async () => {
+    setup();
+    const { paragraph, bar } = await selectParagraph();
+    expect(within(bar).queryByRole('button', { name: /Define/ })).not.toBeInTheDocument();
+    fireEvent.contextMenu(paragraph);
+    await screen.findByRole('menuitem', { name: 'Save quote' });
+    expect(
+      screen.queryByRole('menuitem', { name: 'Search in dictionary' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('looks a selection up from the right-click menu, over the page', async () => {
+    const fetchMock = setup([dictionaryOn, lookupAnswer]);
+    const { paragraph } = await selectParagraph();
+    fireEvent.contextMenu(paragraph);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Search in dictionary' }));
+
+    const card = await screen.findByTestId('dictionary-popover');
+    expect(
+      await within(card).findByText('one of several parts or pieces that fit with others'),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('a section of a book')).toBeInTheDocument();
+    expect(within(card).getByText('WordNet')).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes('/dictionaries/lookup?word=First+section+text.'),
+      ),
+    ).toBe(true);
+    // The card sits over the book; the side panel stays shut.
+    expect(screen.queryByRole('complementary', { name: 'Reader panel' })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('dictionary-popover')).not.toBeInTheDocument());
+  });
+
+  it('saves a looked-up word and lists it in the Dictionary panel', async () => {
+    const fetchMock = setup([
+      dictionaryOn,
+      lookupAnswer,
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/api/v1/libraries/lib1/files/f1/words')
+          ? json({ word: savedWord })
+          : undefined,
+    ]);
+    const { bar } = await selectParagraph();
+    fireEvent.click(within(bar).getByRole('button', { name: /Define/ }));
+
+    const card = await screen.findByTestId('dictionary-popover');
+    fireEvent.click(await within(card).findByRole('button', { name: /Save word/ }));
+
+    expect(await screen.findByTestId('reader-flash')).toHaveTextContent('Saved to your words');
+    expect(postBody(fetchMock, '/api/v1/libraries/lib1/files/f1/words')).toMatchObject({
+      word: 'First section text',
+      text: 'First section text.',
+      location: 'block-1',
+      source: 'WordNet',
+      definition: 'section, noun · one of several parts or pieces that fit with others',
+    });
+    expect(within(card).getByRole('button', { name: /Saved/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dictionary: saved words' }));
+    const panel = screen.getByTestId('reader-words');
+    expect(within(panel).getByText('First section text')).toBeInTheDocument();
+    expect(within(panel).getByText(/one of several parts/)).toBeInTheDocument();
+  });
+
+  it('removes a saved word from the Dictionary panel', async () => {
+    const fetchMock = setup([
+      dictionaryOn,
+      (url) =>
+        url.endsWith('/api/v1/libraries/lib1/files/f1/words')
+          ? json({ words: [savedWord] })
+          : undefined,
+      (url, init) =>
+        init?.method === 'DELETE' && url.endsWith('/api/v1/libraries/lib1/words/w1')
+          ? noContent()
+          : undefined,
+    ]);
+    await screen.findByText('First section text.');
+    fireEvent.click(await screen.findByRole('button', { name: 'Dictionary: saved words' }));
+    const panel = screen.getByTestId('reader-words');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Remove First section text' }));
+    await waitFor(() => {
+      expect(called(fetchMock, 'DELETE', '/api/v1/libraries/lib1/words/w1')).toBe(true);
+    });
+    expect(within(panel).getByText('No saved words yet')).toBeInTheDocument();
+  });
+
   it('confirms a new bookmark with a quick flash', async () => {
     setup([
       (url, init) =>

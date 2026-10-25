@@ -28,6 +28,7 @@ import {
 import type { HealthResponse, PendingSignup, User, UserRole, VersionResponse } from '../api/types';
 import Brand from '../components/Brand';
 import { ConfirmDialog } from '../components/Dialog';
+import { DictionarySettings } from '../components/settings/DictionarySettings';
 import { PageHeader } from '../components/States';
 import { Icon, type IconName } from '../components/ui/Icon';
 import { formatDate } from '../lib/dates';
@@ -325,6 +326,7 @@ export default function SettingsPage() {
     { id: 'account', label: 'Account' },
     { id: 'appearance', label: 'Appearance' },
     { id: 'library', label: 'Library' },
+    { id: 'dictionary', label: 'Dictionary' },
     ...(isAdmin
       ? [
           { id: 'accounts', label: 'Accounts' },
@@ -423,6 +425,14 @@ export default function SettingsPage() {
               title="Duplicates"
               description="Files that share exact content with another file."
             />
+          </Section>
+
+          <Section
+            id="dictionary"
+            title="Dictionary"
+            description="Look words up while you read: select a word, then right-click it or press and hold."
+          >
+            <DictionarySettings isAdmin={isAdmin} />
           </Section>
 
           {isAdmin ? (

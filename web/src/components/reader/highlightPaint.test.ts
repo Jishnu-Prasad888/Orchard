@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { findTextRange, highlightName } from './highlightPaint';
+import { WORD_MARK, findTextRange, highlightName } from './highlightPaint';
 
 function dom(html: string): HTMLElement {
   const root = document.createElement('div');
@@ -36,5 +36,9 @@ describe('highlightName', () => {
   it('names known colors and falls back for unknown ones', () => {
     expect(highlightName('green')).toBe('orchard-hl-green');
     expect(highlightName('#123456')).toBe('orchard-hl-yellow');
+  });
+
+  it('gives saved dictionary words their own gray mark', () => {
+    expect(highlightName(WORD_MARK)).toBe('orchard-hl-word');
   });
 });

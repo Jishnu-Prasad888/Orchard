@@ -28,6 +28,8 @@ const HIGHLIGHT_FILLS: Record<string, string> = {
   blue: '#74c0fc',
   pink: '#f783ac',
   orange: '#ffa94d',
+  // Saved dictionary words (WORD_MARK).
+  word: '#9aa0a6',
 };
 
 /** The real runtime shape of Section.find()/search() results — the shipped

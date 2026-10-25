@@ -39,12 +39,17 @@ function registry(): { highlights: HighlightRegistry; Highlight: HighlightCtor }
   return { highlights: css.highlights, Highlight };
 }
 
+/** The "color" of a saved dictionary word: a quiet gray mark, distinct
+ * from every highlight color. */
+export const WORD_MARK = 'word';
+
+/** Everything that can be painted: the highlight palette plus saved words. */
+const PAINT_COLORS: readonly string[] = [...HIGHLIGHT_COLORS, WORD_MARK];
+
 /** The CSS highlight name for a color (styled by `::highlight(...)` in
  * ReaderPage.css). Unknown colors fall back to the first one. */
 export function highlightName(color: string): string {
-  const known = (HIGHLIGHT_COLORS as readonly string[]).includes(color)
-    ? color
-    : HIGHLIGHT_COLORS[0];
+  const known = PAINT_COLORS.includes(color) ? color : HIGHLIGHT_COLORS[0];
   return `orchard-hl-${known}`;
 }
 
@@ -54,7 +59,7 @@ function rebuild() {
   const api = registry();
   if (!api) return;
   const byName = new Map<string, Range[]>();
-  for (const color of HIGHLIGHT_COLORS) byName.set(highlightName(color), []);
+  for (const color of PAINT_COLORS) byName.set(highlightName(color), []);
   for (const entries of painted.values()) {
     for (const { range, color } of entries) byName.get(highlightName(color))!.push(range);
   }

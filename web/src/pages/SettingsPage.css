@@ -153,7 +153,8 @@
 }
 
 .settings-account-controls,
-.settings-signup-controls {
+.settings-signup-controls,
+.dictionary-controls {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -300,4 +301,50 @@
   margin: 0 0 var(--space-4);
   font-size: 12px;
   color: var(--color-danger-ink);
+}
+
+/* --- Dictionary --- */
+
+.dictionary-version {
+  margin-left: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.dictionary-pair-select {
+  max-width: 14rem;
+}
+
+@media (max-width: 599px) {
+  .dictionary-pair-select {
+    flex: 1;
+    max-width: none;
+  }
+}
+
+.dictionary-running .settings-row-text {
+  gap: var(--space-2);
+}
+
+.dictionary-install {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: min(22rem, 70vw);
+}
+
+.dictionary-install-phase {
+  margin: 0;
+  font-weight: 500;
+}
+
+.dictionary-progress {
+  height: 6px;
+}
+
+.dictionary-install-detail {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
 }

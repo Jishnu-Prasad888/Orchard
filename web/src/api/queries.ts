@@ -37,6 +37,11 @@ import type {
   FileSummary,
   FolderListResponse,
   GrantListResponse,
+  Dictionary,
+  DictionaryCatalogResponse,
+  DictionaryJob,
+  DictionaryListResponse,
+  DictionaryLookupResponse,
   Highlight,
   HighlightEnvelope,
   HighlightListResponse,
@@ -54,6 +59,9 @@ import type {
   PermissionGrant,
   PublicShareInfo,
   Quote,
+  SavedWord,
+  SavedWordEnvelope,
+  SavedWordListResponse,
   QuoteEnvelope,
   QuoteListResponse,
   RecentSearchListResponse,
@@ -505,6 +513,43 @@ export const updateHighlight = (
 
 export const deleteHighlight = (libraryId: string, highlightId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/highlights/${highlightId}`);
+
+/* --------------------------- dictionaries ----------------------------- */
+
+export const listDictionaries = () => apiGet<DictionaryListResponse>('/dictionaries');
+
+export const getDictionaryCatalog = () =>
+  apiGet<DictionaryCatalogResponse>('/dictionaries/catalog');
+
+export const installDictionary = (id: string) =>
+  apiPost<{ job: DictionaryJob }>('/dictionaries/install', { id });
+
+export const cancelDictionaryInstall = () => apiDelete<void>('/dictionaries/install');
+
+export const setDictionaryEnabled = (id: string, enabled: boolean) =>
+  apiPatch<{ dictionary: Dictionary }>(`/dictionaries/${encodeURIComponent(id)}`, { enabled });
+
+export const removeDictionary = (id: string) =>
+  apiDelete<void>(`/dictionaries/${encodeURIComponent(id)}`);
+
+export const lookupWord = (word: string, signal?: AbortSignal) =>
+  apiRequest<DictionaryLookupResponse>(`/dictionaries/lookup${query({ word })}`, {
+    signal: signal ?? null,
+  });
+
+/* --------------------------- saved words ------------------------------ */
+
+export const listFileWords = (libraryId: string, fileId: string) =>
+  apiGet<SavedWordListResponse>(`/libraries/${libraryId}/files/${fileId}/words`);
+
+export const saveWord = (
+  libraryId: string,
+  fileId: string,
+  word: Pick<SavedWord, 'word' | 'location' | 'text' | 'definition' | 'source'>,
+) => apiPost<SavedWordEnvelope>(`/libraries/${libraryId}/files/${fileId}/words`, word);
+
+export const deleteSavedWord = (libraryId: string, wordId: string) =>
+  apiDelete<void>(`/libraries/${libraryId}/words/${wordId}`);
 
 /* ----------------------------- quotes -------------------------------- */
 

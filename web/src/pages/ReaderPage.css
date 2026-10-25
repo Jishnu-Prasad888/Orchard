@@ -908,6 +908,10 @@ button.reader-card-main {
 ::highlight(orchard-hl-orange) {
   background-color: rgb(255 169 77 / 45%);
 }
+/* Saved dictionary words: gray, quieter than any highlight. */
+::highlight(orchard-hl-word) {
+  background-color: rgb(140 146 152 / 30%);
+}
 
 .reader-selection-error {
   flex-basis: 100%;
@@ -1046,4 +1050,266 @@ button.reader-card-main {
   .reader-zoom-level {
     display: none;
   }
+}
+
+/* --- Dictionary card ("Search in dictionary") ---
+   Floats over the book inside .reader-surface, so a lookup never reflows
+   the page. Placed beside the right-click point by DictionaryPopover; a
+   bottom sheet on narrow screens or when there's no point to sit beside. */
+
+.dict-popover {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-2);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100% - var(--space-4)));
+  max-height: min(440px, calc(100% - var(--space-4)));
+  overflow: hidden;
+  color: var(--reader-ink);
+  background: var(--reader-surface-elevated);
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  outline: none;
+  animation: dict-in 140ms var(--ease-standard);
+}
+
+.dict-popover-sheet {
+  top: auto;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: auto;
+  max-width: 560px;
+  max-height: 60%;
+  margin: 0 auto;
+}
+
+@keyframes dict-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.dict-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) var(--space-1) var(--space-4);
+}
+
+.dict-title {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.dict-title h2 {
+  margin: 0;
+  font-family: var(--font-reading, inherit);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dict-pron {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.dict-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-4) var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dict-tab {
+  flex-shrink: 0;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.dict-tab.active {
+  color: var(--reader-surface-elevated);
+  background: var(--reader-ink);
+  border-color: var(--reader-ink);
+}
+
+.dict-body {
+  flex: 1;
+  padding: var(--space-1) var(--space-4) var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dict-entry + .dict-entry {
+  margin-top: var(--space-3);
+}
+
+.dict-pos {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.dict-pos span {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.dict-senses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 1.25em;
+  font-size: var(--font-size-md);
+  line-height: 1.45;
+}
+
+.dict-senses li {
+  padding-left: 2px;
+}
+
+.dict-def,
+.dict-note,
+.dict-example,
+.dict-synonyms {
+  display: block;
+}
+
+.dict-note {
+  margin-top: 2px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.dict-example {
+  margin-top: 2px;
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.dict-synonyms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.dict-synonym {
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+  color: var(--color-text-secondary);
+  background: var(--color-fill-subtle);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.dict-synonym:hover {
+  color: var(--reader-ink);
+  background: var(--color-fill-hover);
+}
+
+.dict-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.dict-skeleton {
+  display: block;
+  height: 12px;
+  background: var(--color-fill-subtle);
+  border-radius: var(--radius-pill);
+  animation: dict-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.dict-skeleton-short {
+  width: 60%;
+}
+
+@keyframes dict-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.dict-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  border-top: 1px solid var(--reader-border-subtle);
+}
+
+.dict-source {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dict-save {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dict-popover,
+  .dict-skeleton {
+    animation: none;
+  }
+}
+
+/* Saved words in the panel: a gray stripe, like the mark in the text. */
+.reader-word-card {
+  overflow: hidden;
+  background: color-mix(in srgb, #8c9298 8%, var(--reader-surface-elevated));
+  border-left: 4px solid #9aa0a6;
+}
+
+.reader-word-card .reader-card-actions {
+  background: color-mix(in srgb, #8c9298 8%, var(--reader-surface-elevated));
+}
+
+.reader-word-title {
+  font-weight: 600;
+}
+
+.reader-word-meaning {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.reader-word-meaning.is-open {
+  display: block;
 }

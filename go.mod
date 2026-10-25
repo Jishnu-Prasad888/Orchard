@@ -9,6 +9,7 @@ require (
 	github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0
 	github.com/pkg/sftp v1.13.11
 	github.com/tetratelabs/wazero v1.12.0
+	github.com/ulikunitz/xz v0.5.17
 	golang.org/x/crypto v0.57.0
 	modernc.org/sqlite v1.59.0
 )
