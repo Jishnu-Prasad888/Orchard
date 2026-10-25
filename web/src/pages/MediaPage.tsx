@@ -11,6 +11,7 @@
  * file — lives in the URL, so Back, reload, and sharing a link all work.
  */
 
+import { BOOK_ACCEPT } from '../lib/books';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -514,6 +515,7 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
                 <input
                   type="file"
                   multiple
+                  accept={BOOK_ACCEPT}
                   className="visually-hidden"
                   onChange={(event) => {
                     uploadFiles(Array.from(event.target.files ?? []));

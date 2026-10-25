@@ -11,6 +11,7 @@
  * Raspberry Pi with a hundred thousand files.
  */
 
+import { BOOK_ACCEPT } from '../lib/books';
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -615,6 +616,7 @@ function QuickImport({ library }: { library: Library }) {
         ref={fileRef}
         type="file"
         multiple
+        accept={BOOK_ACCEPT}
         hidden
         aria-label={`Add books to ${library.name}`}
         onChange={(event) => {

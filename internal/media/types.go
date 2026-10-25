@@ -32,7 +32,28 @@ var (
 	ErrNotInTrash     = errors.New("file is not in trash")
 	ErrPathTraversal  = errors.New("path traversal detected")
 	ErrUploadTooLarge = errors.New("upload exceeds the configured size limit")
+	ErrNotABook       = errors.New("only EPUB and PDF files can be added to a library")
 )
+
+// --- books ---
+
+// BookExtensions are the only files Orchard indexes, lists, and accepts:
+// Orchard is a reading library, and everything else on a library's disk
+// (installers, AppImages, archives, photos) stays there untouched but is
+// never scanned, hashed, or shown.
+var BookExtensions = []string{"epub", "pdf"}
+
+// IsBook reports whether relPath names a file Orchard indexes, judged by its
+// extension, case-insensitively ("Novel.EPUB" counts).
+func IsBook(relPath string) bool {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(relPath), "."))
+	for _, b := range BookExtensions {
+		if ext == b {
+			return true
+		}
+	}
+	return false
+}
 
 // --- media type ---
 

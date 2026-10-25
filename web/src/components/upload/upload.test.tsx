@@ -99,7 +99,7 @@ function Pick() {
         onClick={() =>
           enqueue(
             'lib1',
-            ['a', 'b', 'c'].map((n) => new File(['x'], `${n}.jpg`)),
+            ['a', 'b', 'c'].map((n) => new File(['x'], `${n}.pdf`)),
             'trip',
           )
         }
@@ -204,7 +204,7 @@ describe('uploads', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show upload details' }));
     expect(screen.getByText('That file is too large.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retry a.jpg' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry a.pdf' }));
     await waitFor(() => expect(requests).toHaveLength(4));
   });
 
@@ -231,7 +231,7 @@ describe('uploads', () => {
     act(() => requests[0]!.fail());
 
     expect(
-      await screen.findByText(/a\.jpg: The connection to the server was lost\. Retrying in 20 s/),
+      await screen.findByText(/a\.pdf: The connection to the server was lost\. Retrying in 20 s/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/failed/)).not.toBeInTheDocument();
   });
@@ -240,7 +240,7 @@ describe('uploads', () => {
     setup();
     await waitFor(() => expect(requests).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: 'Show upload details' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel a.jpg' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel a.pdf' }));
     expect(await screen.findByText('Cancelled')).toBeInTheDocument();
     await waitFor(() => expect(called(fetchMock, 'DELETE', '/uploads/u1')).toBe(true));
   });
@@ -254,17 +254,17 @@ describe('uploads', () => {
   });
 
   it('opens a finished upload with View', async () => {
-    completions = { 'trip/a.jpg': uploadedFile('f1', 'a.jpg', 'photo') };
+    completions = { 'trip/a.pdf': uploadedFile('f1', 'a.pdf', 'photo') };
     setup();
     await waitFor(() => expect(requests).toHaveLength(2));
     act(() => requests[0]!.finish());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View a.jpg' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View a.pdf' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/files?folder=trip&view=f1');
   });
 
   it('opens an uploaded book in the reader', async () => {
-    completions = { 'trip/a.jpg': uploadedFile('b1', 'a.epub', 'document') };
+    completions = { 'trip/a.pdf': uploadedFile('b1', 'a.epub', 'document') };
     setup();
     await waitFor(() => expect(requests).toHaveLength(2));
     act(() => requests[0]!.finish());
@@ -275,8 +275,8 @@ describe('uploads', () => {
 
   it('shows the uploaded files in their folder when the tray is clicked', async () => {
     completions = {
-      'trip/a.jpg': uploadedFile('f1', 'a.jpg', 'photo'),
-      'trip/b.jpg': uploadedFile('f2', 'b.jpg', 'photo'),
+      'trip/a.pdf': uploadedFile('f1', 'a.pdf', 'photo'),
+      'trip/b.pdf': uploadedFile('f2', 'b.pdf', 'photo'),
     };
     setup();
     await waitFor(() => expect(requests).toHaveLength(2));
@@ -304,9 +304,31 @@ describe('uploads', () => {
     );
 
     const input = await screen.findByLabelText('Upload files to Photos');
-    fireEvent.change(input, { target: { files: [new File(['x'], 'beach.jpg')] } });
+    fireEvent.change(input, { target: { files: [new File(['x'], 'beach.pdf')] } });
 
     await waitFor(() => expect(requests).toHaveLength(1));
-    expect(bodyOf(fetchMock, 'POST', '/uploads')).toEqual({ path: 'trip/beach.jpg', size: 1 });
+    expect(bodyOf(fetchMock, 'POST', '/uploads')).toEqual({ path: 'trip/beach.pdf', size: 1 });
+  });
+
+  it('only offers books, and skips anything else with a word why', async () => {
+    mount(<TopBar searchRef={{ current: null }} onShowShortcuts={() => {}} />);
+
+    const input = await screen.findByLabelText('Upload files to Photos');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.epub'));
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File(['x'], 'Tool-x86_64.AppImage'),
+          new File(['x'], 'Novel.EPUB'),
+          new File(['x'], 'photo.jpg'),
+        ],
+      },
+    });
+
+    expect(
+      await screen.findByText('Skipped 2 files that aren’t EPUBs or PDFs.'),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(bodyOf(fetchMock, 'POST', '/uploads')).toEqual({ path: 'Novel.EPUB', size: 1 });
   });
 });

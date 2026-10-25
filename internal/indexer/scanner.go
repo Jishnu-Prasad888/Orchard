@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 )
 
 // orchardDirName is the metadata directory name that must never be indexed.
@@ -51,15 +53,6 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		return nil, fmt.Errorf("load existing index: %w", err)
 	}
 
-	// Build a secondary hash → []*IndexedFile index for move detection.
-	// Only entries that have a content hash are useful here.
-	existingByHash := make(map[string][]*IndexedFile)
-	for _, f := range existingByPath {
-		if f.ContentHash != "" {
-			existingByHash[f.ContentHash] = append(existingByHash[f.ContentHash], f)
-		}
-	}
-
 	// seenIDs tracks which existing records were observed in this scan so we
 	// can mark unvisited records as missing afterwards.
 	seenIDs := make(map[string]struct{})
@@ -70,10 +63,34 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		if err := sc.store.EndBatch(); err != nil {
 			sc.logger.Warn("finish scan batch", "library_id", libraryID, "error", err)
 		}
-		if result.NewFiles+result.Modified+result.Moved+result.Missing > 0 {
+		if result.NewFiles+result.Modified+result.Moved+result.Missing+result.Removed > 0 {
 			sc.store.Analyze()
 		}
 	}()
+
+	// Only books are indexed (media.IsBook). Rows for anything else — left
+	// from before that rule, or a book renamed to another extension — are
+	// removed rather than marked missing: the file is still on disk, it just
+	// isn't Orchard's to list, and reporting it as missing would be wrong.
+	for path, f := range existingByPath {
+		if media.IsBook(path) {
+			continue
+		}
+		if err := sc.store.Delete(ctx, f.ID); err != nil {
+			return result, fmt.Errorf("remove non-book %s: %w", path, err)
+		}
+		delete(existingByPath, path)
+		result.Removed++
+	}
+
+	// Build a secondary hash → []*IndexedFile index for move detection.
+	// Only entries that have a content hash are useful here.
+	existingByHash := make(map[string][]*IndexedFile)
+	for _, f := range existingByPath {
+		if f.ContentHash != "" {
+			existingByHash[f.ContentHash] = append(existingByHash[f.ContentHash], f)
+		}
+	}
 
 	walkErr := filepath.WalkDir(root, func(absPath string, d os.DirEntry, walkInErr error) error {
 		if err := ctx.Err(); err != nil {
@@ -91,6 +108,12 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		}
 		if d.IsDir() {
 			return nil // descend into ordinary directories
+		}
+		// Anything but a book is left alone: not stat'ed, hashed, or stored.
+		// (On a Pi, hashing one multi-gigabyte AppImage costs minutes.)
+		if !media.IsBook(d.Name()) {
+			result.Skipped++
+			return nil
 		}
 
 		relPath, err := filepath.Rel(root, absPath)
@@ -160,6 +183,8 @@ func (sc *Scanner) Scan(ctx context.Context, libraryID, root string) (*Result, e
 		"modified", result.Modified,
 		"moved", result.Moved,
 		"missing", result.Missing,
+		"removed", result.Removed,
+		"skipped", result.Skipped,
 		"errors", result.Errors,
 		"duration", result.FinishedAt.Sub(result.StartedAt),
 	)

@@ -306,7 +306,7 @@ describe('MediaPage', () => {
     }
     vi.stubGlobal('XMLHttpRequest', FakeXhr);
 
-    const session = { id: 'u1', path: 'beach.jpg', size: 5, offset: 0, chunk_size: 8 << 20 };
+    const session = { id: 'u1', path: 'beach.pdf', size: 5, offset: 0, chunk_size: 8 << 20 };
     const fetchMock = setup([
       (url, init) =>
         init?.method === 'POST' && url.endsWith('/libraries/lib1/uploads')
@@ -318,14 +318,14 @@ describe('MediaPage', () => {
           : undefined,
     ]);
     const input = await screen.findByTestId('upload-input');
-    const file = new File(['bytes'], 'beach.jpg', { type: 'image/jpeg' });
+    const file = new File(['bytes'], 'beach.pdf', { type: 'application/pdf' });
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toEqual({ url: '/api/v1/libraries/lib1/uploads/u1', offset: '0' });
     expect(bodyOf(fetchMock, 'POST', '/libraries/lib1/uploads')).toEqual({
-      path: 'beach.jpg',
+      path: 'beach.pdf',
       size: 5,
     });
 

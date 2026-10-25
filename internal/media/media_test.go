@@ -335,19 +335,19 @@ func TestUpload(t *testing.T) {
 	ctx := context.Background()
 
 	content := "hello upload content"
-	f, err := svc.WriteUpload(ctx, "uploads/new.txt", strings.NewReader(content))
+	f, err := svc.WriteUpload(ctx, "uploads/new.pdf", strings.NewReader(content))
 	if err != nil {
 		t.Fatalf("WriteUpload: %v", err)
 	}
-	if f.Name != "new.txt" {
-		t.Errorf("name = %q, want new.txt", f.Name)
+	if f.Name != "new.pdf" {
+		t.Errorf("name = %q, want new.pdf", f.Name)
 	}
 	if f.SizeBytes != int64(len(content)) {
 		t.Errorf("size = %d, want %d", f.SizeBytes, len(content))
 	}
 
 	// File must be indexed.
-	got, err := store.GetByRelPath(ctx, "uploads/new.txt")
+	got, err := store.GetByRelPath(ctx, "uploads/new.pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,9 +359,9 @@ func TestUpload(t *testing.T) {
 func TestUploadRejectsExisting(t *testing.T) {
 	svc, store, root := newTestService(t)
 	ctx := context.Background()
-	seedFile(t, store, root, "exists.jpg")
+	seedFile(t, store, root, "exists.pdf")
 
-	_, err := svc.WriteUpload(ctx, "exists.jpg", strings.NewReader("data"))
+	_, err := svc.WriteUpload(ctx, "exists.pdf", strings.NewReader("data"))
 	if err == nil {
 		t.Error("expected ErrAlreadyExists")
 	}
@@ -380,13 +380,13 @@ func TestUploadCapEnforced(t *testing.T) {
 	svc := media.NewService(store, root, media.WithMaxUploadBytes(64))
 	ctx := context.Background()
 
-	_, err := svc.WriteUpload(ctx, "big.bin", strings.NewReader("x"+strings.Repeat("y", 64)))
+	_, err := svc.WriteUpload(ctx, "big.pdf", strings.NewReader("x"+strings.Repeat("y", 64)))
 	if !errors.Is(err, media.ErrUploadTooLarge) {
 		t.Fatalf("oversized upload error = %v, want ErrUploadTooLarge", err)
 	}
 
 	// Nothing may be committed the over-limit file.
-	if _, err := store.GetByRelPath(ctx, "big.bin"); !errors.Is(err, media.ErrNotFound) {
+	if _, err := store.GetByRelPath(ctx, "big.pdf"); !errors.Is(err, media.ErrNotFound) {
 		t.Errorf("over-limit upload was indexed: %v", err)
 	}
 
@@ -406,7 +406,7 @@ func TestUploadWithinCapSucceeds(t *testing.T) {
 	store, root := newTestStore(t)
 	svc := media.NewService(store, root, media.WithMaxUploadBytes(64))
 	content := strings.Repeat("z", 64)
-	f, err := svc.WriteUpload(context.Background(), "at-limit.bin", strings.NewReader(content))
+	f, err := svc.WriteUpload(context.Background(), "at-limit.pdf", strings.NewReader(content))
 	if err != nil {
 		t.Fatalf("WriteUpload at exact cap: %v", err)
 	}
@@ -420,17 +420,17 @@ func TestUploadWithinCapSucceeds(t *testing.T) {
 func TestRename(t *testing.T) {
 	svc, store, root := newTestService(t)
 	ctx := context.Background()
-	seedFile(t, store, root, "old.jpg")
+	seedFile(t, store, root, "old.pdf")
 
-	updated, err := svc.Rename(ctx, "old.jpg", "new.jpg")
+	updated, err := svc.Rename(ctx, "old.pdf", "new.pdf")
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
-	if updated.Name != "new.jpg" {
-		t.Errorf("name = %q, want new.jpg", updated.Name)
+	if updated.Name != "new.pdf" {
+		t.Errorf("name = %q, want new.pdf", updated.Name)
 	}
 	// Old path gone from index.
-	f, _ := store.GetByRelPath(ctx, "old.jpg")
+	f, _ := store.GetByRelPath(ctx, "old.pdf")
 	if f != nil {
 		t.Error("old path still in index after rename")
 	}
@@ -439,15 +439,15 @@ func TestRename(t *testing.T) {
 func TestRenameRejectsTraversalName(t *testing.T) {
 	svc, store, root := newTestService(t)
 	ctx := context.Background()
-	seedFile(t, store, root, "old.jpg")
+	seedFile(t, store, root, "old.pdf")
 
-	for _, name := range []string{"../escape.jpg", "a/b.jpg", ".orchard", "x\x00.jpg"} {
-		if _, err := svc.Rename(ctx, "old.jpg", name); err == nil {
+	for _, name := range []string{"../escape.pdf", "a/b.pdf", ".orchard", "x\x00.pdf"} {
+		if _, err := svc.Rename(ctx, "old.pdf", name); err == nil {
 			t.Errorf("Rename with new_name %q expected error", name)
 		}
 	}
 	// Original is untouched and still present.
-	if f, err := store.GetByRelPath(ctx, "old.jpg"); err != nil || f == nil {
+	if f, err := store.GetByRelPath(ctx, "old.pdf"); err != nil || f == nil {
 		t.Errorf("old path not present after rejected renames: err=%v", err)
 	}
 }
@@ -457,16 +457,16 @@ func TestRenameRejectsTraversalName(t *testing.T) {
 func TestMove(t *testing.T) {
 	svc, store, root := newTestService(t)
 	ctx := context.Background()
-	seedFile(t, store, root, "src/photo.jpg")
+	seedFile(t, store, root, "src/photo.pdf")
 
-	updated, err := svc.Move(ctx, "src/photo.jpg", "dst/photo.jpg")
+	updated, err := svc.Move(ctx, "src/photo.pdf", "dst/photo.pdf")
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
-	if updated.RelPath != "dst/photo.jpg" {
-		t.Errorf("rel_path = %q, want dst/photo.jpg", updated.RelPath)
+	if updated.RelPath != "dst/photo.pdf" {
+		t.Errorf("rel_path = %q, want dst/photo.pdf", updated.RelPath)
 	}
-	f, _ := store.GetByRelPath(ctx, "src/photo.jpg")
+	f, _ := store.GetByRelPath(ctx, "src/photo.pdf")
 	if f != nil {
 		t.Error("old path still in index after move")
 	}
@@ -477,24 +477,24 @@ func TestMove(t *testing.T) {
 func TestCopy(t *testing.T) {
 	svc, store, root := newTestService(t)
 	ctx := context.Background()
-	seedFile(t, store, root, "original.jpg")
+	seedFile(t, store, root, "original.pdf")
 
-	copied, err := svc.Copy(ctx, "original.jpg", "copy.jpg")
+	copied, err := svc.Copy(ctx, "original.pdf", "copy.pdf")
 	if err != nil {
 		t.Fatalf("Copy: %v", err)
 	}
-	if copied.RelPath != "copy.jpg" {
-		t.Errorf("rel_path = %q, want copy.jpg", copied.RelPath)
+	if copied.RelPath != "copy.pdf" {
+		t.Errorf("rel_path = %q, want copy.pdf", copied.RelPath)
 	}
 	// Both files should exist on disk.
-	if _, err := os.Stat(filepath.Join(root, "original.jpg")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "original.pdf")); err != nil {
 		t.Error("original missing after copy")
 	}
-	if _, err := os.Stat(filepath.Join(root, "copy.jpg")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "copy.pdf")); err != nil {
 		t.Error("copy not on disk")
 	}
 	// Both in index.
-	orig, _ := store.GetByRelPath(ctx, "original.jpg")
+	orig, _ := store.GetByRelPath(ctx, "original.pdf")
 	if orig == nil {
 		t.Error("original not in index")
 	}
@@ -861,5 +861,61 @@ func TestListFilesFilterByExtension(t *testing.T) {
 	}
 	if page.Total != 3 {
 		t.Errorf("total = %d, want 3", page.Total)
+	}
+}
+
+func TestRenameMoveCopyKeepBooksBooks(t *testing.T) {
+	svc, store, root := newTestService(t)
+	ctx := context.Background()
+	seedFile(t, store, root, "novel.epub")
+	if _, err := svc.Rename(ctx, "novel.epub", "novel.txt"); !errors.Is(err, media.ErrNotABook) {
+		t.Errorf("rename to .txt: %v, want ErrNotABook", err)
+	}
+	if _, err := svc.Move(ctx, "novel.epub", "elsewhere/novel"); !errors.Is(err, media.ErrNotABook) {
+		t.Errorf("move without extension: %v, want ErrNotABook", err)
+	}
+	if _, err := svc.Copy(ctx, "novel.epub", "novel.zip"); !errors.Is(err, media.ErrNotABook) {
+		t.Errorf("copy to .zip: %v, want ErrNotABook", err)
+	}
+	if _, err := svc.WriteUpload(ctx, "Tool.AppImage", strings.NewReader("x")); !errors.Is(err, media.ErrNotABook) {
+		t.Errorf("upload AppImage: %v, want ErrNotABook", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Tool.AppImage")); !os.IsNotExist(err) {
+		t.Errorf("refused upload left a file: %v", err)
+	}
+	if _, err := svc.Rename(ctx, "novel.epub", "Novel.EPUB"); err != nil {
+		t.Errorf("rename keeping the extension: %v", err)
+	}
+}
+
+func TestListFoldersHidesFoldersWithoutBooks(t *testing.T) {
+	svc, store, root := newTestService(t)
+	seedFile(t, store, root, "reading/book.pdf")
+	for path, content := range map[string]string{
+		"apps/Tool-x86_64.AppImage": "elf",
+		"apps/more/setup.sh":        "sh",
+		"photos/a.jpg":              "jpg",
+	} {
+		full := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "new", "shelf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	top, err := svc.ListFolders(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range top {
+		names = append(names, f.RelPath)
+	}
+	if strings.Join(names, ",") != "new,reading" {
+		t.Errorf("folders = %v, want [new reading]", names)
 	}
 }

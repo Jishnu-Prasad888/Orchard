@@ -1,15 +1,16 @@
 /**
- * Files — the library's books as they are on disk: folders, PDFs, EPUBs and
- * word-processor documents, grid or list, upload and organize. Other files
- * stay on disk but are not listed here.
+ * Files — the library's books as they are on disk: folders, PDFs and EPUBs,
+ * grid or list, upload and organize. Other files stay on disk but are never
+ * indexed (the server skips them), so they don't appear anywhere.
  */
 
+import { BOOK_EXTENSIONS } from '../lib/books';
 import MediaPage from './MediaPage';
 import type { MediaPageConfig } from './MediaPage';
 
 const CONFIG: MediaPageConfig = {
   title: 'Files',
-  extensions: ['pdf', 'epub', 'doc', 'docx', 'odt'],
+  extensions: BOOK_EXTENSIONS,
   showTypeFilter: false,
   showFolders: true,
   emptyTitle: 'This folder is empty',
