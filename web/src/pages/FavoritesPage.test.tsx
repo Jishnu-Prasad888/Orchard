@@ -300,6 +300,27 @@ describe('FavoritesPage', () => {
     expect(await screen.findByTestId('menu-complete')).toHaveAttribute('aria-checked', 'false');
   });
 
+  it('forgets having read a book from its menu', async () => {
+    const fn = setup([
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/favorites')
+          ? json({ files: [{ ...photo, media_type: 'document' }] })
+          : undefined,
+      (url, init) =>
+        init?.method === 'POST' && url.endsWith('/files/f1/forget') ? noContent() : undefined,
+    ]);
+
+    fireEvent.contextMenu((await screen.findAllByRole('button', { name: /IMG_0001/ }))[0]!);
+    fireEvent.click(await screen.findByTestId('menu-forget-read'));
+
+    await waitFor(() =>
+      expect(called(fn, 'POST', '/api/v1/libraries/lib1/files/f1/forget')).toBe(true),
+    );
+    expect(
+      await screen.findByText('Forgotten — it reads from the start next time'),
+    ).toBeInTheDocument();
+  });
+
   it('offers to un-complete a completed file', async () => {
     const fn = setup([
       (url) =>

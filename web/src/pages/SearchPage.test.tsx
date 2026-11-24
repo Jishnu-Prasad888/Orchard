@@ -1,7 +1,7 @@
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { json, mockApi, originalFetch, renderPage } from '../test/harness';
+import { fileFixture, json, mockApi, originalFetch, renderPage } from '../test/harness';
 import type { RouteHandler } from '../test/harness';
 import SearchPage from './SearchPage';
 
@@ -99,5 +99,50 @@ describe('SearchPage', () => {
 
     await screen.findByText('Results for “dune”');
     expect(screen.queryByTestId('content-search-results')).not.toBeInTheDocument();
+  });
+
+  it('folds matches in hidden (completed) books away below the results', async () => {
+    setup([
+      (url) =>
+        url.includes('/api/v1/settings/hide-completed')
+          ? json({ hide_completed: true })
+          : undefined,
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/search?')
+          ? json({
+              files: [
+                fileFixture({ id: 'f1', name: 'Dune.epub' }),
+                fileFixture({ id: 'f2', name: 'Dune Messiah.epub', completed: true }),
+              ],
+              next_cursor: '',
+              total: 2,
+            })
+          : undefined,
+    ]);
+
+    const hidden = await screen.findByTestId('search-hidden');
+    expect(within(hidden).getByText('1 more match in a hidden book')).toBeInTheDocument();
+    expect(hidden).not.toHaveAttribute('open');
+    expect(within(screen.getByTestId('file-grid')).queryByText('Dune Messiah.epub')).toBeNull();
+
+    fireEvent.click(within(hidden).getByText('1 more match in a hidden book'));
+    expect(hidden).toHaveAttribute('open');
+    expect(within(hidden).getByText('Dune Messiah.epub')).toBeInTheDocument();
+  });
+
+  it('has no hidden section while completed books are shown', async () => {
+    setup([
+      (url) =>
+        url.includes('/api/v1/libraries/lib1/search?')
+          ? json({
+              files: [fileFixture({ id: 'f2', name: 'Dune Messiah.epub', completed: true })],
+              next_cursor: '',
+              total: 1,
+            })
+          : undefined,
+    ]);
+
+    expect(await screen.findByText('Dune Messiah.epub')).toBeInTheDocument();
+    expect(screen.queryByTestId('search-hidden')).not.toBeInTheDocument();
   });
 });

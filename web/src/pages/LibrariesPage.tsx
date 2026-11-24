@@ -11,6 +11,7 @@
  * this page degrades to a read-only list rather than a wall of dead buttons.
  */
 
+import { ArrowUp } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useLibraries } from '../api/libraries';
@@ -138,7 +139,8 @@ function ServerFolderBrowser({
           onClick={() => listing && setTarget(listing.parent)}
           disabled={!listing || listing.roots}
         >
-          ↑ Up
+          <ArrowUp aria-hidden="true" />
+          Up
         </button>
         <button
           type="button"

@@ -45,6 +45,12 @@ function setup(overrides: { tags?: typeof tags; tagFiles?: typeof tagFiles } = {
       url.endsWith('/api/v1/libraries/lib1/files/f2/tags') && init?.method === 'POST'
         ? noContent()
         : undefined, // tag a file from the add-books picker
+    // The add-books picker lists the whole library, newest first, until
+    // something is typed.
+    (url) =>
+      url.includes('/api/v1/libraries/lib1/files?') && url.includes('sort=mod_time')
+        ? json({ files: [fileFixture(), fileFixture({ id: 'f2', name: 'Dune.epub' })] })
+        : undefined,
     (url) => {
       if (!url.includes('/search?')) return undefined;
       // The add-books picker searches the whole library, untagged.

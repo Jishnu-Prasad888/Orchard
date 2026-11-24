@@ -2,6 +2,7 @@
  * The application frame around every signed-in page: the sidebar (a drawer
  * on narrow screens), the top bar with search, the bottom bar on phones, and
  * the things that float above pages — the upload tray and the shortcuts sheet.
+ * Books dropped from the desktop onto any page are uploaded (FileDropZone).
  *
  * The page itself is the scroll container's only content, so a long file grid
  * scrolls the window and the bars stay put.
@@ -13,6 +14,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useLibraries } from '../../api/libraries';
 import { notifyLibraryChanged } from '../../api/libraryEvents';
 import { HideCompletedProvider } from '../media/useHideCompleted';
+import { FileDropZone } from '../upload/FileDropZone';
 import { UploadTray } from '../upload/UploadTray';
 import { MobileNav } from './MobileNav';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -106,7 +108,7 @@ export default function AppShell() {
 
   return (
     <HideCompletedProvider>
-      <div className="app-shell" data-testid="app-shell">
+      <FileDropZone className="app-shell">
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
@@ -132,7 +134,7 @@ export default function AppShell() {
 
         <UploadTray />
         <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      </div>
+      </FileDropZone>
     </HideCompletedProvider>
   );
 }

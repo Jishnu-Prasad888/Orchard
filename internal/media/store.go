@@ -58,17 +58,30 @@ func (s *FileStore) List(ctx context.Context, opts ListOptions) (*Page, error) {
 		return s.listByReading(ctx, opts, conditions, args, hint)
 	}
 
-	// Cursor: rel_path > cursor for forward pagination.
+	// Cursor: the rel_path of the last row of the previous page. The next
+	// page starts after that row in the page's own order — ORDER BY col dir,
+	// rel_path ASC — so the comparison follows the sort direction, and ties
+	// on col are broken by rel_path. Comparing with ">" regardless of
+	// direction made every descending listing serve its first page again
+	// as its second.
 	if opts.Cursor != "" {
+		cmp := ">"
+		if opts.Order == SortDesc {
+			cmp = "<"
+		}
 		switch opts.Sort {
-		case SortBySize:
-			conditions = append(conditions, "size_bytes > (SELECT size_bytes FROM indexed_files WHERE rel_path = ?)")
-			args = append(args, opts.Cursor)
-		case SortByModTime:
-			conditions = append(conditions, "mod_time > (SELECT mod_time FROM indexed_files WHERE rel_path = ?)")
-			args = append(args, opts.Cursor)
+		case SortBySize, SortByModTime:
+			col := "size_bytes"
+			if opts.Sort == SortByModTime {
+				col = "mod_time"
+			}
+			conditions = append(conditions, fmt.Sprintf(
+				"(%[1]s %[2]s (SELECT %[1]s FROM indexed_files WHERE rel_path = ?)"+
+					" OR (%[1]s = (SELECT %[1]s FROM indexed_files WHERE rel_path = ?) AND rel_path > ?))",
+				col, cmp))
+			args = append(args, opts.Cursor, opts.Cursor, opts.Cursor)
 		default: // SortByName
-			conditions = append(conditions, "rel_path > ?")
+			conditions = append(conditions, "rel_path "+cmp+" ?")
 			args = append(args, opts.Cursor)
 		}
 	}

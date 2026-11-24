@@ -189,6 +189,58 @@ func TestListFilesPagination(t *testing.T) {
 	}
 }
 
+// TestListFilesPaginationEverySortAndDirection walks every page of every
+// sort, both ways, and expects each file exactly once in the same order as
+// one unpaged listing. A descending listing used to serve its first page
+// again as its second (the cursor always compared with ">"), and files
+// sharing a mod_time or size could be skipped.
+func TestListFilesPaginationEverySortAndDirection(t *testing.T) {
+	store, root := newTestStore(t)
+	ctx := context.Background()
+	same := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i, name := range []string{"a.epub", "b.epub", "c.epub", "d.epub", "e.epub", "f.epub", "g.epub"} {
+		abs := filepath.Join(root, name)
+		// Sizes and times repeat, so ties have to be broken by path.
+		writeFile(t, abs, strings.Repeat("x", 1+i%3))
+		info, err := os.Stat(abs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.UpsertFromPath(ctx, name, info.Size(), same.Add(time.Duration(i%2)*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, sort := range []media.SortField{media.SortByName, media.SortByModTime, media.SortBySize} {
+		for _, order := range []media.SortOrder{media.SortAsc, media.SortDesc} {
+			whole, err := store.List(ctx, media.ListOptions{Sort: sort, Order: order, Limit: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var want, got []string
+			for _, f := range whole.Files {
+				want = append(want, f.RelPath)
+			}
+			cursor := ""
+			for pages := 0; pages < 10; pages++ {
+				page, err := store.List(ctx, media.ListOptions{Sort: sort, Order: order, Limit: 2, Cursor: cursor})
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, f := range page.Files {
+					got = append(got, f.RelPath)
+				}
+				if page.NextCursor == "" {
+					break
+				}
+				cursor = page.NextCursor
+			}
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Errorf("%s %s: paged %v, want %v", sort, order, got, want)
+			}
+		}
+	}
+}
+
 // TestListFilesFilterByType proves the media-type filter reaches the query.
 //
 // The Videos page asks for ?type=video and was answered with the whole

@@ -11,6 +11,8 @@ import (
 	"github.com/Jishnu-Prasad888/Orchard/internal/librarydb"
 	"github.com/Jishnu-Prasad888/Orchard/internal/media"
 	"github.com/Jishnu-Prasad888/Orchard/internal/progress"
+	"github.com/Jishnu-Prasad888/Orchard/internal/reading"
+	"github.com/Jishnu-Prasad888/Orchard/internal/recents"
 )
 
 // defaultInProgressLimit matches Home's "a taste, not the library" sizing.
@@ -37,6 +39,10 @@ func (s *Server) openProgressStore(
 	}
 	return progress.NewStore(db), release, true
 }
+
+// completedPercent is how far through a book counts as having read it all.
+// The readers report exactly 100 on the last page.
+const completedPercent = 100
 
 // progressResponse is the wire representation of a user's resume point.
 type progressResponse struct {
@@ -123,9 +129,75 @@ func (s *Server) handleSetReadingProgress(w http.ResponseWriter, r *http.Request
 			CodeInternal, "Failed to save reading progress.")
 		return
 	}
+	// Reaching the end of a book marks it completed, as if the user had
+	// ticked Completed themselves. Only ever set here, never cleared:
+	// paging back through a finished book doesn't make it unread.
+	completed := false
+	if body.Percent >= completedPercent {
+		if err := s.markCompleted(r, lib, u.ID, fileID); err != nil {
+			s.logger.Error("mark finished book completed", "library_id", lib.ID, "error", err)
+		} else {
+			completed = true
+		}
+	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
-		"progress": progressResponse{FileID: fileID, Location: body.Location, Percent: body.Percent},
+		"progress":  progressResponse{FileID: fileID, Location: body.Location, Percent: body.Percent},
+		"completed": completed,
 	})
+}
+
+// markCompleted sets a file's reading status to completed for the user.
+func (s *Server) markCompleted(r *http.Request, lib *library.Library, userID, fileID string) error {
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
+	if err != nil {
+		return err
+	}
+	defer release()
+	return reading.NewStore(db).Set(r.Context(), userID, fileID, reading.StatusCompleted)
+}
+
+// handleForgetFileReading — POST /api/v1/libraries/{id}/files/{fileID}/forget
+// Forgets the acting user ever read this file: it leaves "recently opened",
+// its resume point goes (so it reads from the start, at 0%), and a
+// Completed mark is cleared with it. Bookmarks, highlights and quotes stay.
+func (s *Server) handleForgetFileReading(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	lib, err := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeLibraryError(w, r, err)
+		return
+	}
+	if !s.fileKeyFor(w, r, u, lib, r.PathValue("fileID"), authz.CapEdit) {
+		return
+	}
+	store, cleanup, ok := s.openProgressStore(w, r, lib)
+	if !ok {
+		return
+	}
+	defer cleanup()
+	db, release, err := librarydb.Acquire(lib.Root + "/.orchard")
+	if err != nil {
+		s.logger.Error("open library db to forget reading", "library_id", lib.ID, "error", err)
+		writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+			CodeInternal, "Failed to open library database.")
+		return
+	}
+	defer release()
+
+	ctx, fileID := r.Context(), r.PathValue("fileID")
+	steps := []func() error{
+		func() error { return store.Clear(ctx, u.ID, fileID) },
+		func() error { return recents.NewStore(db, lib.ID).Forget(ctx, u.ID, fileID) },
+		func() error { return reading.NewStore(db).Clear(ctx, u.ID, fileID) },
+	}
+	for _, step := range steps {
+		if err := step(); err != nil {
+			s.logger.Error("forget file reading", "library_id", lib.ID, "error", err)
+			writeError(w, s.logger, requestIDOrEmpty(r), http.StatusInternalServerError,
+				CodeInternal, "Failed to forget reading this file.")
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleClearReadingProgress — DELETE /api/v1/libraries/{id}/files/{fileID}/progress

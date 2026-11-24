@@ -37,6 +37,17 @@ func (s *Store) MarkOpened(ctx context.Context, userID, fileID string) error {
 	return nil
 }
 
+// Forget removes the record of the given user having opened a file, so it
+// leaves their "recently opened" list. Forgetting a file never opened is not
+// an error.
+func (s *Store) Forget(ctx context.Context, userID, fileID string) error {
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM file_opens WHERE user_id = ? AND file_id = ?`, userID, fileID); err != nil {
+		return fmt.Errorf("forget file open: %w", err)
+	}
+	return nil
+}
+
 // ListRecentlyOpened returns the given user's most recently opened files,
 // newest first, capped at limit. Only files still present are included,
 // matching the favorites list's behavior.

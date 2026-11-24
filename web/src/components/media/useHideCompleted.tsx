@@ -132,6 +132,26 @@ export function useVisibleFiles<T extends FileSummary>(files: T[]): T[] {
   }, [files, hideCompleted, marked]);
 }
 
+/**
+ * What `useVisibleFiles` leaves out of `files`: the completed ones, while
+ * "Hide completed" is on (otherwise nothing). Search offers them in a
+ * section of their own, folded away.
+ */
+export function useHiddenFiles<T extends FileSummary>(files: T[]): T[] {
+  const { hideCompleted, marked } = useHideCompleted();
+  return useMemo(
+    () =>
+      hideCompleted
+        ? files
+            .map((f) => (isStale(f, marked) ? { ...f, completed: marked.get(f.id) } : f))
+            .filter((f) => f.completed)
+        : NO_HIDDEN,
+    [files, hideCompleted, marked],
+  ) as T[];
+}
+
+const NO_HIDDEN: FileSummary[] = [];
+
 function isStale(file: FileSummary, marked: ReadonlyMap<string, boolean>): boolean {
   const value = marked.get(file.id);
   return value !== undefined && value !== Boolean(file.completed);

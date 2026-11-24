@@ -585,3 +585,37 @@
     opacity: 0.5;
   }
 }
+
+/* Dropping files from the desktop onto any page: a quiet outline around the
+   page, not a flash, and a pill saying where they will go. */
+.app-shell.is-dropping .app-content::after {
+  content: '';
+  position: fixed;
+  inset: var(--space-2);
+  z-index: var(--z-dropdown);
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  pointer-events: none;
+}
+
+.drop-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-7);
+  z-index: var(--z-dropdown);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.drop-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-on-primary);
+  background: var(--color-primary-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-3);
+}

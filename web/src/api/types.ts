@@ -249,6 +249,12 @@ export interface Collection {
   name: string;
   description?: string;
   pinned: boolean;
+  /** One of COLLECTION_COLORS, or '' (or absent, from an older server) for none. */
+  color?: string;
+  /** When it was last pinned; absent while unpinned. */
+  pinned_at?: string | undefined;
+  /** Kept off the Collections page and Home unless searched for. */
+  hidden?: boolean;
   item_count: number;
   created_at: string;
   updated_at: string;

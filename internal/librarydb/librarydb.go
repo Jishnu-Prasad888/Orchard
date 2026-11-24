@@ -132,6 +132,18 @@ func migrate(db *sql.DB, orchardDir string) error {
 	if err := addReadingAndOpensIndexes(db); err != nil {
 		return err
 	}
+	if err := addCollectionItemPosition(db); err != nil {
+		return err
+	}
+	if err := addCollectionColor(db); err != nil {
+		return err
+	}
+	if err := addCollectionPinnedAt(db); err != nil {
+		return err
+	}
+	if err := addCollectionHidden(db); err != nil {
+		return err
+	}
 	if err := addFTSContent(db, orchardDir); err != nil {
 		return err
 	}
@@ -378,6 +390,66 @@ func addBookMetadataCoverVersion(db *sql.DB) error {
 		return nil
 	}
 	_, err = db.Exec(`ALTER TABLE book_metadata ADD COLUMN cover_version INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// addCollectionItemPosition backfills collection_items.position (a
+// collection's reading timeline) on a library database created before it
+// existed. Existing items start off the timeline (NULL).
+func addCollectionItemPosition(db *sql.DB) error {
+	has, err := columnExists(db, "collection_items", "position")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE collection_items ADD COLUMN position INTEGER`)
+	return err
+}
+
+// addCollectionColor backfills collections.color on a library database
+// created before collections had colours. Existing ones start uncoloured.
+func addCollectionColor(db *sql.DB) error {
+	has, err := columnExists(db, "collections", "color")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE collections ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
+// addCollectionPinnedAt backfills collections.pinned_at. A collection
+// already pinned is taken to have been pinned when it last changed, which
+// keeps its place among the others close to what it was.
+func addCollectionPinnedAt(db *sql.DB) error {
+	has, err := columnExists(db, "collections", "pinned_at")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE collections ADD COLUMN pinned_at TEXT`); err != nil {
+		return err
+	}
+	_, err = db.Exec(`UPDATE collections SET pinned_at = updated_at WHERE pinned != 0`)
+	return err
+}
+
+// addCollectionHidden backfills collections.hidden; existing ones are shown.
+func addCollectionHidden(db *sql.DB) error {
+	has, err := columnExists(db, "collections", "hidden")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE collections ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 
@@ -726,6 +798,13 @@ CREATE TABLE IF NOT EXISTS collections (
 	name        TEXT NOT NULL,
 	description TEXT NOT NULL DEFAULT '',
 	pinned      INTEGER NOT NULL DEFAULT 0,
+	-- color is one of collections.Colors, or '' for none.
+	color       TEXT NOT NULL DEFAULT '',
+	-- pinned_at is when it was last pinned (NULL while unpinned): pinned
+	-- collections are listed most recently pinned first.
+	pinned_at   TEXT,
+	-- hidden keeps it off the Collections page (and Home) unless searched for.
+	hidden      INTEGER NOT NULL DEFAULT 0,
 	created_at  TEXT NOT NULL,
 	updated_at  TEXT NOT NULL,
 	UNIQUE (user_id, name COLLATE NOCASE)
@@ -738,6 +817,9 @@ CREATE TABLE IF NOT EXISTS collection_items (
 	collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
 	file_id       TEXT NOT NULL REFERENCES indexed_files(id) ON DELETE CASCADE,
 	added_at      TEXT NOT NULL,
+	-- position is the file's place in the collection's reading timeline
+	-- (1 = read first); NULL leaves it off the timeline.
+	position      INTEGER,
 	PRIMARY KEY (collection_id, file_id)
 );
 

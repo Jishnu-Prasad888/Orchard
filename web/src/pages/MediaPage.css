@@ -96,36 +96,50 @@
   color: var(--color-text-secondary);
 }
 
-/* Dropping files from the desktop: a quiet outline, not a flash. */
-.media-page.is-dropping::after {
-  content: '';
-  position: absolute;
-  inset: var(--space-2);
-  border: 2px dashed var(--color-primary);
-  border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
-  pointer-events: none;
+/* Search matches "Hide completed" keeps out of the grid: folded away
+   below it, one click to look. */
+.search-hidden {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
 }
 
-.drop-overlay {
-  position: fixed;
-  left: 50%;
-  bottom: var(--space-7);
-  z-index: var(--z-dropdown);
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.drop-overlay-card {
+.search-hidden > summary {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
   font-weight: var(--font-weight-medium);
-  color: var(--color-on-primary);
-  background: var(--color-primary-strong);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-3);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.search-hidden > summary::-webkit-details-marker {
+  display: none;
+}
+
+.search-hidden > summary svg {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.search-hidden[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.search-hidden > summary:hover {
+  color: var(--color-text-primary);
+}
+
+.search-hidden-why {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+.search-hidden[open] > summary {
+  margin-bottom: var(--space-3);
 }
 
 @media (max-width: 599px) {

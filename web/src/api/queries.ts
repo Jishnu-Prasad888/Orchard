@@ -281,10 +281,11 @@ export const setReadingProgress = (
   location: string,
   percent: number,
 ) =>
-  apiPut<{ progress: ReadingProgress }>(`/libraries/${libraryId}/files/${fileId}/progress`, {
-    location,
-    percent,
-  });
+  // `completed`: reaching 100% marked the book completed on the server.
+  apiPut<{ progress: ReadingProgress; completed?: boolean }>(
+    `/libraries/${libraryId}/files/${fileId}/progress`,
+    { location, percent },
+  );
 
 export const clearReadingProgress = (libraryId: string, fileId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/files/${fileId}/progress`);
@@ -313,6 +314,15 @@ export const getHideCompleted = () =>
 export const setHideCompleted = (hide: boolean) =>
   apiPut<{ hide_completed: boolean }>('/settings/hide-completed', { hide_completed: hide });
 
+/** Libraries whose collections the user keeps off Collections and Home. */
+export const getHiddenCollectionLibraries = () =>
+  apiGet<{ library_ids: string[] }>('/settings/hidden-collection-libraries');
+
+export const setHiddenCollectionLibraries = (libraryIds: string[]) =>
+  apiPut<{ library_ids: string[] }>('/settings/hidden-collection-libraries', {
+    library_ids: libraryIds,
+  });
+
 /* ------------------------- reader preferences --------------------------- */
 
 /** Reading preferences, stored like the Home layout: on the account and in
@@ -330,6 +340,11 @@ export const setReaderPreferences = (preferences: ReaderPreferences, libraryId?:
 
 export const markFileOpened = (libraryId: string, fileId: string) =>
   apiPost<void>(`/libraries/${libraryId}/files/${fileId}/opened`);
+
+/** Forget having read a file: it leaves "recently opened", its progress goes
+ * back to 0, and a Completed mark is cleared. Annotations stay. */
+export const forgetFileReading = (libraryId: string, fileId: string) =>
+  apiPost<void>(`/libraries/${libraryId}/files/${fileId}/forget`);
 
 export const listRecentlyOpened = (libraryId: string, limit?: number) =>
   apiGet<FileCollectionResponse>(
@@ -439,14 +454,24 @@ export const createCollection = (libraryId: string, name: string, description?: 
 export const updateCollection = (
   libraryId: string,
   collectionId: string,
-  patch: Partial<Pick<Collection, 'name' | 'description' | 'pinned'>>,
+  patch: Partial<Pick<Collection, 'name' | 'description' | 'pinned' | 'color' | 'hidden'>>,
 ) => apiPatch<CollectionEnvelope>(`/libraries/${libraryId}/collections/${collectionId}`, patch);
 
 export const deleteCollection = (libraryId: string, collectionId: string) =>
   apiDelete<void>(`/libraries/${libraryId}/collections/${collectionId}`);
 
+/** A collection's files, and its reading timeline: the ids of the books
+ * the user has put in reading order, first to read first. */
 export const listCollectionFiles = (libraryId: string, collectionId: string) =>
-  apiGet<FileCollectionResponse>(`/libraries/${libraryId}/collections/${collectionId}/files`);
+  apiGet<FileCollectionResponse & { timeline?: string[] }>(
+    `/libraries/${libraryId}/collections/${collectionId}/files`,
+  );
+
+/** Replace a collection's reading timeline; books left out leave it. */
+export const setCollectionTimeline = (libraryId: string, collectionId: string, fileIds: string[]) =>
+  apiPut<{ timeline: string[] }>(`/libraries/${libraryId}/collections/${collectionId}/timeline`, {
+    file_ids: fileIds,
+  });
 
 export const addCollectionFile = (libraryId: string, collectionId: string, fileId: string) =>
   apiPost<void>(`/libraries/${libraryId}/collections/${collectionId}/files`, { file_id: fileId });

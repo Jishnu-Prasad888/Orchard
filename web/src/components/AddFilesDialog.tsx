@@ -2,17 +2,41 @@
  * A dialog for adding library files to a tag or collection from the page that
  * shows it: search the library, tick what to add, confirm. Files already there
  * show ticked and locked, so the list doubles as a view of what is in it.
+ *
+ * The list is sorted newest first or A–Z. With nothing typed it is the
+ * library itself in that order (asked of the server, so the first page is the
+ * right one); with a search, the matches are put in that order.
  */
 
 import { useEffect, useState } from 'react';
 
-import { searchFiles } from '../api/queries';
+import { listFiles, searchFiles } from '../api/queries';
 import type { FileSummary } from '../api/types';
 import { Dialog } from './Dialog';
 import './AddFilesDialog.css';
 
 /** How long typing has to pause before the library is searched. */
 const SEARCH_DELAY_MS = 250;
+const LIMIT = 50;
+
+type SortOrder = 'newest' | 'name';
+
+const displayName = (file: FileSummary) => file.title || file.name;
+
+function sorted(files: FileSummary[], order: SortOrder): FileSummary[] {
+  const out = files.slice();
+  if (order === 'newest') {
+    out.sort((a, b) => b.mod_time.localeCompare(a.mod_time));
+  } else {
+    out.sort((a, b) =>
+      displayName(a).localeCompare(displayName(b), undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      }),
+    );
+  }
+  return out;
+}
 
 export function AddFilesDialog({
   open,
@@ -62,6 +86,7 @@ function AddFilesForm({
   testId?: string | undefined;
 }) {
   const [query, setQuery] = useState('');
+  const [order, setOrder] = useState<SortOrder>('newest');
   const [results, setResults] = useState<FileSummary[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [picked, setPicked] = useState<Map<string, FileSummary>>(() => new Map());
@@ -73,10 +98,18 @@ function AddFilesForm({
     const q = query.trim();
     const timer = window.setTimeout(
       () => {
-        searchFiles(libraryId, { q: q || undefined, limit: 50 })
+        const request = q
+          ? searchFiles(libraryId, { q, limit: LIMIT })
+          : listFiles(libraryId, {
+              recursive: true,
+              sort: order === 'newest' ? 'mod_time' : 'name',
+              order: order === 'newest' ? 'desc' : 'asc',
+              limit: LIMIT,
+            });
+        request
           .then((r) => {
             if (cancelled) return;
-            setResults(r.files ?? []);
+            setResults(sorted(r.files ?? [], order));
             setSearchError(null);
           })
           .catch((e: unknown) => {
@@ -89,7 +122,7 @@ function AddFilesForm({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [libraryId, query]);
+  }, [libraryId, query, order]);
 
   const toggle = (file: FileSummary) =>
     setPicked((current) => {
@@ -133,14 +166,39 @@ function AddFilesForm({
         </>
       }
     >
-      <input
-        type="search"
-        className="dialog-input add-files-search"
-        placeholder="Search the library…"
-        aria-label="Search the library"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="add-files-controls">
+        <input
+          type="search"
+          className="dialog-input add-files-search"
+          placeholder="Search the library…"
+          aria-label="Search the library"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="add-files-sort" role="radiogroup" aria-label="Sort">
+          {(
+            [
+              ['newest', 'Newest'],
+              ['name', 'A–Z'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={order === value}
+              className={
+                order === value ? 'add-files-sort-option is-active' : 'add-files-sort-option'
+              }
+              title={value === 'newest' ? 'Newest to oldest' : 'By name, A to Z'}
+              onClick={() => setOrder(value)}
+              data-testid={`add-files-sort-${value}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {searchError && (
         <p className="error-text" role="alert">
@@ -165,7 +223,7 @@ function AddFilesForm({
                     onChange={() => toggle(file)}
                   />
                   <span className="add-files-text">
-                    <span className="add-files-name">{file.title || file.name}</span>
+                    <span className="add-files-name">{displayName(file)}</span>
                     <span className="add-files-path">
                       {already ? 'Already added' : file.folder_path || '/'}
                     </span>

@@ -7,6 +7,7 @@
  * dialogs, and the shared viewer, so nothing here reimplements them.
  */
 
+import { ArrowLeft } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import { useAuth } from '../auth/authContext';
@@ -251,7 +252,8 @@ export default function TagsPage() {
         <section className="tag-detail" data-testid="tag-detail">
           <div className="tag-detail-header">
             <button type="button" className="button" onClick={() => setActiveTag(null)}>
-              ← Tags
+              <ArrowLeft aria-hidden="true" />
+              Tags
             </button>
             <h2>
               <span className="tag-chip">{activeTag.name}</span>

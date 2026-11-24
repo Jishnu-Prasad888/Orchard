@@ -1,6 +1,44 @@
-.add-files-search {
-  width: 100%;
+.add-files-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-bottom: var(--space-3);
+}
+
+.add-files-search {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Newest | A–Z: a small segmented control beside the search. */
+.add-files-sort {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.add-files-sort-option {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.add-files-sort-option:hover {
+  color: var(--color-text-primary);
+}
+
+.add-files-sort-option.is-active {
+  background: var(--color-fill-hover);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 .add-files-list {
