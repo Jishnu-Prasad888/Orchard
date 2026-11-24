@@ -29,6 +29,35 @@ var ErrAlreadyExists = errors.New("collection already exists")
 // not a member of the collection.
 var ErrFileNotInCollection = errors.New("file is not in collection")
 
+// MaxPinned is how many collections one user can pin at a time.
+const MaxPinned = 5
+
+// ErrTooManyPinned is returned when pinning one more than MaxPinned.
+var ErrTooManyPinned = errors.New("too many pinned collections")
+
+// ErrInvalidColor is returned for a colour outside Colors.
+var ErrInvalidColor = errors.New("unknown collection colour")
+
+// Colors is the fixed palette a collection can be coloured with, by name;
+// the web app owns what each looks like in light and dark themes. No
+// colour is "".
+var Colors = []string{
+	"coral", "peach", "sand", "mint", "sage", "fog", "storm", "dusk", "blossom", "clay", "chalk",
+}
+
+// ValidColor reports whether c is "" or one of Colors.
+func ValidColor(c string) bool {
+	if c == "" {
+		return true
+	}
+	for _, known := range Colors {
+		if c == known {
+			return true
+		}
+	}
+	return false
+}
+
 // Collection is a named, personal grouping of files.
 type Collection struct {
 	ID          string
@@ -36,9 +65,14 @@ type Collection struct {
 	Name        string
 	Description string
 	Pinned      bool
-	ItemCount   int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Color       string
+	// PinnedAt is when it was last pinned; zero while unpinned.
+	PinnedAt time.Time
+	// Hidden keeps it off the user's Collections page unless searched for.
+	Hidden    bool
+	ItemCount int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Store is the repository for collections in a per-library database.
@@ -77,22 +111,22 @@ func (s *Store) Create(ctx context.Context, userID, name, description string) (*
 // different user.
 func (s *Store) GetOwned(ctx context.Context, id, userID string) (*Collection, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT c.id, c.user_id, c.name, c.description, c.pinned, c.created_at, c.updated_at,
+		SELECT c.id, c.user_id, c.name, c.description, c.pinned, c.color, c.pinned_at, c.hidden, c.created_at, c.updated_at,
 		       (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id)
 		FROM collections c
 		WHERE c.id = ? AND c.user_id = ?`, id, userID)
 	return s.scanCollection(row)
 }
 
-// List returns all of userID's collections, ordered pinned-first then by
-// name.
+// List returns all of userID's collections: the pinned ones first, most
+// recently pinned first, then the rest by name.
 func (s *Store) List(ctx context.Context, userID string) ([]*Collection, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.user_id, c.name, c.description, c.pinned, c.created_at, c.updated_at,
+		SELECT c.id, c.user_id, c.name, c.description, c.pinned, c.color, c.pinned_at, c.hidden, c.created_at, c.updated_at,
 		       (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id)
 		FROM collections c
 		WHERE c.user_id = ?
-		ORDER BY c.pinned DESC, c.name COLLATE NOCASE`, userID)
+		ORDER BY c.pinned DESC, c.pinned_at DESC, c.name COLLATE NOCASE`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list collections: %w", err)
 	}
@@ -105,6 +139,8 @@ type Update struct {
 	Name        *string
 	Description *string
 	Pinned      *bool
+	Color       *string
+	Hidden      *bool
 }
 
 // Update applies a patch to a collection owned by userID.
@@ -125,14 +161,49 @@ func (s *Store) Update(ctx context.Context, id, userID string, patch Update) (*C
 	if patch.Pinned != nil {
 		pinned = *patch.Pinned
 	}
+	color := existing.Color
+	if patch.Color != nil {
+		color = *patch.Color
+	}
 	if name == "" {
 		return nil, fmt.Errorf("collection name must not be empty")
 	}
+	if !ValidColor(color) {
+		return nil, ErrInvalidColor
+	}
+	hidden := existing.Hidden
+	if patch.Hidden != nil {
+		hidden = *patch.Hidden
+	}
+	// A hidden collection isn't shown anywhere, Home included, so hiding
+	// one unpins it (and frees its pin).
+	if hidden && patch.Hidden != nil {
+		pinned = false
+	}
+	if pinned && !existing.Pinned {
+		var count int
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM collections WHERE user_id = ? AND pinned != 0`, userID).Scan(&count); err != nil {
+			return nil, fmt.Errorf("count pinned collections: %w", err)
+		}
+		if count >= MaxPinned {
+			return nil, ErrTooManyPinned
+		}
+	}
 	now := rfc3339(time.Now().UTC())
+	// Pinning (again) puts it first; unpinning forgets when.
+	var pinnedAt any
+	switch {
+	case pinned && !existing.Pinned:
+		pinnedAt = sortableTime(time.Now())
+	case pinned:
+		pinnedAt = sortableTime(existing.PinnedAt)
+	}
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE collections SET name = ?, description = ?, pinned = ?, updated_at = ?
+		`UPDATE collections SET name = ?, description = ?, pinned = ?, color = ?, pinned_at = ?,
+		        hidden = ?, updated_at = ?
 		 WHERE id = ? AND user_id = ?`,
-		name, description, boolToInt(pinned), now, id, userID)
+		name, description, boolToInt(pinned), color, pinnedAt, boolToInt(hidden), now, id, userID)
 	if err != nil {
 		if isUniqueConstraint(err) {
 			return nil, ErrAlreadyExists
@@ -211,11 +282,76 @@ func (s *Store) ListFiles(ctx context.Context, collectionID, userID string) ([]*
 	return s.scanFiles(rows)
 }
 
+// Timeline returns the ids of the files on a collection's reading timeline,
+// in reading order. Files no longer present are left out.
+func (s *Store) Timeline(ctx context.Context, collectionID, userID string) ([]string, error) {
+	if _, err := s.GetOwned(ctx, collectionID, userID); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ci.file_id
+		FROM collection_items ci
+		JOIN indexed_files f ON f.id = ci.file_id
+		WHERE ci.collection_id = ? AND ci.position IS NOT NULL AND f.status = 'present'
+		ORDER BY ci.position, ci.added_at`, collectionID)
+	if err != nil {
+		return nil, fmt.Errorf("list collection timeline: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan collection timeline: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SetTimeline replaces a collection's reading timeline with fileIDs, read in
+// that order. Every id must already be in the collection (ErrFileNotInCollection
+// otherwise); items not listed leave the timeline. Duplicates keep their
+// first place.
+func (s *Store) SetTimeline(ctx context.Context, collectionID, userID string, fileIDs []string) error {
+	if _, err := s.GetOwned(ctx, collectionID, userID); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin set timeline: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE collection_items SET position = NULL WHERE collection_id = ?`, collectionID); err != nil {
+		return fmt.Errorf("clear collection timeline: %w", err)
+	}
+	seen := make(map[string]bool, len(fileIDs))
+	position := 0
+	for _, id := range fileIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		position++
+		res, err := tx.ExecContext(ctx,
+			`UPDATE collection_items SET position = ? WHERE collection_id = ? AND file_id = ?`,
+			position, collectionID, id)
+		if err != nil {
+			return fmt.Errorf("set collection timeline: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrFileNotInCollection
+		}
+	}
+	return tx.Commit()
+}
+
 // ListByFile returns userID's collections that contain fileID — used by the
 // "add to collection" picker to show which collections already have a file.
 func (s *Store) ListByFile(ctx context.Context, userID, fileID string) ([]*Collection, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.user_id, c.name, c.description, c.pinned, c.created_at, c.updated_at,
+		SELECT c.id, c.user_id, c.name, c.description, c.pinned, c.color, c.pinned_at, c.hidden, c.created_at, c.updated_at,
 		       (SELECT COUNT(*) FROM collection_items ci2 WHERE ci2.collection_id = c.id)
 		FROM collections c
 		JOIN collection_items ci ON ci.collection_id = c.id
@@ -237,10 +373,11 @@ type rowScanner interface {
 func (s *Store) scanCollection(row rowScanner) (*Collection, error) {
 	var (
 		c                      Collection
-		pinned                 int
+		pinned, hidden         int
+		pinnedAt               sql.NullString
 		createdStr, updatedStr string
 	)
-	err := row.Scan(&c.ID, &c.UserID, &c.Name, &c.Description, &pinned,
+	err := row.Scan(&c.ID, &c.UserID, &c.Name, &c.Description, &pinned, &c.Color, &pinnedAt, &hidden,
 		&createdStr, &updatedStr, &c.ItemCount)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -249,6 +386,12 @@ func (s *Store) scanCollection(row rowScanner) (*Collection, error) {
 		return nil, fmt.Errorf("scan collection: %w", err)
 	}
 	c.Pinned = pinned != 0
+	c.Hidden = hidden != 0
+	if c.Pinned && pinnedAt.Valid {
+		if err := parseTime(pinnedAt.String, &c.PinnedAt); err != nil {
+			return nil, err
+		}
+	}
 	if err := parseTime(createdStr, &c.CreatedAt); err != nil {
 		return nil, err
 	}
@@ -320,6 +463,11 @@ func newID() string {
 }
 
 func rfc3339(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// sortableTime is RFC 3339 with all nine fractional digits, so the column
+// sorts as text in time order (RFC3339Nano drops trailing zeros, and
+// "…05.1Z" would sort after "…05.12Z").
+func sortableTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000000000Z07:00") }
 
 func parseTime(s string, out *time.Time) error {
 	t, err := time.Parse(time.RFC3339Nano, s)

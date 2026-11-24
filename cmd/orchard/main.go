@@ -36,6 +36,12 @@ import (
 )
 
 func main() {
+	// `orchard --version` prints the bare version (e.g. v1.2.3), which is
+	// what scripts/auto-update.sh compares against the latest release.
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "version") {
+		fmt.Println(version.Get().Version)
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "orchard:", err)
 		os.Exit(1)

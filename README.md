@@ -152,6 +152,29 @@ docker run -d \
 `scripts/docker-dev.sh` rebuilds the image from the current source tree and
 restarts a dev container, wiping local dev data first.
 
+## Staying up to date
+
+`scripts/auto-update.sh` keeps an installed release binary on the latest
+published GitHub release. It checks the download against the release's
+`SHA256SUMS`, makes sure it runs, keeps the binary it replaced as
+`<bin>.previous`, and never touches a development build.
+
+```sh
+scripts/auto-update.sh check       # installed vs. latest version
+scripts/auto-update.sh             # update now, if there is a newer release
+
+# Check every day at 04:15 and restart the service after an update:
+scripts/auto-update.sh install --at 04:15 --restart "systemctl --user restart orchard"
+scripts/auto-update.sh install --every 7          # weekly instead (same time of day)
+scripts/auto-update.sh uninstall                  # stop checking
+```
+
+The schedule is a systemd user timer where available, otherwise a crontab
+line. Settings (binary path, time, interval, restart command, whether to
+follow pre-releases) are kept in `~/.config/orchard/auto-update.conf`; edit
+it directly or re-run `install` with new options. `orchard --version` prints
+the version the script compares against.
+
 ## Configuration
 
 All settings use the `ORCHARD_` prefix.

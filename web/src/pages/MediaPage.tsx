@@ -33,7 +33,7 @@ import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { SelectionToolbar } from '../components/media/SelectionToolbar';
 import { useFavorites } from '../components/media/useFavorites';
 import { type ListingQuery, useFileListing } from '../components/media/useFileListing';
-import { useVisibleFiles } from '../components/media/useHideCompleted';
+import { useHiddenFiles, useVisibleFiles } from '../components/media/useHideCompleted';
 import { useMediaActions } from '../components/media/useMediaActions';
 import { useSelection } from '../components/media/useSelection';
 import {
@@ -47,7 +47,6 @@ import {
 import { Icon, type IconName } from '../components/ui/Icon';
 import { Menu, menuGroups, type MenuAnchor, type MenuEntry } from '../components/ui/Menu';
 import { useToast } from '../components/ui/Toast';
-import { useFileDrop } from '../components/upload/useFileDrop';
 import { useUploadActions } from '../components/upload/UploadProvider';
 import { ViewerModal } from '../components/ViewerModal';
 import './MediaPage.css';
@@ -273,6 +272,10 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const listing = useFileListing(libraryId, query, { enabled: !offline });
   const { folders, total } = listing;
   const files = useVisibleFiles(listing.files);
+  // Search results that "Hide completed" keeps out of the grid, offered
+  // below it in a folded section so a match is never silently missing.
+  const hiddenMatches = useHiddenFiles(listing.files);
+  const showHiddenMatches = Boolean(config.searchPage) && listing.searching;
 
   // Once a revealed file has had its two blinks, stop pointing at it; give a
   // file that never shows up (deleted since, or further down the list) a
@@ -390,7 +393,6 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
     },
     [uploads, libraryId, folderMode, folder],
   );
-  const drop = useFileDrop(uploadFiles, canUpload);
 
   // Dragging a tile onto a folder or a breadcrumb moves it there.
   const moveInto = async (event: React.DragEvent, destination: string) => {
@@ -476,10 +478,9 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
   const nothingHere = ready && !listing.error && files.length === 0 && folders.length === 0;
 
   return (
-    <main
-      className={drop.dragging ? 'page media-page is-dropping' : 'page media-page'}
-      {...drop.bind}
-    >
+    // Files dropped from the desktop are taken by the app shell, which
+    // puts them in the folder on screen (registered above).
+    <main className="page media-page">
       {selection.active && (
         <SelectionToolbar
           count={selection.size}
@@ -791,15 +792,25 @@ function MediaBrowser({ config, library }: { config: MediaPageConfig; library: L
         </>
       )}
 
-      {drop.dragging && (
-        <div className="drop-overlay" aria-hidden="true">
-          <div className="drop-overlay-card">
-            <Icon name="upload" size={28} />
-            <span>
-              Drop to upload to {folderMode && folder ? folder.split('/').pop() : library.name}
-            </span>
-          </div>
-        </div>
+      {ready && showHiddenMatches && hiddenMatches.length > 0 && (
+        <details className="search-hidden" data-testid="search-hidden">
+          <summary>
+            <Icon name="chevron-right" size={16} />
+            {hiddenMatches.length === 1
+              ? '1 more match in a hidden book'
+              : `${numberFormat.format(hiddenMatches.length)} more matches in hidden books`}
+            <span className="search-hidden-why">Completed — hidden by “Hide completed”</span>
+          </summary>
+          <MediaGrid
+            libraryId={libraryId}
+            files={hiddenMatches}
+            onOpen={ops.openViewer}
+            favorites={favorites.ids}
+            onContextMenu={openMenu}
+            label="Matches in hidden books"
+            testId="search-hidden-grid"
+          />
+        </details>
       )}
 
       {ops.viewer && (

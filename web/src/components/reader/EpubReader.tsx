@@ -11,12 +11,13 @@
  * than trusting the stale declaration, with a comment at each.
  */
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import ePub from 'epubjs';
 import type { Book, Contents, NavItem, Rendition } from 'epubjs';
 
 import { Icon } from '../ui/Icon';
 import { drawPageMarks, watchPageMarks, type PageLocations } from './epubPageMarks';
+import { applyTheme } from './epubTheme';
 import type { ReaderHandle, ReaderHighlight, ReaderProps, SearchMatch, TocEntry } from './types';
 import { zoomDirection } from './zoom';
 
@@ -45,6 +46,11 @@ interface EpubSection {
   load: (request: (url: string) => Promise<Document>) => Promise<Document>;
   find: (query: string) => EpubFindMatch[];
   unload: () => void;
+}
+
+/** Rendition.resize's real signature: both sizes optional, plus a place. */
+interface EpubRenditionResize {
+  resize: (width?: number, height?: number, epubcfi?: string) => void;
 }
 
 /** Spine.spineItems is the real backing array; the shipped .d.ts omits it. */
@@ -82,18 +88,29 @@ function pageLabelFor(
   return null;
 }
 
-/** A reading theme that wins over the book's own text colours. */
-function themeRules(text: string, background: string, link: string) {
-  return {
-    body: { color: `${text} !important`, background: `${background} !important` },
-    'body *': {
-      color: `${text} !important`,
-      'background-color': 'transparent !important',
-      'border-color': `${text} !important`,
-    },
-    'a, a *': { color: `${link} !important` },
-  };
+/** Text size, spacing and column: what epub.js lays its pages out from. */
+function applyLayoutStyles(
+  rendition: Rendition,
+  preferences: ReaderProps['preferences'],
+  spread: boolean,
+) {
+  rendition.themes.fontSize(`${preferences.font_size}px`);
+  rendition.themes.override('line-height', String(preferences.line_spacing), true);
+  // A spread splits the window into two columns itself; holding the text
+  // to the reading width as well would squeeze both into half of it.
+  rendition.themes.override('max-width', spread ? 'none' : `${preferences.reading_width}px`, true);
+  rendition.themes.override('margin', '0 auto', true);
+  rendition.themes.override('padding', `${preferences.margin}px`, true);
 }
+
+/** The preferences that change where the pages break. */
+function layoutKey(preferences: ReaderProps['preferences'], spread: boolean): string {
+  const { font_size, line_spacing, reading_width, margin } = preferences;
+  return JSON.stringify([font_size, line_spacing, reading_width, margin, spread]);
+}
+
+/** How long a burst of zoom steps or a resize settles before re-laying out. */
+const RELAYOUT_DELAY_MS = 120;
 
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -139,6 +156,18 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
   useEffect(() => {
     onZoomKeyRef.current = onZoomKey;
   }, [onZoomKey]);
+  // The latest preferences, for the hooks epub.js runs on each new chapter.
+  const preferencesRef = useRef(preferences);
+  useEffect(() => {
+    preferencesRef.current = preferences;
+  }, [preferences]);
+  // The layout the pages on screen were laid out with.
+  const appliedLayout = useRef<string | null>(null);
+  // While the book is being laid out again (a new text size, a resize),
+  // epub.js reports the pages it passes through; they are not the reader
+  // moving, so they mustn't become the saved place.
+  const relayingOut = useRef(false);
+  const relayoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // The two layout preferences decide how epub.js lays the book out, which
   // it only takes at creation — so they rebuild the rendition (not the
@@ -155,6 +184,7 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
     if (!container || !book) return;
 
     const drawnMap = drawn.current;
+    appliedLayout.current = null;
     const rendition = book.renderTo(container, {
       width: '100%',
       height: '100%',
@@ -164,32 +194,38 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
     });
     renditionRef.current = rendition;
 
-    // The light theme keeps a book's own colours. Dark and sepia replace
-    // them: most books colour their paragraphs black in their own CSS, which
-    // beats a colour set on <body> and left dark mode as black text on a
-    // dark page. Links stay distinguishable.
-    rendition.themes.register('light', { body: { color: '#1a1a1a', background: '#ffffff' } });
-    rendition.themes.register('dark', themeRules('#e4e4e4', '#1a1a1a', '#9cc0ff'));
-    rendition.themes.register('sepia', themeRules('#3a2e1f', '#f4ecd8', '#6b4a1f'));
+    // Styles go in before the first page is laid out, so it opens at the
+    // saved place in its final layout rather than moving once they arrive.
+    applyLayoutStyles(rendition, preferencesRef.current, spread);
+    appliedLayout.current = layoutKey(preferencesRef.current, spread);
+    rendition.hooks.content.register((contents: Contents) => {
+      applyTheme(contents, preferencesRef.current.theme);
+    });
 
     rendition.on(
       'relocated',
       (location: {
         start: { cfi: string; index: number; displayed?: { page: number; total: number } };
+        atEnd?: boolean;
       }) => {
         const cfi = location.start.cfi;
-        lastLocation.current = cfi;
         setPageLabel(pageLabelFor(book, cfi, locationsReady.current, location.start.displayed));
+        if (relayingOut.current) return;
+        lastLocation.current = cfi;
         // Exact once the location map is built; until then, how far through
         // the chapters the reader is — close enough for a progress bar, and
-        // far better than reporting a book in progress as 0% read.
+        // far better than reporting a book in progress as 0% read. The last
+        // page is 100% either way: a location map measures where a page
+        // starts, which on the last page is short of the end.
         const chapters = (book.spine as unknown as EpubSpineWithItems).spineItems.length;
-        const percent = locationsReady.current
-          ? book.locations.percentageFromCfi(cfi) * 100
-          : chapters > 0
-            ? (location.start.index / chapters) * 100
-            : 0;
-        onProgress(cfi, percent);
+        const percent = location.atEnd
+          ? 100
+          : locationsReady.current
+            ? book.locations.percentageFromCfi(cfi) * 100
+            : chapters > 0
+              ? (location.start.index / chapters) * 100
+              : 0;
+        onProgress(cfi, Math.min(100, percent));
         onSelectionChange(null);
       },
     );
@@ -248,6 +284,25 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
       event.preventDefault();
       onZoomKeyRef.current?.(direction);
     });
+    // The same for Ctrl + scroll and a trackpad pinch (which arrives as
+    // one): the browser would zoom the whole app, and keep it zoomed on the
+    // pages you go back to.
+    let lastWheelZoom = 0;
+    rendition.hooks.content.register((contents: Contents) => {
+      contents.document.addEventListener(
+        'wheel',
+        (event: WheelEvent) => {
+          if (!event.ctrlKey) return;
+          event.preventDefault();
+          // One step per burst: a trackpad sends dozens of events per pinch.
+          const now = Date.now();
+          if (event.deltaY === 0 || now - lastWheelZoom < 150) return;
+          lastWheelZoom = now;
+          onZoomKeyRef.current?.(event.deltaY < 0 ? 1 : -1);
+        },
+        { passive: false },
+      );
+    });
 
     let cancelled = false;
     book.ready
@@ -259,8 +314,29 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
         if (!cancelled) onError(e instanceof Error ? e.message : 'Could not open this EPUB.');
       });
 
+    // epub.js lays its pages out again when the window is resized, but not
+    // when only its own box changes — opening a side panel narrows the book
+    // without the window moving, which left pages cut off or blank. Watch
+    // the box itself.
+    let lastBox = '';
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(([entry]) => {
+            if (!entry) return;
+            const box = `${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
+            if (box === lastBox) return;
+            const first = lastBox === '';
+            lastBox = box;
+            if (!first) scheduleRelayout('resize');
+          });
+    observer?.observe(container);
+
     return () => {
       cancelled = true;
+      observer?.disconnect();
+      if (relayoutTimer.current) clearTimeout(relayoutTimer.current);
+      relayingOut.current = false;
       window.removeEventListener('keydown', onKey);
       renditionRef.current = null;
       // A new rendition starts with no annotations of its own.
@@ -319,23 +395,54 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentUrl]);
 
-  // Apply reading preferences whenever they change, without re-opening the book.
+  /**
+   * Lay the book out again and go back to where the reader was. A resize
+   * tells epub.js the new size; a new text size or spacing reflows the
+   * chapter, so its pages are rebuilt — re-breaking them in place left
+   * every page after a zoom shifted part-way into the next. Either way the
+   * place is the last one the reader turned to, not wherever the reflow
+   * happened to leave the view, so zooming in and out never drifts.
+   */
+  const scheduleRelayout = useCallback((kind: 'resize' | 'reflow') => {
+    if (relayoutTimer.current) clearTimeout(relayoutTimer.current);
+    relayoutTimer.current = setTimeout(() => {
+      relayoutTimer.current = null;
+      const rendition = renditionRef.current;
+      if (!rendition) return;
+      const anchor = lastLocation.current || undefined;
+      relayingOut.current = true;
+      if (kind === 'resize') {
+        // Measures the box again (the size given is the "100%" it was
+        // opened with). The shipped .d.ts leaves out the third argument,
+        // the place to show once resized.
+        (rendition as unknown as EpubRenditionResize).resize(undefined, undefined, anchor);
+      } else {
+        rendition.clear();
+      }
+      rendition
+        .display(anchor)
+        .catch(() => undefined)
+        .finally(() => {
+          if (renditionRef.current === rendition) relayingOut.current = false;
+        });
+    }, RELAYOUT_DELAY_MS);
+  }, []);
+
+  // Apply reading preferences whenever they change, without re-opening the
+  // book: the theme straight onto the chapters on screen, and a change of
+  // layout by laying the pages out again at the same place.
   useEffect(() => {
     const rendition = renditionRef.current;
-    if (!rendition) return;
-    rendition.themes.select(preferences.theme);
-    rendition.themes.fontSize(`${preferences.font_size}px`);
-    rendition.themes.override('line-height', String(preferences.line_spacing), true);
-    // A spread splits the window into two columns itself; holding the text
-    // to the reading width as well would squeeze both into half of it.
-    rendition.themes.override(
-      'max-width',
-      spread ? 'none' : `${preferences.reading_width}px`,
-      true,
-    );
-    rendition.themes.override('margin', '0 auto', true);
-    rendition.themes.override('padding', `${preferences.margin}px`, true);
-  }, [preferences, ready, spread]);
+    if (!rendition || !ready) return;
+    for (const contents of rendition.getContents() as unknown as Contents[]) {
+      applyTheme(contents, preferences.theme);
+    }
+    const key = layoutKey(preferences, spread);
+    if (key === appliedLayout.current) return;
+    appliedLayout.current = key;
+    applyLayoutStyles(rendition, preferences, spread);
+    scheduleRelayout('reflow');
+  }, [preferences, ready, spread, scheduleRelayout]);
 
   // Once the location map exists, redraw page marks on the chapters already
   // on screen and make the page counter exact.

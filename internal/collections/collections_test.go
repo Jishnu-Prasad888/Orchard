@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -420,5 +421,184 @@ func TestListFilesExcludesNonPresent(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Errorf("expected deleted file to be excluded, got %d", len(files))
+	}
+}
+
+// --- Timeline ---
+
+func TestTimelineOrderReplaceAndOwnership(t *testing.T) {
+	store, fs := newTestStoreWithFiles(t)
+	ctx := context.Background()
+	c, err := store.Create(ctx, "u1", "Series", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b, d := seedFile(t, fs, "a.epub"), seedFile(t, fs, "b.epub"), seedFile(t, fs, "d.epub")
+	outside := seedFile(t, fs, "outside.epub")
+	for _, id := range []string{a, b, d} {
+		if err := store.AddFile(ctx, c.ID, "u1", id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got, _ := store.Timeline(ctx, c.ID, "u1"); len(got) != 0 {
+		t.Fatalf("new timeline = %v, want empty", got)
+	}
+	if err := store.SetTimeline(ctx, c.ID, "u1", []string{d, a, d}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Timeline(ctx, c.ID, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != d+","+a {
+		t.Errorf("timeline = %v, want [d a]", got)
+	}
+
+	// Replacing drops what is left out.
+	if err := store.SetTimeline(ctx, c.ID, "u1", []string{b}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := store.Timeline(ctx, c.ID, "u1"); strings.Join(got, ",") != b {
+		t.Errorf("timeline after replace = %v, want [b]", got)
+	}
+
+	// A book outside the collection is refused, and nothing changes.
+	if err := store.SetTimeline(ctx, c.ID, "u1", []string{a, outside}); !errors.Is(err, collections.ErrFileNotInCollection) {
+		t.Errorf("outside book: err = %v, want ErrFileNotInCollection", err)
+	}
+	if got, _ := store.Timeline(ctx, c.ID, "u1"); strings.Join(got, ",") != b {
+		t.Errorf("timeline after refused set = %v, want [b]", got)
+	}
+
+	// Another user's collection is not found.
+	if err := store.SetTimeline(ctx, c.ID, "u2", []string{a}); !errors.Is(err, collections.ErrNotFound) {
+		t.Errorf("other user: err = %v, want ErrNotFound", err)
+	}
+}
+
+// --- Colour ---
+
+func TestUpdateColor(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	c, err := store.Create(ctx, "u1", "Sci-fi", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Color != "" {
+		t.Fatalf("new collection colour = %q, want none", c.Color)
+	}
+	mint := "mint"
+	got, err := store.Update(ctx, c.ID, "u1", collections.Update{Color: &mint})
+	if err != nil || got.Color != "mint" {
+		t.Fatalf("set colour: %v, %+v", err, got)
+	}
+	// Leaving Color out keeps it.
+	pinned := true
+	if got, _ = store.Update(ctx, c.ID, "u1", collections.Update{Pinned: &pinned}); got.Color != "mint" {
+		t.Errorf("colour after pin = %q, want mint", got.Color)
+	}
+	bad := "chartreuse"
+	if _, err := store.Update(ctx, c.ID, "u1", collections.Update{Color: &bad}); !errors.Is(err, collections.ErrInvalidColor) {
+		t.Errorf("unknown colour: err = %v, want ErrInvalidColor", err)
+	}
+	none := ""
+	if got, _ = store.Update(ctx, c.ID, "u1", collections.Update{Color: &none}); got.Color != "" {
+		t.Errorf("cleared colour = %q, want none", got.Color)
+	}
+}
+
+// TestListPinnedMostRecentFirst: pinned collections lead, the one pinned
+// last at the front; unpinning drops one back among the rest by name.
+func TestListPinnedMostRecentFirst(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	ids := map[string]string{}
+	for _, name := range []string{"Alpha", "Bravo", "Charlie", "Delta"} {
+		c, err := store.Create(ctx, "u1", name, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[name] = c.ID
+	}
+	pin := func(name string, value bool) {
+		t.Helper()
+		if _, err := store.Update(ctx, ids[name], "u1", collections.Update{Pinned: &value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	names := func() string {
+		t.Helper()
+		list, err := store.List(ctx, "u1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range list {
+			out = append(out, c.Name)
+		}
+		return strings.Join(out, ",")
+	}
+
+	pin("Charlie", true)
+	pin("Alpha", true)
+	pin("Delta", true)
+	if got := names(); got != "Delta,Alpha,Charlie,Bravo" {
+		t.Errorf("after pins = %s, want Delta,Alpha,Charlie,Bravo", got)
+	}
+	// Renaming a pinned collection keeps its place; re-pinning one moves it up.
+	newName := "Alpha2"
+	if _, err := store.Update(ctx, ids["Alpha"], "u1", collections.Update{Name: &newName}); err != nil {
+		t.Fatal(err)
+	}
+	pin("Charlie", false)
+	pin("Charlie", true)
+	if got := names(); got != "Charlie,Delta,Alpha2,Bravo" {
+		t.Errorf("after re-pin = %s, want Charlie,Delta,Alpha2,Bravo", got)
+	}
+	pin("Delta", false)
+	if got := names(); got != "Charlie,Alpha2,Bravo,Delta" {
+		t.Errorf("after unpin = %s, want Charlie,Alpha2,Bravo,Delta", got)
+	}
+}
+
+// TestPinLimitAndHiding: five pins at most; hiding one unpins it, which
+// frees a pin.
+func TestPinLimitAndHiding(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	yes, no := true, false
+	var ids []string
+	for i := 0; i < collections.MaxPinned+1; i++ {
+		c, err := store.Create(ctx, "u1", string(rune('A'+i)), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, c.ID)
+	}
+	for _, id := range ids[:collections.MaxPinned] {
+		if _, err := store.Update(ctx, id, "u1", collections.Update{Pinned: &yes}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	last := ids[collections.MaxPinned]
+	if _, err := store.Update(ctx, last, "u1", collections.Update{Pinned: &yes}); !errors.Is(err, collections.ErrTooManyPinned) {
+		t.Fatalf("sixth pin: err = %v, want ErrTooManyPinned", err)
+	}
+	// Re-saving one already pinned is not a new pin.
+	if _, err := store.Update(ctx, ids[0], "u1", collections.Update{Pinned: &yes}); err != nil {
+		t.Errorf("re-pin: %v", err)
+	}
+	hidden, err := store.Update(ctx, ids[0], "u1", collections.Update{Hidden: &yes})
+	if err != nil || !hidden.Hidden || hidden.Pinned {
+		t.Fatalf("hide: %v, %+v; want hidden and unpinned", err, hidden)
+	}
+	if _, err := store.Update(ctx, last, "u1", collections.Update{Pinned: &yes}); err != nil {
+		t.Errorf("pin after a hide freed one: %v", err)
+	}
+	shown, err := store.Update(ctx, ids[0], "u1", collections.Update{Hidden: &no})
+	if err != nil || shown.Hidden {
+		t.Errorf("unhide: %v, %+v", err, shown)
 	}
 }

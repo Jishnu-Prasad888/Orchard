@@ -20,6 +20,7 @@ import { useFileLabels } from '../api/fileLabels';
 import { useLibraryResource } from '../api/resources';
 import {
   getHomeLayout,
+  getHiddenCollectionLibraries,
   listCollections,
   listFavorites,
   listFiles,
@@ -43,6 +44,7 @@ import { LibraryGatePage } from '../components/LibraryGatePage';
 import { MediaGrid, MediaGridSkeleton } from '../components/media/MediaGrid';
 import { FileMenuHeader } from '../components/media/FileMenuHeader';
 import { gridMetrics } from '../components/media/layout';
+import { useForgetRead } from '../components/media/useForgetRead';
 import { useHideCompleted, useVisibleFiles } from '../components/media/useHideCompleted';
 import { EmptyState, ErrorState, LibraryOfflineNotice } from '../components/States';
 import { downloadUrl } from '../components/media';
@@ -151,38 +153,51 @@ function Home({ library }: { library: Library }) {
 
   const home = useLibraryResource<HomeData>(
     useCallback(async (id: string) => {
-      const [recent, recentlyOpened, inProgress, favorites, collections, recentQuotes] =
-        await Promise.all([
-          listFiles(id, {
-            recursive: true,
-            sort: 'mod_time',
-            order: 'desc',
-            limit: RECENT_LIMIT,
-          })
-            .then((r) => r.files ?? [])
-            .catch(() => [] as FileSummary[]),
-          listRecentlyOpened(id, RECENT_LIMIT)
-            .then((r) => r.files ?? [])
-            .catch(() => [] as FileSummary[]),
-          listInProgress(id)
-            .then((r) => r.files ?? [])
-            .catch(() => [] as InProgressFile[]),
-          listFavorites(id)
-            .then((r) => r.files ?? [])
-            .catch(() => [] as FileSummary[]),
-          listCollections(id)
-            .then((r) => r.collections ?? [])
-            .catch(() => [] as Collection[]),
-          listLibraryQuotes(id, { limit: WRITING_LIMIT })
-            .then((r) => r.quotes ?? [])
-            .catch(() => [] as Quote[]),
-        ]);
+      const [
+        recent,
+        recentlyOpened,
+        inProgress,
+        favorites,
+        collections,
+        recentQuotes,
+        hiddenLibraryIds,
+      ] = await Promise.all([
+        listFiles(id, {
+          recursive: true,
+          sort: 'mod_time',
+          order: 'desc',
+          limit: RECENT_LIMIT,
+        })
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+        listRecentlyOpened(id, RECENT_LIMIT)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+        listInProgress(id)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as InProgressFile[]),
+        listFavorites(id)
+          .then((r) => r.files ?? [])
+          .catch(() => [] as FileSummary[]),
+        listCollections(id)
+          .then((r) => r.collections ?? [])
+          .catch(() => [] as Collection[]),
+        listLibraryQuotes(id, { limit: WRITING_LIMIT })
+          .then((r) => r.quotes ?? [])
+          .catch(() => [] as Quote[]),
+        // A library whose collections are hidden pins none here.
+        getHiddenCollectionLibraries()
+          .then((r) => r.library_ids ?? [])
+          .catch(() => [] as string[]),
+      ]);
       return {
         recent,
         recentlyOpened,
         inProgress,
         favorites,
-        pinnedCollections: collections.filter((c) => c.pinned).slice(0, PINNED_COLLECTIONS_LIMIT),
+        pinnedCollections: (hiddenLibraryIds.includes(id) ? [] : collections)
+          .filter((c) => c.pinned && !c.hidden)
+          .slice(0, PINNED_COLLECTIONS_LIMIT),
         recentQuotes,
       };
     }, []),
@@ -221,6 +236,7 @@ function Home({ library }: { library: Library }) {
     },
     [libraryId, markCompleted, toast],
   );
+  const forgetRead = useForgetRead(libraryId, home.reload);
   const openMenu = useCallback(
     (file: FileSummary, x: number, y: number) =>
       setMenu({
@@ -236,6 +252,13 @@ function Home({ library }: { library: Library }) {
               checked: Boolean(file.completed),
               onSelect: () => setCompleted(file, !file.completed),
               testId: 'menu-complete',
+            },
+            {
+              id: 'forget-read',
+              label: 'Forget read',
+              icon: 'refresh',
+              onSelect: () => void forgetRead(file),
+              testId: 'menu-forget-read',
             },
           ],
           [
@@ -291,6 +314,7 @@ function Home({ library }: { library: Library }) {
       openShare,
       canShare,
       setCompleted,
+      forgetRead,
     ],
   );
   const data = home.data;

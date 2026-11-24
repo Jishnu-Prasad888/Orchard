@@ -197,3 +197,84 @@ func TestReaderPreferences_ArePerUser(t *testing.T) {
 		t.Errorf("a second user must see the defaults, not the admin's preferences, got %+v", body.Preferences)
 	}
 }
+
+// TestReadingProgress_FinishingMarksCompleted: reading to 100% ticks
+// Completed, as the menu's checkbox would; 99% does not.
+func TestReadingProgress_FinishingMarksCompleted(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "book.epub", 10); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	status := func() string {
+		rec := client.do(t, http.MethodGet, "/api/v1/libraries/"+libID+"/files/f1/reading-status", nil)
+		var body struct {
+			Status *string `json:"status"`
+		}
+		jsonUnmarshalRec(t, rec, &body)
+		if body.Status == nil {
+			return ""
+		}
+		return *body.Status
+	}
+
+	client.do(t, http.MethodPut, "/api/v1/libraries/"+libID+"/files/f1/progress",
+		map[string]any{"location": "page:99", "percent": 99})
+	if got := status(); got != "" {
+		t.Fatalf("status at 99%% = %q, want none", got)
+	}
+	rec := client.do(t, http.MethodPut, "/api/v1/libraries/"+libID+"/files/f1/progress",
+		map[string]any{"location": "page:100", "percent": 100})
+	var body struct {
+		Completed bool `json:"completed"`
+	}
+	jsonUnmarshalRec(t, rec, &body)
+	if !body.Completed {
+		t.Errorf("response completed = false, want true")
+	}
+	if got := status(); got != "completed" {
+		t.Errorf("status at 100%% = %q, want completed", got)
+	}
+}
+
+// TestForgetFileReading clears the open, the resume point and Completed.
+func TestForgetFileReading(t *testing.T) {
+	_, client, libID, libRoot := newSearchTestServer(t)
+	if err := seedLibraryFile(t, libRoot, "f1", "book.epub", 10); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	base := "/api/v1/libraries/" + libID + "/files/"
+	client.roundTrip(t, http.MethodPost, base+"f1/opened", "")
+	client.do(t, http.MethodPut, base+"f1/progress", map[string]any{"location": "page:100", "percent": 100})
+
+	rec := client.roundTrip(t, http.MethodPost, base+"f1/forget", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("forget status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = client.do(t, http.MethodGet, base+"f1/progress", nil)
+	var progress struct {
+		Progress any `json:"progress"`
+	}
+	jsonUnmarshalRec(t, rec, &progress)
+	if progress.Progress != nil {
+		t.Errorf("progress after forget = %v, want none", progress.Progress)
+	}
+	rec = client.do(t, http.MethodGet, base+"recently-opened", nil)
+	var opened struct {
+		Files []struct {
+			ID string `json:"id"`
+		} `json:"files"`
+	}
+	jsonUnmarshalRec(t, rec, &opened)
+	if len(opened.Files) != 0 {
+		t.Errorf("recently opened after forget = %v, want empty", opened.Files)
+	}
+	rec = client.do(t, http.MethodGet, base+"f1/reading-status", nil)
+	var status struct {
+		Status *string `json:"status"`
+	}
+	jsonUnmarshalRec(t, rec, &status)
+	if status.Status != nil {
+		t.Errorf("status after forget = %q, want none", *status.Status)
+	}
+}

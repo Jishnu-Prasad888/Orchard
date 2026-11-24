@@ -20,6 +20,12 @@
     box-shadow var(--duration-fast) var(--ease-standard);
 }
 
+/* A coloured collection is filled with its colour, as a Keep note is. */
+.collection-card.has-color {
+  background: var(--collection-fill);
+  border-color: color-mix(in srgb, var(--collection-fill) 70%, var(--color-text-primary) 12%);
+}
+
 .collection-card:hover {
   border-color: var(--color-accent);
   box-shadow: var(--shadow-1);
@@ -81,4 +87,91 @@
   .collections-page {
     padding: var(--space-3) var(--space-2) var(--space-6);
   }
+}
+
+/* The colour circles under the header: click one to see only that colour. */
+.collection-color-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+}
+
+.collection-color-filter .color-swatch {
+  width: 24px;
+  height: 24px;
+}
+
+/* Colours no collection has yet stay in the row (the set is fixed), quieter. */
+.collection-color-filter .color-swatch.is-unused {
+  opacity: 0.4;
+}
+
+.collection-color-filter-clear {
+  margin-left: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+/* A–Z | Newest beside the header's buttons. */
+.collection-sort {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.collection-sort button {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.collection-sort button.is-active {
+  background: var(--color-fill-hover);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Hidden collections a search found, folded away below the grid. */
+.collections-page .search-hidden {
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.collections-page .search-hidden > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.collections-page .search-hidden > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collections-page .search-hidden > summary svg {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.collections-page .search-hidden[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.collections-page .search-hidden-why {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
 }

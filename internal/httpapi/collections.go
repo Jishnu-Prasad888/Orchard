@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Jishnu-Prasad888/Orchard/internal/auth"
@@ -38,17 +40,27 @@ type collectionResponse struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Pinned      bool   `json:"pinned"`
+	Color       string `json:"color"`
+	PinnedAt    string `json:"pinned_at,omitempty"`
+	Hidden      bool   `json:"hidden"`
 	ItemCount   int    `json:"item_count"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
 
 func toCollectionResponse(c *collections.Collection) collectionResponse {
+	pinnedAt := ""
+	if !c.PinnedAt.IsZero() {
+		pinnedAt = c.PinnedAt.UTC().Format(time.RFC3339Nano)
+	}
 	return collectionResponse{
+		PinnedAt:    pinnedAt,
+		Hidden:      c.Hidden,
 		ID:          c.ID,
 		Name:        c.Name,
 		Description: c.Description,
 		Pinned:      c.Pinned,
+		Color:       c.Color,
 		ItemCount:   c.ItemCount,
 		CreatedAt:   c.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:   c.UpdatedAt.UTC().Format(time.RFC3339),
@@ -146,6 +158,8 @@ func (s *Server) handleUpdateCollection(w http.ResponseWriter, r *http.Request, 
 		Name        *string `json:"name"`
 		Description *string `json:"description"`
 		Pinned      *bool   `json:"pinned"`
+		Color       *string `json:"color"`
+		Hidden      *bool   `json:"hidden"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
@@ -160,6 +174,8 @@ func (s *Server) handleUpdateCollection(w http.ResponseWriter, r *http.Request, 
 		Name:        body.Name,
 		Description: body.Description,
 		Pinned:      body.Pinned,
+		Color:       body.Color,
+		Hidden:      body.Hidden,
 	})
 	if err != nil {
 		s.writeCollectionError(w, r, err)
@@ -217,7 +233,50 @@ func (s *Server) handleListCollectionFiles(w http.ResponseWriter, r *http.Reques
 		results = append(results, toFileResponse(f))
 	}
 	attachFileExtras(results, s.fileExtrasFor(r.Context(), lib, u.ID, files))
-	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": results})
+	timeline, err := store.Timeline(r.Context(), r.PathValue("collectionID"), u.ID)
+	if err != nil {
+		s.writeCollectionError(w, r, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"files": results, "timeline": timeline})
+}
+
+// handleSetCollectionTimeline — PUT /api/v1/libraries/{id}/collections/{collectionID}/timeline
+// Body {"file_ids": [...]}: the collection's books in the order the user
+// means to read them. Books left out leave the timeline (not the collection).
+func (s *Server) handleSetCollectionTimeline(w http.ResponseWriter, r *http.Request, u *auth.User) {
+	lib, err := s.libraries.Get(actorCtx(r, u).Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeLibraryError(w, r, err)
+		return
+	}
+	if !s.requireCap(w, r, u, authz.LibraryKey(lib.ID), authz.CapEdit) {
+		return
+	}
+	store, cleanup, ok := s.openCollectionStore(w, r, lib)
+	if !ok {
+		return
+	}
+	defer cleanup()
+
+	var body struct {
+		FileIDs []string `json:"file_ids"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		writeDomainError(w, s.logger, requestIDOrEmpty(r), err)
+		return
+	}
+	collectionID := r.PathValue("collectionID")
+	if err := store.SetTimeline(r.Context(), collectionID, u.ID, body.FileIDs); err != nil {
+		s.writeCollectionError(w, r, err)
+		return
+	}
+	timeline, err := store.Timeline(r.Context(), collectionID, u.ID)
+	if err != nil {
+		s.writeCollectionError(w, r, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]any{"timeline": timeline})
 }
 
 // handleAddCollectionFile — POST /api/v1/libraries/{id}/collections/{collectionID}/files
@@ -317,6 +376,12 @@ func (s *Server) writeCollectionError(w http.ResponseWriter, r *http.Request, er
 	case errors.Is(err, collections.ErrAlreadyExists):
 		writeError(w, s.logger, reqID, http.StatusConflict, CodeConflict,
 			"A collection with that name already exists.")
+	case errors.Is(err, collections.ErrTooManyPinned):
+		writeError(w, s.logger, reqID, http.StatusConflict, CodeConflict,
+			fmt.Sprintf("You can pin up to %d collections. Unpin one first.", collections.MaxPinned))
+	case errors.Is(err, collections.ErrInvalidColor):
+		writeError(w, s.logger, reqID, http.StatusBadRequest, CodeBadRequest,
+			"Unknown colour; use one of: "+strings.Join(collections.Colors, ", ")+", or \"\" for none.")
 	case errors.Is(err, collections.ErrFileNotInCollection):
 		writeError(w, s.logger, reqID, http.StatusNotFound, CodeNotFound,
 			"File is not in this collection.")

@@ -192,6 +192,8 @@ func (s *Server) Handler() http.Handler {
 	// account-wide checkbox, shown at the top of every page.
 	mux.Handle("GET /api/v1/settings/hide-completed", s.withAuth(allowAny, s.handleGetHideCompleted))
 	mux.Handle("PUT /api/v1/settings/hide-completed", s.withAuth(allowAny, s.handleSetHideCompleted))
+	mux.Handle("GET /api/v1/settings/hidden-collection-libraries", s.withAuth(allowAny, s.handleGetHiddenCollectionLibraries))
+	mux.Handle("PUT /api/v1/settings/hidden-collection-libraries", s.withAuth(allowAny, s.handleSetHiddenCollectionLibraries))
 
 	// Dictionaries. Installing, enabling and removing them is server
 	// administration; looking a word up (and asking whether any dictionary
@@ -283,6 +285,8 @@ func (s *Server) Handler() http.Handler {
 			s.withAuth(allowAny, s.handleListRecentlyOpened))
 		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/opened",
 			s.withAuth(allowAny, s.handleMarkFileOpened))
+		mux.Handle("POST /api/v1/libraries/{id}/files/{fileID}/forget",
+			s.withAuth(allowAny, s.handleForgetFileReading))
 		mux.Handle("GET /api/v1/libraries/{id}/files/duplicates", s.withAuth(allowAny, s.handleListDuplicates))
 
 		// Folders and trash.
@@ -325,6 +329,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("GET /api/v1/libraries/{id}/collections/{collectionID}/files", s.withAuth(allowAny, s.handleListCollectionFiles))
 		mux.Handle("POST /api/v1/libraries/{id}/collections/{collectionID}/files", s.withAuth(allowAny, s.handleAddCollectionFile))
 		mux.Handle("DELETE /api/v1/libraries/{id}/collections/{collectionID}/files/{fileID}", s.withAuth(allowAny, s.handleRemoveCollectionFile))
+		mux.Handle("PUT /api/v1/libraries/{id}/collections/{collectionID}/timeline", s.withAuth(allowAny, s.handleSetCollectionTimeline))
 		mux.Handle("GET /api/v1/libraries/{id}/files/{fileID}/collections", s.withAuth(allowAny, s.handleListFileCollections))
 
 		// Bookmarks. Many per (user, file); each has its own id.

@@ -17,6 +17,7 @@
  * is a flat list.
  */
 
+import { ArrowUp } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
@@ -265,7 +266,8 @@ export default function PublicSharePage() {
                 }
                 data-testid="share-up"
               >
-                ← Up
+                <ArrowUp aria-hidden="true" />
+                Up
               </button>
               <span className="muted">
                 {shownFolder.slice(rootFolder ? rootFolder.length + 1 : 0)}

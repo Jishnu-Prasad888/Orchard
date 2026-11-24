@@ -1,0 +1,159 @@
+/* The collection palette. Each colour is a soft fill for a card in light
+   mode and a deep, muted one in dark mode (text stays the theme's own), on
+   the pattern of Google Keep's note colours. `--swatch-ring` outlines the
+   pale ones so they still read as circles. */
+
+[data-collection-color='coral'] {
+  --collection-fill: #faafa8;
+}
+[data-collection-color='peach'] {
+  --collection-fill: #f39f76;
+}
+[data-collection-color='sand'] {
+  --collection-fill: #fff8b8;
+}
+[data-collection-color='mint'] {
+  --collection-fill: #e2f6d3;
+}
+[data-collection-color='sage'] {
+  --collection-fill: #b4ddd3;
+}
+[data-collection-color='fog'] {
+  --collection-fill: #d4e4ed;
+}
+[data-collection-color='storm'] {
+  --collection-fill: #aeccdc;
+}
+[data-collection-color='dusk'] {
+  --collection-fill: #d3bfdb;
+}
+[data-collection-color='blossom'] {
+  --collection-fill: #f6e2dd;
+}
+[data-collection-color='clay'] {
+  --collection-fill: #e9e3d4;
+}
+[data-collection-color='chalk'] {
+  --collection-fill: #efeff1;
+}
+
+:root[data-theme='dark'] [data-collection-color='coral'] {
+  --collection-fill: #77172e;
+}
+:root[data-theme='dark'] [data-collection-color='peach'] {
+  --collection-fill: #692b17;
+}
+:root[data-theme='dark'] [data-collection-color='sand'] {
+  --collection-fill: #7c4a03;
+}
+:root[data-theme='dark'] [data-collection-color='mint'] {
+  --collection-fill: #264d3b;
+}
+:root[data-theme='dark'] [data-collection-color='sage'] {
+  --collection-fill: #0c625d;
+}
+:root[data-theme='dark'] [data-collection-color='fog'] {
+  --collection-fill: #256377;
+}
+:root[data-theme='dark'] [data-collection-color='storm'] {
+  --collection-fill: #284255;
+}
+:root[data-theme='dark'] [data-collection-color='dusk'] {
+  --collection-fill: #472e5b;
+}
+:root[data-theme='dark'] [data-collection-color='blossom'] {
+  --collection-fill: #6c394f;
+}
+:root[data-theme='dark'] [data-collection-color='clay'] {
+  --collection-fill: #4b443a;
+}
+:root[data-theme='dark'] [data-collection-color='chalk'] {
+  --collection-fill: #3c3f43;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) [data-collection-color='coral'] {
+    --collection-fill: #77172e;
+  }
+  :root:not([data-theme]) [data-collection-color='peach'] {
+    --collection-fill: #692b17;
+  }
+  :root:not([data-theme]) [data-collection-color='sand'] {
+    --collection-fill: #7c4a03;
+  }
+  :root:not([data-theme]) [data-collection-color='mint'] {
+    --collection-fill: #264d3b;
+  }
+  :root:not([data-theme]) [data-collection-color='sage'] {
+    --collection-fill: #0c625d;
+  }
+  :root:not([data-theme]) [data-collection-color='fog'] {
+    --collection-fill: #256377;
+  }
+  :root:not([data-theme]) [data-collection-color='storm'] {
+    --collection-fill: #284255;
+  }
+  :root:not([data-theme]) [data-collection-color='dusk'] {
+    --collection-fill: #472e5b;
+  }
+  :root:not([data-theme]) [data-collection-color='blossom'] {
+    --collection-fill: #6c394f;
+  }
+  :root:not([data-theme]) [data-collection-color='clay'] {
+    --collection-fill: #4b443a;
+  }
+  :root:not([data-theme]) [data-collection-color='chalk'] {
+    --collection-fill: #3c3f43;
+  }
+}
+
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.color-swatch {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  border-radius: 50%;
+  background: var(--collection-fill, var(--color-surface));
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch[aria-checked='true'],
+.color-swatch[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 2px var(--color-surface-elevated, var(--color-surface)),
+    0 0 0 4px var(--color-text-primary);
+}
+
+.color-swatch.is-none {
+  color: var(--color-text-muted);
+}
+
+/* The palette at the top of a collection's menu. */
+.collection-menu-colors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 236px;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.collection-menu-colors-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

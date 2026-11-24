@@ -41,6 +41,7 @@ import { RenderingCancelledException, TextLayer } from 'pdfjs-dist';
 import { Icon } from '../ui/Icon';
 import { clearHighlights, findTextRange, paintHighlights } from './highlightPaint';
 import { buildViews, viewIndexOf } from './pdfViews';
+import { zoomDirection } from './zoom';
 import type { ReaderHandle, ReaderHighlight, ReaderProps, SearchMatch, TocEntry } from './types';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -525,6 +526,45 @@ export const PdfReader = forwardRef<ReaderHandle, ReaderProps>(function PdfReade
     return () => window.removeEventListener('keydown', onKey);
   }, [vertical, turn]);
 
+  const stepZoom = useCallback((direction: 1 | -1) => {
+    setZoom((current) => {
+      const steps = direction === 1 ? ZOOM_STEPS : [...ZOOM_STEPS].reverse();
+      return (
+        steps.find((z) => (direction === 1 ? z > current + 0.001 : z < current - 0.001)) ?? current
+      );
+    });
+  }, []);
+
+  // Ctrl/⌘ +, − and 0, and Ctrl + scroll (a trackpad pinch arrives as one),
+  // zoom the pages rather than the browser — whose zoom would scale the
+  // whole app and stay that way on the pages you go back to.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const direction = zoomDirection(event.key);
+      if (direction === null) return;
+      event.preventDefault();
+      if (direction === 0) setZoom(1);
+      else stepZoom(direction);
+    };
+    // One step per burst: a trackpad sends dozens of events per pinch.
+    let lastWheel = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const now = Date.now();
+      if (event.deltaY === 0 || now - lastWheel < 150) return;
+      lastWheel = now;
+      stepZoom(event.deltaY < 0 ? 1 : -1);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('wheel', onWheel);
+    };
+  }, [stepZoom]);
+
   useImperativeHandle(ref, () => ({
     goTo: (location: string) => {
       const page = parsePageLocation(location);
@@ -553,15 +593,6 @@ export const PdfReader = forwardRef<ReaderHandle, ReaderProps>(function PdfReade
   if (!doc) {
     return <p className="reader-loading muted">Opening PDF…</p>;
   }
-
-  const stepZoom = (direction: 1 | -1) => {
-    setZoom((current) => {
-      const steps = direction === 1 ? ZOOM_STEPS : [...ZOOM_STEPS].reverse();
-      return (
-        steps.find((z) => (direction === 1 ? z > current + 0.001 : z < current - 0.001)) ?? current
-      );
-    });
-  };
 
   const renderView = (pages: number[], index: number) => (
     <div

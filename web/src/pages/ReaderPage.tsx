@@ -107,6 +107,8 @@ const EpubReader = lazyPage(() =>
 );
 
 const PROGRESS_SAVE_DEBOUNCE_MS = 2500;
+/** Ctrl + scroll zooms at most one step this often. */
+const WHEEL_ZOOM_INTERVAL_MS = 150;
 /** How long a "Quoted!" / "Bookmarked!" confirmation stays up. */
 const FLASH_MS = 1200;
 
@@ -676,8 +678,24 @@ function ReaderPageContent({ libraryId, fileId }: { libraryId: string; fileId: s
       event.preventDefault();
       zoom(direction);
     };
+    // Ctrl + scroll and a trackpad pinch too: left to the browser they zoom
+    // the whole app, which then stays zoomed on the pages you go back to.
+    // One step per gesture burst, not one per wheel event.
+    let lastWheel = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const now = Date.now();
+      if (event.deltaY === 0 || now - lastWheel < WHEEL_ZOOM_INTERVAL_MS) return;
+      lastWheel = now;
+      zoom(event.deltaY < 0 ? 1 : -1);
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('wheel', onWheel);
+    };
   }, [canZoom, zoom]);
 
   // The phone toolbar's overflow: what the narrow top bar hides.
