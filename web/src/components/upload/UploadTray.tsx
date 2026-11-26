@@ -1,9 +1,11 @@
 /**
  * The compact upload tray: present only while there is something to report.
  *
- * Collapsed, it is one line and a progress bar ("Uploading 14 files · 12
- * complete"); expanded, it lists each file with its own state and a cancel or
- * retry control. It never blocks the page and never covers the bottom
+ * Open (the default), it lists every file in a scrolling list of capped
+ * height: a ring filling with its progress and a percentage while it goes up,
+ * a tick when done, and the reason when it failed, with a cancel or retry
+ * control. Folded, it is one line and a progress bar ("Uploading 14 files ·
+ * 12 complete"). It never blocks the page and never covers the bottom
  * navigation.
  *
  * Once something has uploaded, the tray leads to it, the way a file
@@ -27,16 +29,83 @@ function summary(items: UploadItem[]) {
   const active = items.filter((i) => i.status === 'queued' || i.status === 'uploading');
   const done = items.filter((i) => i.status === 'done').length;
   const failed = items.filter((i) => i.status === 'error').length;
-  const total = items.reduce((n, i) => n + (i.status === 'cancelled' ? 0 : i.total), 0);
+  // Cancelled and refused files never go up, so they don't count toward
+  // the bytes still to send.
+  const counts = (i: UploadItem) => i.status !== 'cancelled' && !i.rejected;
+  const total = items.reduce((n, i) => n + (counts(i) ? i.total : 0), 0);
   const loaded = items.reduce(
-    (n, i) => n + (i.status === 'done' ? i.total : i.status === 'cancelled' ? 0 : i.loaded),
+    (n, i) => n + (!counts(i) ? 0 : i.status === 'done' ? i.total : i.loaded),
     0,
   );
   return { active: active.length, done, failed, fraction: total > 0 ? loaded / total : 0 };
 }
 
+function percent(item: UploadItem): number {
+  if (item.status === 'done') return 100;
+  return item.total > 0 ? Math.min(100, Math.round((item.loaded / item.total) * 100)) : 0;
+}
+
 function progressText(item: UploadItem) {
-  return `${formatBytes(item.loaded)} of ${formatBytes(item.total)}`;
+  return `${formatBytes(item.loaded)} of ${formatBytes(item.total)} · ${percent(item)}%`;
+}
+
+function statusText(item: UploadItem): string {
+  switch (item.status) {
+    case 'uploading':
+      return item.notice ?? progressText(item);
+    case 'queued':
+      return 'Waiting to upload';
+    case 'done':
+      return `Uploaded · ${formatBytes(item.total)}`;
+    case 'cancelled':
+      return 'Cancelled';
+    case 'error':
+      return `Failed: ${item.error ?? 'The upload failed.'}`;
+  }
+}
+
+/** A ring that fills as the file goes up, the way Drive's upload panel shows it. */
+function ProgressRing({ item }: { item: UploadItem }) {
+  const r = 8;
+  const c = 2 * Math.PI * r;
+  const value = percent(item);
+  return (
+    <svg
+      className="upload-ring"
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      role="progressbar"
+      aria-label={`${item.file.name} progress`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+    >
+      <circle className="upload-ring-track" cx={10} cy={10} r={r} />
+      <circle
+        className="upload-ring-fill"
+        cx={10}
+        cy={10}
+        r={r}
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - value / 100)}
+        transform="rotate(-90 10 10)"
+      />
+    </svg>
+  );
+}
+
+function StatusIcon({ item }: { item: UploadItem }) {
+  if (item.status === 'uploading') return <ProgressRing item={item} />;
+  const name =
+    item.status === 'done'
+      ? 'check-circle'
+      : item.status === 'error'
+        ? 'alert'
+        : item.status === 'cancelled'
+          ? 'close'
+          : 'clock';
+  return <Icon name={name} size={20} />;
 }
 
 function folderQuery(folder: string): string {
@@ -47,7 +116,9 @@ export function UploadTray() {
   const { items, cancel, retry, dismissFinished } = useUploads();
   const { libraryId } = useLibraries();
   const navigate = useNavigate();
-  const [expanded, setExpanded] = useState(false);
+  // Open by default so each file's progress is in view; a person can fold it
+  // down to the one-line summary.
+  const [expanded, setExpanded] = useState(true);
 
   if (items.length === 0) return null;
 
@@ -174,24 +245,13 @@ export function UploadTray() {
       </div>
 
       {expanded && (
-        <ul className="upload-tray-list" id="upload-tray-list">
+        <ul className="upload-tray-list" id="upload-tray-list" aria-label="Files">
           {items.map((item) => (
             <li
               key={item.id}
               className={`upload-item is-${item.status}${item.notice ? ' has-notice' : ''}`}
             >
-              <Icon
-                name={
-                  item.status === 'done'
-                    ? 'check'
-                    : item.status === 'error'
-                      ? 'alert'
-                      : item.status === 'cancelled'
-                        ? 'close'
-                        : 'upload'
-                }
-                size={18}
-              />
+              <StatusIcon item={item} />
               {reachable(item) ? (
                 <button
                   type="button"
@@ -202,26 +262,14 @@ export function UploadTray() {
                   <span className="upload-item-name" title={item.dest}>
                     {item.file.name}
                   </span>
-                  <span className="upload-item-status">
-                    {item.status === 'uploading' && (item.notice ?? progressText(item))}
-                    {item.status === 'queued' && 'Waiting'}
-                    {item.status === 'done' && 'Uploaded'}
-                    {item.status === 'cancelled' && 'Cancelled'}
-                    {item.status === 'error' && (item.error ?? 'Failed')}
-                  </span>
+                  <span className="upload-item-status">{statusText(item)}</span>
                 </button>
               ) : (
                 <div className="upload-item-text">
                   <span className="upload-item-name" title={item.dest}>
                     {item.file.name}
                   </span>
-                  <span className="upload-item-status">
-                    {item.status === 'uploading' && (item.notice ?? progressText(item))}
-                    {item.status === 'queued' && 'Waiting'}
-                    {item.status === 'done' && 'Uploaded'}
-                    {item.status === 'cancelled' && 'Cancelled'}
-                    {item.status === 'error' && (item.error ?? 'Failed')}
-                  </span>
+                  <span className="upload-item-status">{statusText(item)}</span>
                 </div>
               )}
               {(item.status === 'queued' || item.status === 'uploading') && (
@@ -244,7 +292,7 @@ export function UploadTray() {
                   View
                 </button>
               )}
-              {(item.status === 'error' || item.status === 'cancelled') && (
+              {(item.status === 'error' || item.status === 'cancelled') && !item.rejected && (
                 <button
                   type="button"
                   className="icon-button"

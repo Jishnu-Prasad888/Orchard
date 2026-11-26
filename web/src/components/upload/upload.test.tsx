@@ -201,8 +201,13 @@ describe('uploads', () => {
     act(() => requests[2]!.finish());
 
     expect(await screen.findByText('1 upload failed')).toBeInTheDocument();
+    // The list is open, so the reason is on the file's own row.
+    expect(screen.getByText('Failed: That file is too large.')).toBeInTheDocument();
+
+    // Folded, the summary still names the file and the reason.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide upload details' }));
+    expect(screen.getByText('a.pdf: That file is too large.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show upload details' }));
-    expect(screen.getByText('That file is too large.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry a.pdf' }));
     await waitFor(() => expect(requests).toHaveLength(4));
@@ -231,7 +236,11 @@ describe('uploads', () => {
     act(() => requests[0]!.fail());
 
     expect(
-      await screen.findByText(/a\.pdf: The connection to the server was lost\. Retrying in 20 s/),
+      await screen.findByText(/^The connection to the server was lost\. Retrying in 20 s/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide upload details' }));
+    expect(
+      screen.getByText(/a\.pdf: The connection to the server was lost\. Retrying in 20 s/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/failed/)).not.toBeInTheDocument();
   });
@@ -239,7 +248,6 @@ describe('uploads', () => {
   it('cancels a file in flight and frees the server’s copy', async () => {
     setup();
     await waitFor(() => expect(requests).toHaveLength(2));
-    fireEvent.click(screen.getByRole('button', { name: 'Show upload details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel a.pdf' }));
     expect(await screen.findByText('Cancelled')).toBeInTheDocument();
     await waitFor(() => expect(called(fetchMock, 'DELETE', '/uploads/u1')).toBe(true));
@@ -253,13 +261,26 @@ describe('uploads', () => {
     await waitFor(() => expect(Number(bar.getAttribute('aria-valuenow'))).toBeGreaterThan(0));
   });
 
+  it('shows each file’s own progress and state', async () => {
+    setup();
+    await waitFor(() => expect(requests).toHaveLength(2));
+    expect(screen.getByText('Waiting to upload')).toBeInTheDocument();
+
+    const ring = screen.getByRole('progressbar', { name: 'b.pdf progress' });
+    expect(ring).toHaveAttribute('aria-valuenow', '0');
+
+    act(() => requests[0]!.finish());
+    expect(await screen.findByText(/^Uploaded/)).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { name: 'a.pdf progress' })).not.toBeInTheDocument();
+  });
+
   it('opens a finished upload with View', async () => {
     completions = { 'trip/a.pdf': uploadedFile('f1', 'a.pdf', 'photo') };
     setup();
     await waitFor(() => expect(requests).toHaveLength(2));
     act(() => requests[0]!.finish());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View a.pdf' }));
+    fireEvent.click(await screen.findByTestId('upload-view'));
     expect(screen.getByTestId('location')).toHaveTextContent('/files?folder=trip&view=f1');
   });
 
@@ -269,7 +290,7 @@ describe('uploads', () => {
     await waitFor(() => expect(requests).toHaveLength(2));
     act(() => requests[0]!.finish());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View a.epub' }));
+    fireEvent.click(await screen.findByTestId('upload-view'));
     expect(screen.getByTestId('location')).toHaveTextContent('/read/lib1/b1');
   });
 
@@ -330,5 +351,25 @@ describe('uploads', () => {
     ).toBeInTheDocument();
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(bodyOf(fetchMock, 'POST', '/uploads')).toEqual({ path: 'Novel.EPUB', size: 1 });
+  });
+
+  it('lists refused files as failed, with the reason and no retry', async () => {
+    function Add() {
+      const { enqueue } = useUploads();
+      return (
+        <button onClick={() => enqueue('lib1', [new File(['x'], 'photo.jpg')], '')}>add</button>
+      );
+    }
+    mount(
+      <>
+        <Add />
+        <UploadTray />
+      </>,
+    );
+    fireEvent.click(screen.getByText('add'));
+    expect(await screen.findByText('photo.jpg')).toBeInTheDocument();
+    expect(screen.getByText('Failed: Only EPUB and PDF files can be added.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry photo.jpg' })).not.toBeInTheDocument();
+    expect(requests).toHaveLength(0);
   });
 });
