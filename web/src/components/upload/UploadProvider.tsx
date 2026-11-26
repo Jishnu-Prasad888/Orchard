@@ -53,7 +53,13 @@ export interface UploadItem {
   notice?: string | undefined;
   /** The file as the server indexed it, once uploaded. */
   uploaded?: FileSummary | undefined;
+  /** Turned away before upload (not a book); it stays in the list with its
+   * reason but cannot be retried. */
+  rejected?: boolean | undefined;
 }
+
+/** Why a file that is not a book was not uploaded. */
+export const NOT_A_BOOK = 'Only EPUB and PDF files can be added.';
 
 /** Where an upload without an explicit folder should go. */
 export interface UploadTarget {
@@ -187,7 +193,22 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         loaded: 0,
         total: file.size,
       }));
-      if (added.length) setItems((list) => [...list, ...added]);
+      // Files turned away still get a row, so the list accounts for every
+      // file the person picked and says why each one didn't go up.
+      const refused = files
+        .filter((file) => !isBookName(file.name))
+        .map<UploadItem>((file) => ({
+          id: nextId.current++,
+          libraryId,
+          file,
+          dest: joinRelPath(folder, file.name),
+          status: 'error',
+          loaded: 0,
+          total: file.size,
+          error: NOT_A_BOOK,
+          rejected: true,
+        }));
+      if (added.length || refused.length) setItems((list) => [...list, ...added, ...refused]);
     },
     [toast],
   );
@@ -204,13 +225,15 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     [patch],
   );
 
-  const retry = useCallback(
-    (id: number) => {
+  const retry = useCallback((id: number) => {
+    setItems((list) => {
+      if (list.find((item) => item.id === id)?.rejected) return list;
       started.current.delete(id);
-      patch(id, { status: 'queued', loaded: 0, error: undefined });
-    },
-    [patch],
-  );
+      return list.map((item) =>
+        item.id === id ? { ...item, status: 'queued', loaded: 0, error: undefined } : item,
+      );
+    });
+  }, []);
 
   const dismissFinished = useCallback(() => {
     setItems((list) =>

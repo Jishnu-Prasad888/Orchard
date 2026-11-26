@@ -58,9 +58,12 @@
 }
 
 .upload-tray-list {
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 0;
-  padding: 0 0 var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
   overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
   border-top: 1px solid var(--color-border-subtle);
 }
@@ -72,9 +75,36 @@
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
 }
 
+.upload-item {
+  min-height: 48px;
+}
+
 .upload-item > svg {
   flex-shrink: 0;
   color: var(--color-text-muted);
+}
+
+.upload-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.upload-ring-track {
+  stroke: var(--color-border);
+}
+
+.upload-ring-fill {
+  stroke: var(--color-primary);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--duration-base) var(--ease-out);
+}
+
+.upload-item.has-notice .upload-ring-fill {
+  stroke: var(--color-warning-ink);
+}
+
+.upload-item.is-cancelled .upload-item-name {
+  color: var(--color-text-secondary);
 }
 
 .upload-item.is-done > svg {
@@ -106,6 +136,11 @@
 
 .upload-item.is-error .upload-item-status {
   color: var(--color-danger-ink);
+  overflow-wrap: anywhere;
+}
+
+.upload-item.is-uploading .upload-item-status {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 899px) {
