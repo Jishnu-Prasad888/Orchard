@@ -103,6 +103,39 @@ Routes today: `/` (Home), `/files`, `/search`, `/favorites`, `/tags`,
 plus the public `/landing`, `/login`, `/setup`, and `/s/:token` (public share
 view).
 
+## Install
+
+Linux and macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Jishnu-Prasad888/Orchard/main/scripts/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Jishnu-Prasad888/Orchard/main/scripts/install.ps1 | iex
+```
+
+The installer picks the build for your OS and CPU, checks it against the
+release's `SHA256SUMS`, and installs it. It then asks a few yes/no questions
+about starting Orchard automatically:
+
+- **Linux**: a systemd service. Either a system service (starts at boot, runs
+  as you; settings in `/etc/orchard/orchard.env`) or a user service
+  (settings in `~/.config/orchard/orchard.env`, with the option to start at
+  boot via lingering).
+- **macOS**: a launchd agent that starts at login.
+- **Windows**: a scheduled task. From an Administrator PowerShell it starts at
+  boot; otherwise it starts when you sign in. Settings are in
+  `orchard-start.cmd` next to the binary.
+
+Run the same command again to upgrade; it replaces the binary in place, keeps
+the old one as `orchard.previous`, and restarts the service. To skip the
+questions, pass `-y` (`… | bash -s -- -y`) or, on Windows, set
+`$env:ORCHARD_YES = '1'` first. `--version vX.Y.Z` / `$env:ORCHARD_VERSION`
+installs a specific release.
+
 ## Development setup
 
 Requirements: Go and Node.
